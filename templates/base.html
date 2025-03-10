@@ -13,8 +13,18 @@
         {% endblock %}
     </title>
 </head>
-<body>
-{% block content %}
+<body class="bg-gray-200">
+<header class="header shadow-md">
+    {% include 'includes/nav.html' %}
+</header >
+<main class="container mx-auto py-8 flex-grow" >
+{% block content%}
+
+
 {% endblock %}
+</main>
+<footer>
+    {% include 'includes/footer.html' %}
+</footer>
 </body>
 </html>
