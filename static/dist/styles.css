@@ -137,6 +137,9 @@
 .container\! {
   width: 100% !important;
 }
+.mx-auto {
+  margin-inline: auto;
+}
 .box-border {
   box-sizing: border-box;
 }
@@ -238,6 +241,9 @@
 }
 .w-1\/2 {
   width: calc(1/2 * 100%);
+}
+.w-1\/4 {
+  width: calc(1/4 * 100%);
 }
 .w-screen {
   width: 100vw;
