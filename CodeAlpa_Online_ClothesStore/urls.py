@@ -16,11 +16,13 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path
-from Main_App import views
+from product_app import views
 from django.conf import settings
 from django.conf.urls.static import static
 
 urlpatterns = [
-    path('',views.index, name='index'),
+    path('',views.product_list, name='index'),
+    path('<slug:category_slug>/', views.product_list, name='product_list_by_category'),
+    path('product/<int:id>/<slug:slug>/', views.product_detail, name="product_detail"),
     path('admin/', admin.site.urls),
 ]+ static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
