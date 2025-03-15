@@ -19,7 +19,9 @@
   "homepage": "https://github.com/rahim8050/CodeAlpa_Online_ClothesStore#readme",
   "description": "",
   "devDependencies": {
-    "tailwindcss": "^4.0.12"
+    "autoprefixer": "^10.4.21",
+    "postcss": "^8.5.3",
+    "tailwindcss": "^4.0.14"
   },
   "dependencies": {
     "@tailwindcss/cli": "^4.0.12"
