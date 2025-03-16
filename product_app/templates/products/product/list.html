@@ -20,7 +20,21 @@ listings of products
 <main class="w-3/4 p-4 ">
    {% if category  %}
    	 <h2 class="font-bold mb-4">{{ category.name }}</h2>
+       {% else %}
+       <h2 class="font-bold mb-4"> All Products: </h2>
    {% endif %}
+<div class="grid grid-cols-3 gap-4">
+    {% for product in products %}
+        <div>
+        {% if product.image %}
+        <img src="{{ product.image.url }}" alt="{{ product.name }}" class="w-full">
+        {% endif %}
+        <h3>{{ product.name }}</h3>
+        <p>{{ product.description }}</p>
+        <p>{{ product.price }}</p>
+        </div>
+    {% endfor %}
+</div>
 
 </main>
  </div>
