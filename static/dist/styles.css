@@ -245,6 +245,15 @@
 .w-1\/2 {
   width: calc(1/2 * 100%);
 }
+.w-1\/4 {
+  width: calc(1/4 * 100%);
+}
+.w-3\/4 {
+  width: calc(3/4 * 100%);
+}
+.w-full {
+  width: 100%;
+}
 .w-screen {
   width: 100vw;
 }
@@ -477,6 +486,9 @@
 }
 .auto-rows-min {
   grid-auto-rows: min-content;
+}
+.grid-cols-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 .grid-cols-none {
   grid-template-columns: none;
