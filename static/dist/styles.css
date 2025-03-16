@@ -146,6 +146,12 @@
 .box-content {
   box-sizing: content-box;
 }
+.line-clamp-3 {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
 .line-clamp-none {
   overflow: visible;
   display: block;
@@ -484,6 +490,9 @@
 .auto-rows-min {
   grid-auto-rows: min-content;
 }
+.grid-cols-1 {
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+}
 .grid-cols-3 {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
@@ -727,6 +736,9 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.overflow-hidden {
+  overflow: hidden;
 }
 .scroll-auto {
   scroll-behavior: auto;
@@ -1360,6 +1372,10 @@
 .transition-normal {
   transition-behavior: normal;
 }
+.duration-300 {
+  --tw-duration: 300ms;
+  transition-duration: 300ms;
+}
 .ease-linear {
   --tw-ease: linear;
   transition-timing-function: linear;
@@ -1766,6 +1782,10 @@
   syntax: "*";
   inherits: false;
 }
+@property --tw-duration {
+  syntax: "*";
+  inherits: false;
+}
 @property --tw-ease {
   syntax: "*";
   inherits: false;
@@ -1783,10 +1803,6 @@
   inherits: false;
 }
 @property --tw-contain-style {
-  syntax: "*";
-  inherits: false;
-}
-@property --tw-duration {
   syntax: "*";
   inherits: false;
 }
