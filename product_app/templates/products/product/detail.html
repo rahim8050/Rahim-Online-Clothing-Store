@@ -1,5 +1,20 @@
 {% extends 'base.html' %}
 {%block title%}{{product.name}}{%endblock%}
 {%block content%}
-    <h1>{{ product.name }}</h1>
+   <div class="container mx-auto p-4 flex">
+   <div>
+       {% if product.image %}
+       <img src="{{product.image.url}}" alt="{{product.name}}" class="w-full">
+       {%else%}
+           <p>The image is not available</p>
+       {%endif%}
+
+                <h3 class="font-semibold">{{product.name}}</h3>
+                <p>{{product.description}}</p>
+                <p class="text-indigo-600">${{product.price}}</p>
+       <form action="">
+           <button type="submit" class="text-white bg-indigo-600 px-4 py-2 rounded-b-none">Add To Cart </button>
+       </form>
+   </div>
+   </div>
 {% endblock %}

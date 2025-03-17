@@ -25,9 +25,7 @@
         {%endif%}
         <div class="grid grid-cols-3 gap-4">
             {% for product in products %}
-{#            <a href="{% url 'product_detail' id=product.id slug=product.slug %}">#}
-{#  {{ product.name }}#}
-{#</a>#}<a href="{% url 'product_detail' product.id product.slug %}">
+<a href="{% url 'product_detail' product.id product.slug %}">
 
             <div>
                 {% if product.image %}
