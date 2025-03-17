@@ -1,6 +1,6 @@
 from django.db import models
 from django.db.models import Sum
-# Example: Import in another app's views.py
+
 from product_app.models import Product
 
 class Cart(models.Model):
