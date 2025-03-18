@@ -13,10 +13,18 @@
         	 <img src="{{ item.product.image.url }}" alt="{{ item.product.name }}  ">
         {% endif %}
         <div class="flex-grow">
-           <h3> {{ item.product.name }}</h3>
-            <p>{{ item.product.description }}</p>
-            <p>$:{{ item.product.price }}</p>
-            <p>Quantity:{{ item.quantity }}</p>
+            <a href="{% url 'product_detail' item.product.id item.product.slug %}">
+           <h3 class="font-semibold text-lg "    > {{ item.product.name }}</h3>
+            </a>
+            <p class="text-grey-700">{{ item.product.description }}</p>
+            <p class="text-indigo-600">${{ item.product.price }}</p>
+            <p class="text-grey-600">Quantity:{{ item.quantity }}</p>
+            <div class="flex-shrink">
+                <form action="" method="post">
+                    {% csrf_token %}
+                    <button type="submit" class="bg-red-600 text-white px-4 py-2 rounded ">X</button>
+                </form>
+            </div>
             </div>
         </li>
         {% endfor %}
