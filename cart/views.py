@@ -1,5 +1,5 @@
       
-from django.shortcuts import render, get_object_or_404
+from django.shortcuts import render, get_object_or_404, redirect
 from django.views.decorators.http import require_POST
 from django.http import JsonResponse
 
@@ -46,5 +46,11 @@ def cart_detail(request):
               cart = get_object_or_404(Cart, id=cart_id)
               return render(request, 'cart/cart_detail.html', {'cart': cart})
     
+def cart_remove(request, product_id):
+    cart_id = request.session.get('cart_id')
+    cart = get_object_or_404(Cart, id=cart_id)
+    item = get_object_or_404(CartItem, id=product_id,cart=cart)
+    item.delete()
+    return redirect("cart:cart_detail")
 
-        
+

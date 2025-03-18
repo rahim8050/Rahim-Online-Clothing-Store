@@ -10,7 +10,7 @@
         {% for item in cart.items.all %}
         <li class="flex items-center p-4">
         {% if item.product.image %}
-        	 <img src="{{ item.product.image.url }}" alt="{{ item.product.name }}  ">
+        	 <img src="{{ item.product.image.url }}" alt="{{ item.product.name }} class="w-24 mr-4  ">
         {% endif %}
         <div class="flex-grow">
             <a href="{% url 'product_detail' item.product.id item.product.slug %}">
@@ -20,9 +20,9 @@
             <p class="text-indigo-600">${{ item.product.price }}</p>
             <p class="text-grey-600">Quantity:{{ item.quantity }}</p>
             <div class="flex-shrink">
-                <form action="" method="post">
+                <form action="{% url 'cart:cart_remove' item.id  %}" method="post">
                     {% csrf_token %}
-                    <button type="submit" class="bg-red-600 text-white px-4 py-2 rounded ">X</button>
+                    <button type="submit" class="bg-red-600 text-white px-4 py-1 text-xs rounded ">X</button>
                 </form>
             </div>
             </div>
