@@ -4,4 +4,22 @@
 {% endblock %}
 {% block content %}
 	<h2>My Cart</h2>
+    
+    {% if cart %}
+    	<ul>
+        {% for item in cart.items.all %}
+        <li class="flex items-center p-4">
+        {% if item.product.image %}
+        	 <img src="{{ item.product.image.url }}" alt="{{ item.product.name }}  ">
+        {% endif %}
+        <div class="flex-grow">
+           <h3> {{ item.product.name }}</h3>
+            <p>{{ item.product.description }}</p>
+            <p>$:{{ item.product.price }}</p>
+            <p>Quantity:{{ item.quantity }}</p>
+            </div>
+        </li>
+        {% endfor %}
+        </ul>
+    {% endif %} 
 {% endblock %}
