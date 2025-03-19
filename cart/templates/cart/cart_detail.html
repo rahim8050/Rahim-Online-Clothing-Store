@@ -10,7 +10,13 @@
         {% for item in cart.items.all %}
         <li class="flex items-center p-4">
         {% if item.product.image %}
-        	 <img src="{{ item.product.image.url }}" alt="{{ item.product.name }} class="w-24 mr-4  ">
+      <div class="flex justify-center">
+  <img
+    src="{{ item.product.image.url }}"
+    alt="{{ item.product.name }}"
+    class="w-1/2 h-auto object-cover"
+  >
+</div>
         {% endif %}
         <div class="flex-grow">
             <a href="{% url 'product_detail' item.product.id item.product.slug %}">
@@ -29,6 +35,7 @@
         </li>
         {% endfor %}
         </ul>
+        <p class="tex-emerald-700"><strong>the total price is ${{ cart.get_total_price }}</strong></p>
         {% else %}
         <p class="text-red-700">Your cart is empty</p>
     {% endif %} 
