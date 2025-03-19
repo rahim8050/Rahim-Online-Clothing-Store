@@ -44,6 +44,8 @@ def cart_detail(request):
        cart_id =request.session.get('cart_id')
        if cart_id:
               cart = get_object_or_404(Cart, id=cart_id)
+              if not cart or not cart.items.exists():
+                  cart = None
               return render(request, 'cart/cart_detail.html', {'cart': cart})
     
 def cart_remove(request, product_id):
