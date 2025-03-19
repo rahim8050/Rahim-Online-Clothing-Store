@@ -10,13 +10,11 @@
         {% for item in cart.items.all %}
         <li class="flex items-center p-4">
         {% if item.product.image %}
-      <div class="flex justify-center">
-  <img
-    src="{{ item.product.image.url }}"
-    alt="{{ item.product.name }}"
-    class="w-1/2 h-auto object-cover"
-  >
-</div>
+<img
+  src="{{ item.product.image.url }}"
+  alt="{{ item.product.name }}"
+  class="w-full md:w-1/2 lg:w-1/3 h-auto object-cover"
+>
         {% endif %}
         <div class="flex-grow">
             <a href="{% url 'product_detail' item.product.id item.product.slug %}">
