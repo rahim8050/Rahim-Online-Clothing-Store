@@ -40,6 +40,8 @@ INSTALLED_APPS = [
     'product_app.apps.MainAppConfig',
     'cart.apps.CartConfig',
     'orders.apps.OrdersConfig',
+    'crispy_forms',
+    'crispy_bootstrap5',
     
 
 
@@ -129,6 +131,11 @@ STATIC_URL = 'static/'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 STATICFILES_DIRS = [BASE_DIR / "static"]
+
+
+CRISPY_ALLOWED_TEMPLATE_PACKS = "bootstrap5"
+
+CRISPY_TEMPLATE_PACK = "bootstrap5"
 
 MEDIA_URL = 'media/'
 STATIC_ROOT = BASE_DIR/'staticfiles'
