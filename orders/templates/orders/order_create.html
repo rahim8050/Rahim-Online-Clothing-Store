@@ -2,11 +2,12 @@
 {% load crispy_forms_filters %}
 {% load crispy_forms_tags %}
 {% block title %}
-	<title>your order</title>
+	your order
 {% endblock %}
 {% block content %}
 <div>
-    <form action="">
+<h2 class="font-semibold mb-4 text-indigo-600">Check Out</h2>
+    <form action="" method="post">
         {% csrf_token %}
         {{ form | crispy }}
         <button type="submit" class="text-white bg-indigo-600 px-4 py-2 rounded-b-none mt-4">Place Order</button>
