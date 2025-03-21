@@ -1,0 +1,13 @@
+{% extends 'base.html' %}
+{% block title %}
+	<title>your order</title>
+{% endblock %}
+{% block content %}
+<div>
+    <form action="">
+        {% csrf_token %}
+        {{ form.as_p }}
+        <button type="submit">make Order</button>
+    </form>
+</div>
+{% endblock %}
