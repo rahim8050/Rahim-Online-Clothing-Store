@@ -42,6 +42,7 @@ INSTALLED_APPS = [
     'orders.apps.OrdersConfig',
     'crispy_forms',
     'crispy_bootstrap5',
+    'users.apps.UsersConfig'
     
 
 
@@ -140,3 +141,5 @@ CRISPY_TEMPLATE_PACK = "bootstrap5"
 MEDIA_URL = 'media/'
 STATIC_ROOT = BASE_DIR/'staticfiles'
 MEDIA_ROOT = BASE_DIR/'mediafiles'
+
+AUTH_USER_MODEL = 'users.CustomUser'
