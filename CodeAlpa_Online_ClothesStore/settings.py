@@ -42,7 +42,8 @@ INSTALLED_APPS = [
     'orders.apps.OrdersConfig',
     'crispy_forms',
     'crispy_bootstrap5',
-    'users.apps.UsersConfig'
+    'users.apps.UsersConfig',
+    'widget_tweaks',
     
 
 
