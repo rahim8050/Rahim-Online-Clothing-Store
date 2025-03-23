@@ -1,5 +1,9 @@
+from django.views import View
+from django.db.models import Q
+from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.shortcuts import render, get_object_or_404
-from django.utils.text import normalize_newlines
+from product_app.models import Product
+
 
 from .models import Category,Product
 # Create your views here.
@@ -22,3 +26,24 @@ def product_detail(request,id,slug):
         'product': product,
     })
 
+def searchproduct(request):
+    return render(request, 'products/product/search_results.html')
+def SearchProduct(request):
+    search_term = request.GET.get('Search', '')
+
+    # Filter products
+    data = Product.objects.filter(
+        Q(name__icontains=search_term) |
+        Q(description__icontains=search_term)
+    ).order_by('id')
+
+    # Pagination
+    paginator = Paginator(data, 15)  # Fixed per_page syntax
+    page = request.GET.get('page', 1)
+
+    try:
+        paginated_data = paginator.page(page)  # Correct method
+    except (EmptyPage, PageNotAnInteger):
+        paginated_data = paginator.page(1)
+
+    return render(request, 'product/search_results.html', {"data": paginated_data})

@@ -1,5 +1,5 @@
 from django.contrib.auth import login
-from django.contrib.auth.views import LoginView
+from django.contrib.auth.views import LoginView, LogoutView
 from django.shortcuts import render
 from django.views.generic import FormView
 
@@ -11,7 +11,8 @@ def home (request):
     pass
 class Login(LoginView):
     template_name = "users/accounts/login.html"
-
+class Logout(LogoutView):
+    next_page = "/"
 class RegisterUser(FormView):
     template_name = "users/accounts/register.html"
     form_class = RegisterUserForm

@@ -1,7 +1,6 @@
 <nav class="container mx-auto p-4 flex justify-between items-center">
     <a href='/' class="text-2xl font-bold text-indigo-600 hover:text-indigo-800 transition-colors duration-300">Rahim  Clothes Store</a>
     <a href="{% url 'register'%}" class="text-indigo-600 hover:text-indigo-800 transition-colors duration-300" >Create account</a>
-    <a href="{% url 'login' %}" class="text-indigo-600 hover:text-indigo-800 transition-colors duration-300">Login</a>
 
 <a href="{% url 'cart:cart_detail'%}">
     <svg class="w-8" version="1.1" id="Layer_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
@@ -17,15 +16,25 @@
 </a>
     <div>
         {% if user.is_authenticated  %}
-            <form method="post" action="">
+            <form method="post" action="{% url 'logout' %}">
             {% csrf_token %}
             <button class="text-indigo-600 hover:text-indigo-800 transition-colors duration-300" type="submit">logout</button>
             </form>
+            {% else %}
+      <li class="list-none inline-block">
+
+        <a href="{% url 'login' %}"
+   class="nav-link text-light hover:text-blue-400 hover:underline
+          hover:underline-offset-4 transition-all duration-300
+          transform hover:scale-105 focus:outline-none">
+  Login
+</a>
+      </li>
         {% endif %} 
     </div>
     <ul>
 
-             <form class="d-flex" method="get" action="#">
+             <form class="d-flex" method="get" action="{% url 'product_app:SearchProduct' %}">
                     <input class="form-control me-2" type="search" name="Search"
                            placeholder="Search Products" aria-label="Search">
                     <button class="btn btn-outline-light" type="submit">Search</button>
