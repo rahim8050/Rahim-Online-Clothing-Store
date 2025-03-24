@@ -31,6 +31,8 @@ urlpatterns = [
     path('product/<int:id>/<slug:slug>/', views.product_detail, name="product_detail"),
     path("users/", include("users.urls")),
     path('products/', include('product_app.urls', namespace='product_app')),
+    path('accounts/profile/', views.profile, name='profile'),
+
 
 
 

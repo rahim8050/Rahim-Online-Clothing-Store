@@ -1,3 +1,4 @@
+from django.contrib.auth.decorators import login_required
 from django.views import View
 from django.db.models import Q
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
@@ -26,9 +27,10 @@ def product_detail(request,id,slug):
         'product': product,
     })
 
-def searchproduct(request):
-    return render(request, 'products/product/search_results.html')
+# def searchproduct(request):
+#     return render(request, 'products/product/search_results.html')
 def SearchProduct(request):
+    data = Product.objects.all().order_by('id').values()
     search_term = request.GET.get('Search', '')
 
     # Filter products
@@ -46,4 +48,7 @@ def SearchProduct(request):
     except (EmptyPage, PageNotAnInteger):
         paginated_data = paginator.page(1)
 
-    return render(request, 'product/list.html', {"data": paginated_data})
+    return render(request, 'products/product/list.html', {"data": paginated_data})
+@login_required
+def profile(request):
+    return render(request, 'users/accounts/profile.html')

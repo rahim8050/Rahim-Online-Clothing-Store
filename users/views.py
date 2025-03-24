@@ -22,3 +22,5 @@ class RegisterUser(FormView):
         user = form.save()
         login(self.request, user)
         return super().form_valid(form)
+def profile(request):
+    return render(request, 'users/accounts/profile.html')
