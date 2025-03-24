@@ -46,4 +46,4 @@ def SearchProduct(request):
     except (EmptyPage, PageNotAnInteger):
         paginated_data = paginator.page(1)
 
-    return render(request, 'product/search_results.html', {"data": paginated_data})
+    return render(request, 'product/list.html', {"data": paginated_data})

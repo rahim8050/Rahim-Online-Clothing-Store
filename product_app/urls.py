@@ -7,6 +7,6 @@ from .views import SearchProduct
 app_name = 'product_app'
 urlpatterns = [
 path('search/', SearchProduct, name='SearchProduct'),
-path('searched/',views.searchproduct,name='search product')
+path('searched/',views.searchproduct,name='search product'),
 
 ]
