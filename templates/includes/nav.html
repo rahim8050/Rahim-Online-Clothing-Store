@@ -1,13 +1,19 @@
-<nav class="bg-white shadow-lg">
+                   <g id="Page-1_4_" sketch:type="MSPage">
+
+
+
+
+                   <nav class="bg-white shadow-lg">
     <div class="container mx-auto px-4">
         <div class="flex justify-between items-center py-4">
+            <!-- Logo -->
             <a href='/' class="text-2xl font-bold text-indigo-600 hover:text-indigo-800 transition-colors duration-300">
                 Rahim Clothes Store
             </a>
 
-
+            <!-- Desktop Menu -->
             <div class="hidden md:flex items-center space-x-6">
-
+                <!-- Search Form -->
                 <form class="flex items-center" method="get" action="{% url 'product_app:SearchProduct' %}">
                     <input class="border rounded-l py-1 px-2" type="search" name="Search"
                            placeholder="Search Products" aria-label="Search">
@@ -15,24 +21,12 @@
                             type="submit">Search</button>
                 </form>
 
-
+                <!-- Navigation Items -->
                 <a href="{% url 'register'%}" class="text-indigo-600 hover:text-indigo-800 transition-colors duration-300">
                     Create account
                 </a>
 
-
-                <a href="{% url 'cart:cart_detail'%}" class="text-indigo-600 hover:text-indigo-800">
-                    <svg class="w-8" viewBox="0 0 40 36">
-                   <g id="Page-1_4_" sketch:type="MSPage">
-    <g id="Desktop_4_" transform="translate(-84.000000, -410.000000)" sketch:type="MSArtboardGroup">
-        <path id="Cart" sketch:type="MSShapeGroup" class="st0" d="M94.5,434.6h24.8l4.7-15.7H92.2l-1.3-8.9H84v4.8h3.1l3.7,27.8h0.1
-            c0,1.9,1.8,3.4,3.9,3.4c2.2,0,3.9-1.5,3.9-3.4h12.8c0,1.9,1.8,3.4,3.9,3.4c2.2,0,3.9-1.5,3.9-3.4h1.7v-3.9l-25.8-0.1L94.5,434.6"
-            />
-    </g>
-</g>
-                    </svg>
-                </a>
-
+                <!-- Auth Section -->
                 <div class="flex items-center">
                     {% if user.is_authenticated %}
                     <form method="post" action="{% url 'logout' %}">
@@ -49,15 +43,31 @@
                 </div>
             </div>
 
+            <!-- Right Side Icons (Cart + Mobile Menu) -->
+            <div class="flex items-center space-x-4">
+                <!-- Cart Icon (Always visible) -->
+                <a href="{% url 'cart:cart_detail'%}" class="text-indigo-600 hover:text-indigo-800">
+                    <svg class="w-8" viewBox="0 0 40 36">
+                            <g id="Desktop_4_" transform="translate(-84.000000, -410.000000)" sketch:type="MSArtboardGroup">
+        <path id="Cart" sketch:type="MSShapeGroup" class="st0" d="M94.5,434.6h24.8l4.7-15.7H92.2l-1.3-8.9H84v4.8h3.1l3.7,27.8h0.1
+            c0,1.9,1.8,3.4,3.9,3.4c2.2,0,3.9-1.5,3.9-3.4h12.8c0,1.9,1.8,3.4,3.9,3.4c2.2,0,3.9-1.5,3.9-3.4h1.7v-3.9l-25.8-0.1L94.5,434.6"
+            />
+    </g>
+</g>
+                    </svg>
+                </a>
 
-            <button id="mobile-menu-button" class="md:hidden text-indigo-600 hover:text-indigo-800">
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                          d="M4 6h16M4 12h16M4 18h16"/>
-                </svg>
-            </button>
+                <!-- Mobile Menu Button -->
+                <button id="mobile-menu-button" class="md:hidden text-indigo-600 hover:text-indigo-800">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M4 6h16M4 12h16M4 18h16"/>
+                    </svg>
+                </button>
+            </div>
         </div>
 
+        <!-- Mobile Menu -->
         <div id="mobile-menu" class="hidden md:hidden pb-4 space-y-4">
             <form class="flex flex-col" method="get" action="{% url 'product_app:SearchProduct' %}">
                 <input class="border rounded-t py-1 px-2" type="search" name="Search"
@@ -86,7 +96,7 @@
 </nav>
 
 <script>
-
+    // Mobile menu toggle
     const mobileMenuButton = document.getElementById('mobile-menu-button');
     const mobileMenu = document.getElementById('mobile-menu');
 
