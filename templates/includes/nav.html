@@ -1,47 +1,96 @@
-<nav class="container mx-auto p-4 flex justify-between items-center">
-    <a href='/' class="text-2xl font-bold text-indigo-600 hover:text-indigo-800 transition-colors duration-300">Rahim  Clothes Store</a>
-    <a href="{% url 'register'%}" class="text-indigo-600 hover:text-indigo-800 transition-colors duration-300" >Create account</a>
+<nav class="bg-white shadow-lg">
+    <div class="container mx-auto px-4">
+        <div class="flex justify-between items-center py-4">
+            <a href='/' class="text-2xl font-bold text-indigo-600 hover:text-indigo-800 transition-colors duration-300">
+                Rahim Clothes Store
+            </a>
 
-<a href="{% url 'cart:cart_detail'%}">
-    <svg class="w-8" version="1.1" id="Layer_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
-	 width="40px" height="36px" viewBox="0 0 40 36" style="enable-background:new 0 0 40 36;" xml:space="preserve">
-<g id="Page-1_4_" sketch:type="MSPage">
-	<g id="Desktop_4_" transform="translate(-84.000000, -410.000000)" sketch:type="MSArtboardGroup">
-		<path id="Cart" sketch:type="MSShapeGroup" class="st0" d="M94.5,434.6h24.8l4.7-15.7H92.2l-1.3-8.9H84v4.8h3.1l3.7,27.8h0.1
-			c0,1.9,1.8,3.4,3.9,3.4c2.2,0,3.9-1.5,3.9-3.4h12.8c0,1.9,1.8,3.4,3.9,3.4c2.2,0,3.9-1.5,3.9-3.4h1.7v-3.9l-25.8-0.1L94.5,434.6"
-			/>
-	</g>
-</g>
-  </svg>
-</a>
 
-    <div>
-        {% if user.is_authenticated  %}
-            <form method="post" action="{% url 'logout' %}">
-            {% csrf_token %}
-            <button class="text-indigo-600 hover:text-indigo-800 transition-colors duration-300" type="submit">logout</button>
-            </form>
-            {% else %}
-      <li class="list-none inline-block">
+            <div class="hidden md:flex items-center space-x-6">
 
-        <a href="{% url 'login' %}"
-   class="nav-link text-light hover:text-blue-400 hover:underline
-          hover:underline-offset-4 transition-all duration-300
-          transform hover:scale-105 focus:outline-none">
-  Login
-</a>
-      </li>
-        {% endif %} 
-    </div>
-    <ul>
-
-             <form class="d-flex" method="get" action="{% url 'product_app:SearchProduct' %}">
-                    <input class="form-control me-2" type="search" name="Search"
+                <form class="flex items-center" method="get" action="{% url 'product_app:SearchProduct' %}">
+                    <input class="border rounded-l py-1 px-2" type="search" name="Search"
                            placeholder="Search Products" aria-label="Search">
-                    <button class="btn btn-outline-light" type="submit">Search</button>
+                    <button class="bg-indigo-600 text-white rounded-r px-4 py-1 hover:bg-indigo-800"
+                            type="submit">Search</button>
                 </form>
 
-    </ul>
-       
-   
+
+                <a href="{% url 'register'%}" class="text-indigo-600 hover:text-indigo-800 transition-colors duration-300">
+                    Create account
+                </a>
+
+
+                <a href="{% url 'cart:cart_detail'%}" class="text-indigo-600 hover:text-indigo-800">
+                    <svg class="w-8" viewBox="0 0 40 36">
+                   <g id="Page-1_4_" sketch:type="MSPage">
+    <g id="Desktop_4_" transform="translate(-84.000000, -410.000000)" sketch:type="MSArtboardGroup">
+        <path id="Cart" sketch:type="MSShapeGroup" class="st0" d="M94.5,434.6h24.8l4.7-15.7H92.2l-1.3-8.9H84v4.8h3.1l3.7,27.8h0.1
+            c0,1.9,1.8,3.4,3.9,3.4c2.2,0,3.9-1.5,3.9-3.4h12.8c0,1.9,1.8,3.4,3.9,3.4c2.2,0,3.9-1.5,3.9-3.4h1.7v-3.9l-25.8-0.1L94.5,434.6"
+            />
+    </g>
+</g>
+                    </svg>
+                </a>
+
+                <div class="flex items-center">
+                    {% if user.is_authenticated %}
+                    <form method="post" action="{% url 'logout' %}">
+                        {% csrf_token %}
+                        <button class="text-indigo-600 hover:text-indigo-800 transition-colors duration-300"
+                                type="submit">Logout</button>
+                    </form>
+                    {% else %}
+                    <a href="{% url 'login' %}"
+                       class="text-indigo-600 hover:text-indigo-800 transition-colors duration-300">
+                        Login
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+
+
+            <button id="mobile-menu-button" class="md:hidden text-indigo-600 hover:text-indigo-800">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M4 6h16M4 12h16M4 18h16"/>
+                </svg>
+            </button>
+        </div>
+
+        <div id="mobile-menu" class="hidden md:hidden pb-4 space-y-4">
+            <form class="flex flex-col" method="get" action="{% url 'product_app:SearchProduct' %}">
+                <input class="border rounded-t py-1 px-2" type="search" name="Search"
+                       placeholder="Search Products" aria-label="Search">
+                <button class="bg-indigo-600 text-white rounded-b px-4 py-1 hover:bg-indigo-800"
+                        type="submit">Search</button>
+            </form>
+
+            <a href="{% url 'register'%}" class="block text-indigo-600 hover:text-indigo-800">
+                Create account
+            </a>
+
+            {% if user.is_authenticated %}
+            <form method="post" action="{% url 'logout' %}">
+                {% csrf_token %}
+                <button class="text-indigo-600 hover:text-indigo-800 w-full text-left"
+                        type="submit">Logout</button>
+            </form>
+            {% else %}
+            <a href="{% url 'login' %}" class="block text-indigo-600 hover:text-indigo-800">
+                Login
+            </a>
+            {% endif %}
+        </div>
+    </div>
 </nav>
+
+<script>
+
+    const mobileMenuButton = document.getElementById('mobile-menu-button');
+    const mobileMenu = document.getElementById('mobile-menu');
+
+    mobileMenuButton.addEventListener('click', () => {
+        mobileMenu.classList.toggle('hidden');
+    });
+</script>
