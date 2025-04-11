@@ -17,26 +17,35 @@
     </aside>
 
     <main class="w-3/4 p-4">
-        <!-- Added search header -->
-        {% if request.GET.search %}
-        <h2 class="font-bold mb-4">Search results for "{{ request.GET.search }}"</h2>
-        {% elif category %}
-        <h2 class="font-bold mb-4">{{ category.name }}</h2>
-        {% else %}
-        <h2 class="font-bold mb-4">All Products:</h2>
-        {% endif %}
+        <!-- Search Header and Form -->
+        <div class="mb-6">
+            <form method="get" action="{% url 'product_search' %}">
+                <input type="text" name="search" placeholder="Search products..."
+                       value="{{ request.GET.search }}" class="border p-2 w-64">
+                <button type="submit" class="bg-blue-500 text-white px-4 py-2">Search</button>
+            </form>
 
+            {% if request.GET.search %}
+                <h2 class="font-bold mt-4">Search results for "{{ request.GET.search }}"</h2>
+            {% elif category %}
+                <h2 class="font-bold mt-4">{{ category.name }}</h2>
+            {% else %}
+                <h2 class="font-bold mt-4">All Products</h2>
+            {% endif %}
+        </div>
+
+        <!-- Product Grid -->
         <div class="grid grid-cols-3 gap-4">
-            {% for product in data %}  <!-- Changed from products to data -->
+            {% for product in products %}
                 <a href="{% url 'product_detail' product.id product.slug %}">
-                    <div class="border p-2 hover:shadow-lg">
+                    <div class="border p-2 hover:shadow-lg transition-shadow">
                         {% if product.image %}
-                        <img src="{{ product.image.url }}" alt="{{ product.name }}"
-                             class="h-64 w-full object-cover">
+                            <img src="{{ product.image.url }}" alt="{{ product.name }}"
+                                 class="h-64 w-full object-cover">
                         {% else %}
-                        <div class="h-64 bg-gray-100 flex items-center justify-center">
-                            <p class="text-emerald-600">Image not available</p>
-                        </div>
+                            <div class="h-64 bg-gray-100 flex items-center justify-center">
+                                <p class="text-emerald-600">Image not available</p>
+                            </div>
                         {% endif %}
 
                         <h3 class="font-semibold mt-2">{{ product.name }}</h3>
@@ -44,34 +53,40 @@
                         <p class="text-indigo-600 mt-2">${{ product.price }}</p>
                     </div>
                 </a>
-            {% empty %}  <!-- Added empty state -->
+            {% empty %}
                 <div class="col-span-3 text-center py-8">
-                    <p class="text-gray-500">No products found matching your search.</p>
+                    <p class="text-gray-500">
+                        {% if request.GET.search %}
+                            No products found matching "{{ request.GET.search }}"
+                        {% else %}
+                            No products available
+                        {% endif %}
+                    </p>
                 </div>
             {% endfor %}
         </div>
 
-        <!-- Pagination Links with search term preservation -->
-        {% if data.paginator.num_pages > 1 %}
+        <!-- Pagination -->
+        {% if products.has_other_pages %}
         <div class="mt-8 flex justify-center">
             <div class="pagination">
                 <span class="step-links flex gap-4">
-                    {% if data.has_previous %}
-                    <a href="?page=1&search={{ request.GET.search }}"
-                       class="px-4 py-2 border">« First</a>
-                    <a href="?page={{ data.previous_page_number }}&search={{ request.GET.search }}"
-                       class="px-4 py-2 border">Previous</a>
+                    {% if products.has_previous %}
+                        <a href="?page=1&search={{ request.GET.search }}"
+                           class="px-4 py-2 border">« First</a>
+                        <a href="?page={{ products.previous_page_number }}&search={{ request.GET.search }}"
+                           class="px-4 py-2 border">Previous</a>
                     {% endif %}
 
                     <span class="current px-4 py-2">
-                        Page {{ data.number }} of {{ data.paginator.num_pages }}
+                        Page {{ products.number }} of {{ products.paginator.num_pages }}
                     </span>
 
-                    {% if data.has_next %}
-                    <a href="?page={{ data.next_page_number }}&search={{ request.GET.search }}"
-                       class="px-4 py-2 border">Next</a>
-                    <a href="?page={{ data.paginator.num_pages }}&search={{ request.GET.search }}"
-                       class="px-4 py-2 border">Last »</a>
+                    {% if products.has_next %}
+                        <a href="?page={{ products.next_page_number }}&search={{ request.GET.search }}"
+                           class="px-4 py-2 border">Next</a>
+                        <a href="?page={{ products.paginator.num_pages }}&search={{ request.GET.search }}"
+                           class="px-4 py-2 border">Last »</a>
                     {% endif %}
                 </span>
             </div>

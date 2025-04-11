@@ -5,6 +5,7 @@ app_name = 'product_app'  # Namespace for your app
 
 urlpatterns = [
     # Proper path syntax with name parameter
-path('Product/search/', SearchProduct, name='SearchProduct')
+path('Product/search/', SearchProduct, name='SearchProduct'),
+
 ]
 

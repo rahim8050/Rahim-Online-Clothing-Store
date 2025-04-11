@@ -27,25 +27,33 @@ def product_detail(request,id,slug):
         'product': product,
     })
 
-def SearchProduct(request):
-    search_term = request.GET.get('search', '')  # Use lowercase 'search'
 
-    # Filter products
-    data = Product.objects.filter(
-        Q(name__icontains=search_term) |
-        Q(description__icontains=search_term)
-    ).order_by('id')
+# Example view
+def SearchProduct(request, category_slug=None):
+    category = None
+    products = Product.objects.all()
 
-    # Pagination
-    paginator = Paginator(data, 15)
-    page = request.GET.get('page', 1)
+    if category_slug:
+        category = get_object_or_404(Category, slug=category_slug)
+        products = products.filter(category=category)
 
-    try:
-        paginated_data = paginator.page(page)
-    except (EmptyPage, PageNotAnInteger):
-        paginated_data = paginator.page(1)
+    if 'search' in request.GET:
+        search_term = request.GET['search']
+        products = products.filter(
+            Q(name__icontains=search_term) |
+            Q(description__icontains=search_term)
+        )
 
-    return render(request, 'products/product/list.html', {"data": paginated_data})
+    paginator = Paginator(products, 12)
+    page_number = request.GET.get('page')
+    products = paginator.get_page(page_number)
+
+    return render(request, 'products/product/list.html', {
+        'category': category,
+        'products': products,
+        'categories': Category.objects.all()
+    })
+
 # def SearchProduct(request):
 #     data = Product.objects.all().order_by('id').values()
 #     search_term = request.GET.get('Search', '')
