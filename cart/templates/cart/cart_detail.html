@@ -39,6 +39,6 @@
     {% endif %}
     <form action="{% url 'orders:order_create' %}" method="post">
     {% csrf_token %}
-    <button type="submit" class="text-white bg-indigo-600 px-4 py-2 rounded-b-none mt-4">Proceed To Checkout</button>
+    <button type="submit" onclick="showCartAddedAnimation()" class="text-white bg-indigo-600 px-4 py-2 rounded-b-none mt-4">Proceed To Checkout</button>
     </form>
 {% endblock %}
