@@ -27,11 +27,8 @@ def product_detail(request,id,slug):
         'product': product,
     })
 
-# def searchproduct(request):
-#     return render(request, 'products/product/search_results.html')
 def SearchProduct(request):
-    data = Product.objects.all().order_by('id').values()
-    search_term = request.GET.get('Search', '')
+    search_term = request.GET.get('search', '')  # Use lowercase 'search'
 
     # Filter products
     data = Product.objects.filter(
@@ -40,15 +37,35 @@ def SearchProduct(request):
     ).order_by('id')
 
     # Pagination
-    paginator = Paginator(data, 15)  # Fixed per_page syntax
+    paginator = Paginator(data, 15)
     page = request.GET.get('page', 1)
 
     try:
-        paginated_data = paginator.page(page)  # Correct method
+        paginated_data = paginator.page(page)
     except (EmptyPage, PageNotAnInteger):
         paginated_data = paginator.page(1)
 
     return render(request, 'products/product/list.html', {"data": paginated_data})
+# def SearchProduct(request):
+#     data = Product.objects.all().order_by('id').values()
+#     search_term = request.GET.get('Search', '')
+#
+#     # Filter products
+#     data = Product.objects.filter(
+#         Q(name__icontains=search_term) |
+#         Q(description__icontains=search_term)
+#     ).order_by('id')
+#
+#     # Pagination
+#     paginator = Paginator(data, 15)  # Fixed per_page syntax
+#     page = request.GET.get('page', 1)
+#
+#     try:
+#         paginated_data = paginator.page(page)  # Correct method
+#     except (EmptyPage, PageNotAnInteger):
+#         paginated_data = paginator.page(1)
+#
+#     return render(request, 'products/product/list.html', {"data": paginated_data})
 @login_required
 def profile(request):
     return render(request, 'users/accounts/profile.html')
