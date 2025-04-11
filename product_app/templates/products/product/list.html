@@ -19,11 +19,7 @@
     <main class="w-3/4 p-4">
         <!-- Search Header and Form -->
         <div class="mb-6">
-            <form method="get" action="{% url 'product_search' %}">
-                <input type="text" name="search" placeholder="Search products..."
-                       value="{{ request.GET.search }}" class="border p-2 w-64">
-                <button type="submit" class="bg-blue-500 text-white px-4 py-2">Search</button>
-            </form>
+
 
             {% if request.GET.search %}
                 <h2 class="font-bold mt-4">Search results for "{{ request.GET.search }}"</h2>

@@ -9,7 +9,11 @@
 {#             Desktop Menu #}
             <div class="hidden md:flex items-center space-x-6">
 {#                 Search Form #}
-
+<form method="get" action="{% url 'product_search' %}">
+                <input type="text" name="search" placeholder="Search products..."
+                       value="{{ request.GET.search }}" class="border p-2 w-64">
+                <button type="submit" class="bg-blue-500 text-white px-4 py-2">Search</button>
+            </form>
 
 
 {#                 Navigation Items #}
