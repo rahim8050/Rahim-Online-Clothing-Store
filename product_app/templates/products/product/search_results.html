@@ -1,10 +1,83 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Title</title>
-</head>
-<body>
+{% extends "base.html" %}
 
-</body>
-</html>
+{% block title %}Rahim online--{% endblock %}
+
+{% block content %}
+
+<div class="container mx-auto p-4 flex">
+    <aside class="w-1/4 p-4">
+        <h2 class="font-bold">Categories:</h2>
+        <ul>
+            {% for category in categories %}
+            <li>
+                <a href="{% url 'product_list_by_category' category.slug %}">{{ category.name }}</a>
+            </li>
+            {% endfor %}
+        </ul>
+    </aside>
+
+    <main class="w-3/4 p-4">
+        <!-- Added search header -->
+        {% if request.GET.search %}
+        <h2 class="font-bold mb-4">Search results for "{{ request.GET.search }}"</h2>
+        {% elif category %}
+        <h2 class="font-bold mb-4">{{ category.name }}</h2>
+        {% else %}
+        <h2 class="font-bold mb-4">All Products:</h2>
+        {% endif %}
+
+        <div class="grid grid-cols-3 gap-4">
+            {% for product in data %}  <!-- Changed from products to data -->
+                <a href="{% url 'product_detail' product.id product.slug %}">
+                    <div class="border p-2 hover:shadow-lg">
+                        {% if product.image %}
+                        <img src="{{ product.image.url }}" alt="{{ product.name }}"
+                             class="h-64 w-full object-cover">
+                        {% else %}
+                        <div class="h-64 bg-gray-100 flex items-center justify-center">
+                            <p class="text-emerald-600">Image not available</p>
+                        </div>
+                        {% endif %}
+
+                        <h3 class="font-semibold mt-2">{{ product.name }}</h3>
+                        <p class="text-sm text-gray-600 truncate">{{ product.description }}</p>
+                        <p class="text-indigo-600 mt-2">${{ product.price }}</p>
+                    </div>
+                </a>
+            {% empty %}  <!-- Added empty state -->
+                <div class="col-span-3 text-center py-8">
+                    <p class="text-gray-500">No products found matching your search.</p>
+                </div>
+            {% endfor %}
+        </div>
+
+        <!-- Pagination Links with search term preservation -->
+        {% if data.paginator.num_pages > 1 %}
+        <div class="mt-8 flex justify-center">
+            <div class="pagination">
+                <span class="step-links flex gap-4">
+                    {% if data.has_previous %}
+                    <a href="?page=1&search={{ request.GET.search }}"
+                       class="px-4 py-2 border">« First</a>
+                    <a href="?page={{ data.previous_page_number }}&search={{ request.GET.search }}"
+                       class="px-4 py-2 border">Previous</a>
+                    {% endif %}
+
+                    <span class="current px-4 py-2">
+                        Page {{ data.number }} of {{ data.paginator.num_pages }}
+                    </span>
+
+                    {% if data.has_next %}
+                    <a href="?page={{ data.next_page_number }}&search={{ request.GET.search }}"
+                       class="px-4 py-2 border">Next</a>
+                    <a href="?page={{ data.paginator.num_pages }}&search={{ request.GET.search }}"
+                       class="px-4 py-2 border">Last »</a>
+                    {% endif %}
+                </span>
+            </div>
+        </div>
+        {% endif %}
+    </main>
+</div>
+
+{% endblock %}
