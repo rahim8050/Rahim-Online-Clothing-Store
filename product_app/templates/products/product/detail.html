@@ -18,7 +18,7 @@
                 <p class="text-indigo-600">${{product.price}}</p>
      <form action="{% url 'cart:cart_add' product.id %}" method="POST" enctype="multipart/form-data" id="add_to_cart-form">
         {% csrf_token %}
-           <button type="submit" class="text-white bg-indigo-600 px-4 py-2 rounded-b-none">Add To Cart </button>
+           <button type="submit" onclick="updateCartCounter(1)"  class=" add-to-cart-button text-white bg-indigo-600 px-4 py-2 rounded-b-none">Add To Cart </button>
             <p id="message"></p>
        </form>
    </div>
