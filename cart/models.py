@@ -3,11 +3,22 @@ from django.db.models import Sum
 
 from product_app.models import Product
 
+
+# models.py
 class Cart(models.Model):
-   created_at = models.DateTimeField(auto_now_add=True)
-   updated_at = models.DateTimeField(auto_now=True)
-   def get_total_price(self):
-       return sum(item.get_total_price() for item in self.items.all())
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+
+    def total_items(self):
+        return self.items.aggregate(
+            total=Sum('quantity')
+        )['total'] or 0
+# class Cart(models.Model):
+#    created_at = models.DateTimeField(auto_now_add=True)
+#    updated_at = models.DateTimeField(auto_now=True)
+#    def get_total_price(self):
+#        return sum(item.get_total_price() for item in self.items.all())
 
 class CartItem(models.Model):
     cart = models.ForeignKey(Cart,related_name='items', on_delete=models.CASCADE)
