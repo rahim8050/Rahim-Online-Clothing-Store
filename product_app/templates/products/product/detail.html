@@ -1,34 +1,55 @@
 {% extends 'base.html' %}
 {%block title%}{{product.name}}{%endblock%}
 {%block content%}
-   <div class="container mx-auto p-4 flex">
-   <div>
-       {% if product.image %}
-       <img
-  src="{{product.image.url}}"
-  alt="{{product.name}}"
-  class="w-full md:w-1/2 max-w-full h-auto inline-block"
->
-       {%else%}
-           <p>The image is not available</p>
-       {%endif%}
+<div class="container mx-auto p-4 flex">
+    <div>
+        {% if product.image %}
+        <img src="{{product.image.url}}" alt="{{product.name}}" class="w-full md:w-1/2 max-w-full h-auto inline-block">
+        {% else %}
+        <p>The image is not available</p>
+        {% endif %}
 
-                <h3 class="font-semibold">{{product.name}}</h3>
-                <p>{{product.description}}</p>
-                <p class="text-indigo-600">${{product.price}}</p>
-     <form action="{% url 'cart:cart_add' product.id %}" method="POST" enctype="multipart/form-data" id="add_to_cart-form">
-        {% csrf_token %}
-           <button type="submit" onclick="updateCartCounter(1)"  class=" add-to-cart-button text-white bg-indigo-600 px-4 py-2 rounded-b-none">Add To Cart </button>
-            <p id="message"></p>
-       </form>
-   </div>
-   </div>
-    <script>
+        <h3 class="font-semibold text-2xl mt-4">{{product.name}}</h3>
+        <p class="text-indigo-600 text-xl mb-4">${{product.price}}</p>
+
+        <!-- Description Toggle Button -->
+        <button onclick="toggleDescription(this)"
+                class="text-indigo-600 hover:text-indigo-800 bg-gray-100 hover:bg-gray-200 px-4 py-2 rounded mb-4 transition-colors duration-300">
+            Show Description
+        </button>
+
+        <!-- Description Content -->
+        <div id="description" class="hidden bg-gray-50 p-4 rounded-lg">
+            <p class="text-gray-700 leading-relaxed">{{product.description}}</p>
+        </div>
+
+        <form action="{% url 'cart:cart_add' product.id %}" method="POST" enctype="multipart/form-data" id="add_to_cart-form" class="mt-6">
+            {% csrf_token %}
+            <button type="submit" onclick="updateCartCounter(1)" class="add-to-cart-button text-white bg-indigo-600 hover:bg-indigo-700 px-6 py-3 rounded transition-colors duration-300">
+                Add To Cart
+            </button>
+            <p id="message" class="mt-2 text-sm text-gray-600"></p>
+        </form>
+    </div>
+</div>
+
+<script>
+    // Toggle description visibility
+    function toggleDescription(button) {
+        const description = document.getElementById('description');
+        description.classList.toggle('hidden');
+        button.textContent = description.classList.contains('hidden')
+            ? 'Show Description'
+            : 'Hide Description';
+    }
+
+    // Existing cart form handling
     document.getElementById('add_to_cart-form').addEventListener('submit', function(event) {
         event.preventDefault();
         const form = event.target;
         const url = form.action;
         const formData = new FormData(form);
+
         fetch(url, {
             method: 'POST',
             headers: {
@@ -36,20 +57,21 @@
             },
             body: formData
         })
-            .then (response => response.json())
-            .then( data => {
-                const messageElement = document.getElementById('message');
-                if (data.success) {
-                    messageElement.textContent = data.message;
-                } else {
-                    messageElement.textContent = 'failed to add to cart';
-                }
-            })
-        .catch( error =>{
+        .then(response => response.json())
+        .then(data => {
+            const messageElement = document.getElementById('message');
+            messageElement.textContent = data.success
+                ? data.message
+                : 'Failed to add to cart';
+
+            if (data.success) {
+                // Trigger cart counter animation
+                showCartAddedAnimation();
+            }
+        })
+        .catch(error => {
             console.error('Error:', error);
-
-            })
-
-    })
-    </script>
+        });
+    });
+</script>
 {% endblock %}
