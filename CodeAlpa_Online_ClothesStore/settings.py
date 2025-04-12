@@ -62,6 +62,12 @@ MIDDLEWARE = [
 
 ]
 
+CSRF_TRUSTED_ORIGINS = [
+    'https://codealpa-online-clothesstore.onrender.com',
+]
+
+SESSION_COOKIE_SECURE = True
+CSRF_COOKIE_SECURE = True
 ROOT_URLCONF = 'CodeAlpa_Online_ClothesStore.urls'
 
 TEMPLATES = [
