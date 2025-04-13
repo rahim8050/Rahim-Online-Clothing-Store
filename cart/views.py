@@ -37,7 +37,22 @@ def cart_add(request, product_id):
     return JsonResponse(response_data)
 
 
+# views.py
+from django.http import JsonResponse
 
+
+def cart_count(request):
+    count = 0
+    cart_id = request.session.get('cart_id')
+
+    if cart_id:
+        try:
+            cart = Cart.objects.get(id=cart_id)
+            count = cart.total_items()
+        except Cart.DoesNotExist:
+            pass
+
+    return JsonResponse({'count': count})
 
 
 

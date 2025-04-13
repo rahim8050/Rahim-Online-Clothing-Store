@@ -136,3 +136,59 @@
     // Example usage - call this when an item is added to cart
     // document.querySelector('.add-to-cart-button').addEventListener('click', showCartAddedAnimation);
 </script>
+
+<!-- In your nav template -->
+<span id="cart-counter"
+    class="absolute -top-2 -right-2 bg-red-500 text-white rounded-full text-xs px-2 py-1 transition-all duration-300 opacity-0 scale-50">
+    {{ cart.total_items|default:0 }}  <!-- Initial value from context -->
+</span>
+
+<script>
+    // Add this to your existing JavaScript
+    function updateCartCounter(count) {
+        const counter = document.getElementById('cart-counter');
+        counter.textContent = count;
+
+        // Only animate if count increased
+        if (parseInt(counter.textContent) < parseInt(count)) {
+            showCartAddedAnimation();
+        }
+    }
+
+    // Fetch initial cart count on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        fetch('/cart/count/')  // Add this endpoint (see below)
+            .then(response => response.json())
+            .then(data => {
+                updateCartCounter(data.count);
+                // Fade in counter if items exist
+                if (data.count > 0) {
+                    const counter = document.getElementById('cart-counter');
+                    counter.classList.remove('opacity-0', 'scale-50');
+                }
+            });
+    });
+
+    // Example AJAX add to cart implementation
+    document.querySelectorAll('.add-to-cart').forEach(button => {
+        button.addEventListener('click', function(e) {
+            e.preventDefault();
+            const productId = this.dataset.productId;
+
+            fetch(`/cart/add/${productId}/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': '{{ csrf_token }}',
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    updateCartCounter(data.cart_total_items);
+                }
+            })
+            .catch(error => console.error('Error:', error));
+        });
+    });
+</script>
