@@ -12,6 +12,12 @@ class Cart(models.Model):
     def get_total_price(self):
        return sum(item.get_total_price() for item in self.items.all())
 
+    def total_items(self):
+
+        return self.items.aggregate(
+            total=Sum('quantity')
+        )['total'] or 0
+
 
 # class Cart(models.Model):
 #    created_at = models.DateTimeField(auto_now_add=True)
