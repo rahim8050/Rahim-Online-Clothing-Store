@@ -48,7 +48,7 @@ INSTALLED_APPS = [
     'widget_tweaks',
     'django_daraja',
     
-
+,
 
 ]
 
