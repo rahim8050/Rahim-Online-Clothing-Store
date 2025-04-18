@@ -47,6 +47,7 @@ INSTALLED_APPS = [
     'users.apps.UsersConfig',
     'widget_tweaks',
     'django_daraja',
+    'Mpesa',
     
 
 
@@ -169,7 +170,7 @@ MPESA_ENVIRONMENT = 'sandbox'
 # Credentials for the daraja app
 
 MPESA_CONSUMER_KEY = 'GDSBSg6UJVGHvxG1DWQiroAdIYGtX9NeDYUwi3XP0M412IIB'
-MPESA_CONSUMER_SECRET = '0LHwg8OtjLwnF3t2pxpBl7EtjaG4uY7bwcPMNNvWypt4Y2JguWXvHRGKYLNjefiy'
+MPESA_CONSUMER_SECRET = '0LHwg8OtjLwnF3t2pxpBl7EtjaG4uY7bwcPMNNvWypt4Y2JguWXvHRGKYLNjefiyp'
 
 #Shortcode to use for transactions. For sandbox  use the Shortcode 1 provided on test credentials page
 
