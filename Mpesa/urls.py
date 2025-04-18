@@ -1,10 +1,9 @@
 from django.urls import path
+from . import views
 
-from Mpesa import views
-from orders.urls import app_name
-from users.urls import urlpatterns
 app_name = "Mpesa"
+
 urlpatterns = [
-                path('trigger', views.trigger_mpesa_payment, name='home'),
-                path('callback', views.callback_mpesa_payment, name='home'),
+    path('trigger_mpesa_payment/', views.trigger_mpesa_payment, name='trigger-payment'),
+    path('callback_mpesa_payment/', views.callback_mpesa_payment, name='callback-handler'),
 ]
