@@ -8,23 +8,18 @@ from django_daraja.mpesa.core import MpesaClient
 
 # Create your views here.
 
-def trigger_mpesa_payment(request):
+def trigger(request):
     cl = MpesaClient()
     phone_number = '254769690483'
     amount = 1
     account_reference = '01-ABC'
     transaction_desc = 'Online Clothes Payment'
-    callback_url = ' https://intent-in-katydid.ngrok-free.app/callback_mpesa_payment'
+    callback_url = 'https://intent-in-katydid.ngrok-free.app/mpesa/callback-handler'
     response = cl.stk_push(phone_number, amount, account_reference, transaction_desc, callback_url)
     return HttpResponse(response)
 
 
 @csrf_exempt
-def callback_mpesa_payment(request):
-    try:
-
-        print("Received callback:", request.body.decode())
-        return HttpResponse(status=200)
-    except Exception as e:
-        print("Callback error:", str(e))
-        return HttpResponse(status=400)
+def callback(request):
+    print("Raw callback data:", request.body.decode())
+    return HttpResponse("OK", status=200)
