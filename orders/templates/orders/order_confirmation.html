@@ -76,4 +76,89 @@
         </a>
     </div>
 </div>
+    <!-- Add this to your product page or checkout section -->
+<div class="mt-8 p-6 bg-gray-50 rounded-lg">
+  <h3 class="text-xl font-semibold mb-4">M-Pesa Payment</h3>
+
+  <!-- Payment Form -->
+  <form id="mpesaForm" class="space-y-4">
+    <div>
+      <label class="block text-sm font-medium text-gray-700">Phone Number</label>
+      <input type="tel" id="phone" name="phone"
+             class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+             placeholder="07XXXXXXXX" required>
+    </div>
+
+    <div>
+      <label class="block text-sm font-medium text-gray-700">Amount</label>
+      <input type="number" id="amount" name="amount"
+             class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+             :value="cartTotal" readonly required>
+    </div>
+
+    <button type="button" onclick="initiateMpesaPayment()"
+            class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-md font-medium transition-colors">
+      Pay with M-Pesa
+    </button>
+  </form>
+
+  <!-- Payment Status -->
+  <div id="paymentStatus" class="mt-4 hidden">
+    <div class="animate-pulse flex items-center">
+      <div class="h-4 w-4 bg-green-600 rounded-full mr-2"></div>
+      <span class="text-sm text-gray-600">Processing payment...</span>
+    </div>
+  </div>
+</div>
+    <script>
+async function initiateMpesaPayment() {
+  const phone = document.getElementById('phone').value;
+  const amount = document.getElementById('amount').value;
+
+  // Show loading status
+  document.getElementById('paymentStatus').classList.remove('hidden');
+
+  try {
+    // Call your backend API
+    const response = await fetch('/api/mpesa/pay', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        phone: phone,
+        amount: amount
+      })
+    });
+
+    const result = await response.json();
+
+    if (result.success) {
+      // Handle successful payment initiation
+      alert('Please check your phone to complete the payment');
+      // Start polling for payment confirmation
+      checkPaymentStatus(result.checkoutRequestID);
+    } else {
+      alert('Payment initiation failed: ' + result.message);
+    }
+  } catch (error) {
+    console.error('Error:', error);
+    alert('Payment failed. Please try again.');
+  }
+}
+
+// Function to poll payment status
+async function checkPaymentStatus(checkoutRequestID) {
+  const statusResponse = await fetch(`/api/mpesa/status/${checkoutRequestID}`);
+  const status = await statusResponse.json();
+
+  if (status.paymentCompleted) {
+    // Handle successful payment
+    window.location.href = '/order-confirmation';
+  } else {
+    // Retry after delay
+    setTimeout(() => checkPaymentStatus(checkoutRequestID), 3000);
+  }
+}
+</script>
 {% endblock %}
