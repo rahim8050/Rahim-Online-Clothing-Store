@@ -1,6 +1,7 @@
 import json
 
 from django.http import HttpResponse
+from django.shortcuts import render
 
 from django.views.decorators.csrf import csrf_exempt
 from django_daraja.mpesa.core import MpesaClient
@@ -23,3 +24,7 @@ def trigger(request):
 def callback(request):
     print("Raw callback data:", request.body.decode())
     return HttpResponse("OK", status=200)
+
+
+def index(request):
+    return render(request, 'index.html')
