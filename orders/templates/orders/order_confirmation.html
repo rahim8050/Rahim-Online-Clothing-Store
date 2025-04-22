@@ -68,7 +68,8 @@
             </p>
         </div>
     </div>
-
+<form action="{% url 'orders:order_create' %}" method="post" class="space-y-6">
+    {% csrf_token %}
     <div class="text-center">
         <a href="/"
            class="inline-block bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-3 rounded-lg transition-colors duration-300">
@@ -77,4 +78,5 @@
     </div>
 </div>
 
+</form>
 {% endblock %}
