@@ -69,7 +69,7 @@
         </div>
     </div>
 
- <div class="mt-8 space-y-6">  <!-- Added container with top margin and vertical spacing -->
+ <div class="mt-8 space-y-6">
     <!-- Continue Shopping Link -->
     <div class="flex justify-center mb-6">
 
@@ -82,7 +82,7 @@
     <form action="{% url 'orders:order_create' %}" method="post" class="space-y-6">
         {% csrf_token %}
 
-        <div class="flex justify-center items-center">  <!-- Removed mt-2 from here -->
+        <div class="flex justify-center items-center">
             <button class="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-3 rounded-lg shadow-sm transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
                 <div class="inline-flex items-center space-x-2">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
@@ -94,7 +94,5 @@
         </div>
     </form>
 </div>
-
-
-
+</div>
 {% endblock %}
