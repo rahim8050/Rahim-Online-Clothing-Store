@@ -4,6 +4,7 @@ from . import views
 app_name = "Mpesa"
 
 urlpatterns = [
+    path('', views.index, name='mpesa'),
     path('trigger/', views.trigger, name='trigger-payment'),
     path('mpesa/callback-handler/', views.callback, name='callback-handler'),
 ]
