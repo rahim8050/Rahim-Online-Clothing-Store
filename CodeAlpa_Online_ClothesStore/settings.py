@@ -162,3 +162,5 @@ STATIC_ROOT = BASE_DIR/'staticfiles'
 MEDIA_ROOT = BASE_DIR/'mediafiles'
 
 AUTH_USER_MODEL = 'users.CustomUser'
+# LOGIN_REDIRECT_URL = 'home'
+# LOGOUT_REDIRECT_URL = 'home'
