@@ -28,3 +28,25 @@ def callback(request):
 
 def mpesa(request):
     return render(request, 'index.html')
+
+def generate_access_token():
+    try:
+        credentials = f"{CONSUMER_KEY}:{CONSUMER_SECRET}"
+        encoded_credentials = base64.b64encode(credentials.encode()).decode()
+
+        headers = {
+            "Authorization": f"Basic {encoded_credentials}",
+            "Content-Type": "application/json",
+        }
+        response = requests.get(
+            f"{MPESA_BASE_URL}/oauth/v1/generate?grant_type=client_credentials",
+            headers=headers,
+        ).json()
+
+        if "access_token" in response:
+            return response["access_token"]
+        else:
+            raise Exception("Access token missing in response.")
+
+    except requests.RequestException as e:
+        raise Exception(f"Failed to connect to M-Pesa: {str(e)}")
