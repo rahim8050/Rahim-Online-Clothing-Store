@@ -5,7 +5,7 @@ from django.shortcuts import render
 
 from django.views.decorators.csrf import csrf_exempt
 from django_daraja.mpesa.core import MpesaClient
-
+appname = 'mpesa'
 
 # Create your views here.
 
@@ -26,5 +26,5 @@ def callback(request):
     return HttpResponse("OK", status=200)
 
 
-def index(request):
+def mpesa(request):
     return render(request, 'index.html')
