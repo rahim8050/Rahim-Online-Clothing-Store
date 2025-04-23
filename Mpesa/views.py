@@ -1,5 +1,14 @@
+import base64
 import json
 
+import requests
+from dotenv import load_dotenv
+import os
+
+load_dotenv()  # Load variables from .env
+
+consumer_key = os.getenv("MPESA_CONSUMER_KEY")
+consumer_secret = os.getenv("MPESA_CONSUMER_SECRET")
 from django.http import HttpResponse
 from django.shortcuts import render
 
