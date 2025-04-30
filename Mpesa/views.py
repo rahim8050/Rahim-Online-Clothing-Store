@@ -20,7 +20,7 @@ appname = 'mpesa'
 
 def trigger(request):
     cl = MpesaClient()
-    phone_number = '254769690483'
+    phone_number = '254717815133'
     amount = 1
     account_reference = '01-ABC'
     transaction_desc = 'Online Clothes Payment'
