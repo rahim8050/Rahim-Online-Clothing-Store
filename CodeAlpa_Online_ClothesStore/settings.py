@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 """
 
 from pathlib import Path
+import MySQLdb
 
 from django.contrib import messages
 
@@ -137,8 +138,14 @@ MPESA_INITIATOR_SECURITY_CREDENTIAL = 'initiator_security_credential'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': 'django.db.mysql',
+        'NAME': 'CodeAlpha',
+        'USER' : 'root',
+        'PASSWORD' : 'root',
+        'HOST' : 'localhost',
+        'PORT' : '3306',
+
+
     }
 }
 

@@ -1,7 +1,8 @@
 # Python
 __pycache__/
 *.pyc
-venv/
+.venv/
+.idea/
 .env
 config.py
 # Django
