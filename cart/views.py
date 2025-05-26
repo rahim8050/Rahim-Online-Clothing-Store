@@ -5,8 +5,12 @@ from django.http import JsonResponse
 
 from product_app.models import Product
 from .models import Cart,CartItem
+from django.contrib.auth.decorators import login_required
+from django.core.exceptions import PermissionDenied
+from users.models import CustomUser
 
-
+@require_POST
+@login_required
 def cart_add(request, product_id):
     cart_id = request.session.get('cart_id')
 
@@ -37,8 +41,9 @@ def cart_add(request, product_id):
     return JsonResponse(response_data)
 
 
-# views.py
-from django.http import JsonResponse
+
+
+
 
 
 def cart_count(request):
