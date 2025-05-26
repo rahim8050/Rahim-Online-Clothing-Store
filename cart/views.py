@@ -7,36 +7,79 @@ from product_app.models import Product
 from .models import Cart,CartItem
 from django.contrib.auth.decorators import login_required, permission_required
 from django.core.exceptions import PermissionDenied
+from django.contrib import messages
 
 
 
+@require_POST
+@permission_required('cart.add_cartitem', raise_exception=True)
 @login_required
-@permission_required("cart.cart_add",raise_exception=True)
+# def cart_add(request, product_id):
+#      if not request.user.is_authenticated:
+#         messages.warning(request, 'Please log in to add items to your cart.')
+#         return redirect('login') 
+#   cart_id = request.session.get('cart_id')
+
+#     if cart_id:
+#         try:
+#             cart = Cart.objects.get(id=cart_id)
+#         except Cart.DoesNotExist:
+#             cart = Cart.objects.create()
+#     else:
+        
+#         cart = Cart.objects.create()
+#         request.session['cart_id'] = cart.id
+
+#     product = get_object_or_404(Product, id=product_id)
+
+#     cart_item, created = CartItem.objects.get_or_create(cart=cart, product=product)
+
+#     if not created:
+#         cart_item.quantity += 1
+
+#     cart_item.save()
+#     request.session['cart_count'] = request.session.get('cart_count', 0) + 1
+
+#     response_data = {
+#         "success": True,
+#         "message": f'Added {product.name} to cart'
+#     }
+
+#     return JsonResponse(response_data)
 def cart_add(request, product_id):
+    if not request.user.is_authenticated:
+        messages.warning(request, 'Please log in to add items to your cart.')
+        return redirect('login') 
+    
     cart_id = request.session.get('cart_id')
 
     if cart_id:
         try:
             cart = Cart.objects.get(id=cart_id)
         except Cart.DoesNotExist:
-            cart = Cart.objects.create()
+            cart = Cart.objects.create(user=request.user)  # Associate with user
     else:
-        cart = Cart.objects.create()
+        cart = Cart.objects.create(user=request.user)  # Associate with user
         request.session['cart_id'] = cart.id
 
     product = get_object_or_404(Product, id=product_id)
 
-    cart_item, created = CartItem.objects.get_or_create(cart=cart, product=product)
+    cart_item, created = CartItem.objects.get_or_create(
+        cart=cart, 
+        product=product,
+        defaults={'user': request.user}  # Associate with user
+    )
 
     if not created:
         cart_item.quantity += 1
+        cart_item.save()
 
-    cart_item.save()
     request.session['cart_count'] = request.session.get('cart_count', 0) + 1
 
     response_data = {
         "success": True,
-        "message": f'Added {product.name} to cart'
+        "message": f'Added {product.name} to cart',
+        "cart_count": request.session['cart_count']
     }
 
     return JsonResponse(response_data)
