@@ -46,6 +46,12 @@
 </div>
 
 <script>
+function showToast(message) {
+    const toast = document.querySelector('.toast-message');
+    toast.textContent = message;
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), 3000);
+}
     // Toggle description visibility
     function toggleDescription(button) {
         const description = document.getElementById('description');
