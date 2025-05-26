@@ -48,7 +48,7 @@
                     <!-- Price and Quantity -->
                     <div class="flex flex-wrap items-center justify-between mt-2">
                         <p class="text-indigo-600 font-medium text-lg md:text-xl">
-                            ${{ item.product.price }}
+                            Ksh{{ item.product.price }}
                         </p>
                         <div class="flex items-center space-x-4">
                             <span class="text-gray-600 text-sm md:text-base">
@@ -64,7 +64,7 @@
         <!-- Total Price -->
         <div class="mt-8 p-4 bg-gray-50 rounded-lg">
             <p class="text-xl md:text-2xl font-semibold text-emerald-700 text-right">
-                Total: ${{ cart.get_total_price }}
+                Total: Ksh{{ cart.get_total_price }}
             </p>
         </div>
 
