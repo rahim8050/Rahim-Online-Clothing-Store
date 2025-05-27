@@ -2,10 +2,13 @@ from django.db import models
 from django.db.models import Sum
 
 from product_app.models import Product
+from django.contrib.auth.models import User
+from users.models import CustomUser,CartItem,Product
 
 
 # models.py
 class Cart(models.Model):
+    user = models.ForeignKey(CustomUser, related_name='carts', on_delete=models.CASCADE, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -28,6 +31,7 @@ class Cart(models.Model):
 class CartItem(models.Model):
     cart = models.ForeignKey(Cart,related_name='items', on_delete=models.CASCADE)
     product = models.ForeignKey(Product, related_name="cart_items", on_delete=models.CASCADE)
+
     quantity = models.PositiveIntegerField(default=1)
     def get_total_price(self):
         return self.product.price * self.quantity
