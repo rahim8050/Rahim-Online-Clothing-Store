@@ -7,7 +7,7 @@ from orders.models import Order, OrderItem
 # Create your views here.
 def order_create(request):
     # cart = None
-    cart = Cart.objects.get(user=request.user)
+    # cart = Cart.objects.get(user=request.user)
     cart_id = request.session.get('cart_id')
 
     # Check if cart exists and is valid
