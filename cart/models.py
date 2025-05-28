@@ -8,7 +8,7 @@ from users.models import CustomUser,CartItem,Product
 
 # models.py
 class Cart(models.Model):
-    user = models.ForeignKey(CustomUser, related_name='carts', on_delete=models.CASCADE, null=True, blank=True)
+    # user = models.ForeignKey(CustomUser, related_name='carts', on_delete=models.CASCADE, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -30,7 +30,7 @@ class Cart(models.Model):
 
 class CartItem(models.Model):
     cart = models.ForeignKey(Cart,related_name='items', on_delete=models.CASCADE)
-    product = models.ForeignKey(Product, related_name="cart_items", on_delete=models.CASCADE)
+    product = models.ForeignKey(Product, related_name="cart_items",default=None,on_delete=models.CASCADE)
 
     quantity = models.PositiveIntegerField(default=1)
     def get_total_price(self):
