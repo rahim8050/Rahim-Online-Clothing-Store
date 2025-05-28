@@ -3,12 +3,13 @@ from django.db.models import Sum
 
 from product_app.models import Product
 from django.contrib.auth.models import User
-from users.models import CustomUser,CartItem,Product
+from users.models import CustomUser
+
 
 
 # models.py
 class Cart(models.Model):
-    # user = models.ForeignKey(CustomUser, related_name='carts', on_delete=models.CASCADE, null=True, blank=True)
+ 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
