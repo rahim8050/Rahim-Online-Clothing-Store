@@ -19,6 +19,8 @@ def order_create(request):
         except Cart.DoesNotExist:
             del request.session['cart_id']
             return redirect("cart:cart_detail")
+# this form is to be validated that the user must be logged in to place an order
+# this took me a while to figure out that the form was the issue and not the view
 
     # Handle POST (form submission)
     if request.method == "POST":
