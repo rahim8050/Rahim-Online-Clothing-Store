@@ -43,6 +43,7 @@
                                 ✕
                             </button>
                         </form>
+
                     </div>
 
                     <!-- Price and Quantity -->
@@ -51,9 +52,31 @@
                             Ksh{{ item.product.price }}
                         </p>
                         <div class="flex items-center space-x-4">
-                            <span class="text-gray-600 text-sm md:text-base">
-                                Quantity: {{ item.quantity }}
-                            </span>
+                            <!-- INCREMENT/DECREMENT CONTROLS -->
+                            <div class="flex items-center border rounded-md">
+                                <!-- Decrement Button -->
+                                <form action="{% url 'cart:cart_decrement' product_id=item.product.id %}" method="post" class="flex">
+                                    {% csrf_token %}
+                                    <button type="submit" 
+                                            class="px-3 py-1 text-gray-600 hover:bg-gray-100 {% if item.quantity <= 1 %}opacity-50 cursor-not-allowed{% endif %}"
+                                            {% if item.quantity <= 1 %}disabled{% endif %}>
+                                        -
+                                    </button>
+                                </form>
+                                
+                                <!-- Quantity Display -->
+                                <span class="px-3 py-1 text-gray-800 border-x">
+                                    {{ item.quantity }}
+                                </span>
+                                
+                                <!-- Increment Button -->
+                                <form action="{% url 'cart:cart_increment' product_id=item.product.id %}" method="post" class="flex">
+                                    {% csrf_token %}
+                                    <button type="submit" class="px-3 py-1 text-gray-600 hover:bg-gray-100">
+                                        +
+                                    </button>
+                                </form>
+                            </div>
                         </div>
                     </div>
                 </div>
