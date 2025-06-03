@@ -1,5 +1,55 @@
-<footer>
+{% comment %} <footer>
 			<div class="container mx-auto p-4 text-center">
 				<p> &copy; 2025 Rahim Store Inc. All rights reserved.</p>
 			</div>
-		</footer>
+		</footer> {% endcomment %}
+		 <!-- Footer -->
+    <footer class="bg-gray-800 text-white mt-16 py-10">
+        <div class="container mx-auto px-4">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-8">
+                <div>
+                    <h3 class="text-xl font-bold mb-4">Rahim Store</h3>
+                    <p class="text-gray-400">Your one-stop shop for all your electronic needs. Quality products at competitive prices.</p>
+                </div>
+                <div>
+                    <h4 class="font-semibold mb-4">Quick Links</h4>
+                    <ul class="space-y-2">
+                        <li><a href="#" class="text-gray-400 hover:text-white transition-colors">Home</a></li>
+                        <li><a href="#" class="text-gray-400 hover:text-white transition-colors">Shop</a></li>
+                        <li><a href="{url 'utilities:about'}" class="text-gray-400 hover:text-white transition-colors">About Us</a></li>
+                        <li><a href="#" class="text-gray-400 hover:text-white transition-colors">Contact</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h4 class="font-semibold mb-4">Customer Service</h4>
+                    <ul class="space-y-2">
+                        <li><a href="#" class="text-gray-400 hover:text-white transition-colors">FAQ</a></li>
+                        <li><a href="#" class="text-gray-400 hover:text-white transition-colors">Shipping Policy</a></li>
+                        <li><a href="#" class="text-gray-400 hover:text-white transition-colors">Returns & Refunds</a></li>
+                        <li><a href="#" class="text-gray-400 hover:text-white transition-colors">Privacy Policy</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h4 class="font-semibold mb-4">Contact Us</h4>
+                    <ul class="space-y-2">
+                        <li class="flex items-center">
+                            <i class="fas fa-map-marker-alt mr-3 text-gray-400"></i>
+                            <span class="text-gray-400">Nairobi, Kenya</span>
+                        </li>
+                        <li class="flex items-center">
+                            <i class="fas fa-phone mr-3 text-gray-400"></i>
+                            <span class="text-gray-400">+254 769690483</span>
+                        </li>
+                        <li class="flex items-center">
+                            <i class="fas fa-envelope mr-3 text-gray-400"></i>
+                            <span class="text-gray-400">support@rahimshop.com</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+            <div class="border-t border-gray-700 mt-8 pt-6 text-center text-gray-400">
+                <p>&copy; 2025 Rahim Store Inc. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
+
