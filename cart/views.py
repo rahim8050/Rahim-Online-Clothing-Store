@@ -6,16 +6,40 @@ from django.http import JsonResponse
 from product_app.models import Product
 from .models import Cart,CartItem
 from django.contrib.auth.decorators import login_required, permission_required
-from django.core.exceptions import PermissionDenied
 from django.contrib import messages
-from django.urls import reverse_lazy
 
+
+# @require_POST
+# def cart_add(request, product_id):
+#     cart_id = request.session.get('cart_id')
+    
+#     if cart_id:
+#         try:
+#             cart = Cart.objects.get(id=cart_id)
+#         except Cart.DoesNotExist:
+#             cart = Cart.objects.create()
+#     else:
+#         cart = Cart.objects.create()
+#         request.session['cart_id'] = cart.id
+    
+#     product = get_object_or_404(Product, id=product_id)
+    
+#     cart_item, created = CartItem.objects.get_or_create(cart=cart, product=product)
+    
+#     if not created:
+#         cart_item.quantity += 1
+    
+#     cart_item.save()
+    
+#     response_data = {
+#         "success":True,
+#         "message": f'Added {product.name} to cart'
+#     }
+    
+#     return JsonResponse(response_data)
 @require_POST
-@login_required
 def cart_add(request, product_id):
-     if not request.user.is_authenticated:
-        messages.warning(request, 'Please log in to add items to your cart.')
-        return reverse_lazy('users:login') 
+    
      cart_id = request.session.get('cart_id')
 
      if cart_id:
@@ -44,43 +68,7 @@ def cart_add(request, product_id):
     }
 
      return JsonResponse(response_data)
-# def cart_add(request, product_id):
-#     if not request.user.is_authenticated:
-#         messages.warning(self.request, 'Please log in to add items to your cart.')
-#         return redirect('users:login') 
-    
-#     cart_id = request.session.get('cart_id')
 
-#     if cart_id:
-#         try:
-#             cart = Cart.objects.get(id=cart_id)
-#         except Cart.DoesNotExist:
-#             cart = Cart.objects.create(user=request.user)  # Associate with user
-#     else:
-#         cart = Cart.objects.create(user=request.user)  # Associate with user
-#         request.session['cart_id'] = cart.id
-
-#     product = get_object_or_404(Product, id=product_id)
-
-#     cart_item, created = CartItem.objects.get_or_create(
-#         cart=cart, 
-#         product=product,
-#         defaults={'user': request.user}  # Associate with user
-#     )
-
-#     if not created:
-#         cart_item.quantity += 1
-#         cart_item.save()
-
-#     request.session['cart_count'] = request.session.get('cart_count', 0) + 1
-
-#     response_data = {
-#         "success": True,
-#         "message": f'Added {product.name} to cart',
-#         "cart_count": request.session['cart_count']
-#     }
-
-#     return JsonResponse(response_data)
 
 
 
@@ -132,6 +120,31 @@ def cart_detail(request):
 
 
 
+# def cart_remove(request, product_id):
+#     cart_id = request.session.get('cart_id')
+
+#     if not cart_id:  # No cart exists
+#         return redirect("cart:cart_detail")
+
+#     try:
+#         cart = Cart.objects.get(id=cart_id)
+#         # Correct lookup: Get CartItem by PRODUCT ID, not CartItem ID
+#         item = CartItem.objects.get(cart=cart, product__id=product_id)
+#         item.delete()
+
+#         # Delete cart if empty and clean session
+#         if not cart.items.exists():
+#             cart.delete()
+#             del request.session['cart_id']
+#             request.session.modified = True
+
+#     except (Cart.DoesNotExist, CartItem.DoesNotExist):
+#         # Handle missing cart or item gracefully
+#         if 'cart_id' in request.session:
+#             del request.session['cart_id']
+#         return redirect("cart:cart_detail")
+
+#     return redirect("cart:cart_detail")
 def cart_remove(request, product_id):
     cart_id = request.session.get('cart_id')
 
@@ -140,22 +153,98 @@ def cart_remove(request, product_id):
 
     try:
         cart = Cart.objects.get(id=cart_id)
-        # Correct lookup: Get CartItem by PRODUCT ID, not CartItem ID
-        item = CartItem.objects.get(cart=cart, product__id=product_id)
-        item.delete()
+        # Get the specific cart item for this product
+        try:
+            item = CartItem.objects.get(cart=cart, product__id=product_id)
+            item.delete()
+            
+            # Update cart count in session
+            if 'cart_count' in request.session:
+                request.session['cart_count'] = max(0, request.session['cart_count'] - item.quantity)
+            
+            # Delete cart if empty and clean session
+            if not cart.items.exists():
+                cart.delete()
+                del request.session['cart_id']
+                if 'cart_count' in request.session:
+                    del request.session['cart_count']
+        except CartItem.DoesNotExist:
+            # The specific item wasn't found - just continue to cart
+            pass
 
-        # Delete cart if empty and clean session
-        if not cart.items.exists():
-            cart.delete()
-            del request.session['cart_id']
-            request.session.modified = True
-
-    except (Cart.DoesNotExist, CartItem.DoesNotExist):
-        # Handle missing cart or item gracefully
+    except Cart.DoesNotExist:
+        # Clean up session if cart doesn't exist
         if 'cart_id' in request.session:
             del request.session['cart_id']
-        return redirect("cart:cart_detail")
+        if 'cart_count' in request.session:
+            del request.session['cart_count']
 
+    return redirect("cart:cart_detail")
+@require_POST
+def cart_increment(request, product_id):
+    """Increase quantity of a specific cart item by 1"""
+    cart_id = request.session.get('cart_id')
+    if not cart_id:
+        return redirect("cart:cart_detail")
+    
+    try:
+        cart = Cart.objects.get(id=cart_id)
+        item = CartItem.objects.get(cart=cart, product__id=product_id)
+        
+        # Increase quantity
+        item.quantity += 1
+        item.save()
+        
+        # Update session cart_count
+        if 'cart_count' in request.session:
+            request.session['cart_count'] += 1
+        
+        messages.success(request, f"Added one more {item.product.name}")
+        
+    except (Cart.DoesNotExist, CartItem.DoesNotExist):
+        messages.error(request, "Item not found in cart")
+    
+    return redirect("cart:cart_detail")
+
+@require_POST
+def cart_decrement(request, product_id):
+    """Decrease quantity of a specific cart item by 1"""
+    cart_id = request.session.get('cart_id')
+    if not cart_id:
+        return redirect("cart:cart_detail")
+    
+    try:
+        cart = Cart.objects.get(id=cart_id)
+        item = CartItem.objects.get(cart=cart, product__id=product_id)
+        
+        # Decrease quantity or remove if 1
+        if item.quantity > 1:
+            item.quantity -= 1
+            item.save()
+            
+            # Update session cart_count
+            if 'cart_count' in request.session:
+                request.session['cart_count'] = max(0, request.session['cart_count'] - 1)
+            
+            messages.info(request, f"Removed one {item.product.name}")
+        else:
+            # Remove item completely if quantity would become 0
+            item.delete()
+            
+            # Update session cart_count
+            if 'cart_count' in request.session:
+                request.session['cart_count'] = max(0, request.session['cart_count'] - 1)
+            
+            messages.info(request, f"Removed {item.product.name} from cart")
+            
+            # Delete cart if empty
+            if not cart.items.exists():
+                cart.delete()
+                del request.session['cart_id']
+        
+    except (Cart.DoesNotExist, CartItem.DoesNotExist):
+        messages.error(request, "Item not found in cart")
+    
     return redirect("cart:cart_detail")
 # def cart_remove(request, product_id):
 #     cart_id = request.session.get('cart_id')
