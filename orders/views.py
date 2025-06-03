@@ -63,16 +63,16 @@ from django.db import transaction
 
 @require_http_methods(["GET", "POST"])  # Explicitly allow GET and POST
 def order_create(request):
-    # Authentication check (like enroll_program)
+    # Authentication check 
     if not request.user.is_authenticated:
         messages.warning(request, "Please log in to place an order")
         return redirect('login')  # Use your login URL name
 
-    # Cart handling (similar to program retrieval in enroll_program)
+    # Cart handling 
     cart_id = request.session.get('cart_id')
     cart = None
     
-    # Validate cart existence (like program validation)
+    # Validate cart existence 
     if cart_id:
         try:
             cart = get_object_or_404(Cart, id=cart_id)
@@ -88,18 +88,18 @@ def order_create(request):
         messages.warning(request, "Your cart is empty")
         return redirect("cart:cart_detail")
 
-    # Order processing (similar to enrollment creation)
+    # Order processing 
     if request.method == 'POST':
         form = OrderForm(request.POST)
         if form.is_valid():
             try:
                 with transaction.atomic():  # Ensure database integrity
-                    # Create order (like enrollment creation)
+                    # Create order 
                     order = form.save(commit=False)
                     order.user = request.user  # Associate user
                     order.save()
 
-                    # Create order items (like enrollment relationship)
+                    # Create order items 
                     for item in cart.items.all():
                         OrderItem.objects.create(
                             order=order,
@@ -108,7 +108,7 @@ def order_create(request):
                             quantity=item.quantity
                         )
 
-                    # Cleanup (similar to post-enrollment actions)
+                    # Cleanup 
                     cart.delete()
                     if 'cart_id' in request.session:
                         del request.session['cart_id']
@@ -125,23 +125,23 @@ def order_create(request):
             messages.error(request, "Please correct the errors in your order form")
     
   
-    else:
-        # Pre-fill form with user data
-        initial_data = {
-            'first_name': request.user.first_name,
-            'last_name': request.user.last_name,
-            'email': request.user.email,
-        }
-        # Add profile data if available
-        if hasattr(request.user, 'profile'):
-            profile = request.user.profile
-            initial_data.update({
-                'phone_number': profile.phone,
-                'address': profile.address,
-                'postal_code': profile.postal_code,
-                'city': profile.city,
-            })
-        form = OrderForm(initial=initial_data)
+    # else:
+    #     # Pre-fill form with user data
+    #     initial_data = {
+    #         'first_name': request.user.first_name,
+    #         'last_name': request.user.last_name,
+    #         'email': request.user.email,
+    #     }
+    #     # Add profile data if available
+    #     if hasattr(request.user, 'profile'):
+    #         profile = request.user.profile
+    #         initial_data.update({
+    #             'phone_number': profile.phone,
+    #             'address': profile.address,
+    #             'postal_code': profile.postal_code,
+    #             'city': profile.city,
+    #         })
+    #     form = OrderForm(initial=initial_data)
 
     return render(request, "orders/order_create.html", {
         "cart": cart,
