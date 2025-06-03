@@ -57,11 +57,9 @@
                                 <!-- Decrement Button -->
                                 <form action="{% url 'cart:cart_decrement' product_id=item.product.id %}" method="post" class="flex">
                                     {% csrf_token %}
-                                    <button type="submit" 
-                                            class="px-3 py-1 text-gray-600 hover:bg-gray-100 {% if item.quantity <= 1 %}opacity-50 cursor-not-allowed{% endif %}"
-                                            {% if item.quantity <= 1 %}disabled{% endif %}>
-                                        -
-                                    </button>
+                                    <button type="submit" class="px-3 py-1 bg-red-500 text-white hover:bg-red-600 rounded-md transition-colors duration-200">
+    -
+</button>
                                 </form>
                                 
                                 <!-- Quantity Display -->
@@ -72,9 +70,9 @@
                                 <!-- Increment Button -->
                                 <form action="{% url 'cart:cart_increment' product_id=item.product.id %}" method="post" class="flex">
                                     {% csrf_token %}
-                                    <button type="submit" class="px-3 py-1 text-gray-600 hover:bg-gray-100">
-                                        +
-                                    </button>
+                                    <button type="submit" class="px-3 py-1 bg-green-500 text-white hover:bg-green-600 rounded-md transition-colors duration-200">
+    +
+</button>
                                 </form>
                             </div>
                         </div>
