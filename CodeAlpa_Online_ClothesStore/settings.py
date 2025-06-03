@@ -50,6 +50,7 @@ INSTALLED_APPS = [
     'widget_tweaks',
     'django_daraja',
     'Mpesa',
+    'utilities',
     
 
 
