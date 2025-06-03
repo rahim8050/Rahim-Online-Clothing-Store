@@ -6,7 +6,7 @@ from django.http import JsonResponse
 from product_app.models import Product
 from .models import Cart,CartItem
 from django.contrib.auth.decorators import login_required, permission_required
-from django.contrib import messages
+
 
 
 # @require_POST
