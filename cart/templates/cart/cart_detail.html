@@ -35,7 +35,7 @@
                         </div>
 
                         <!-- Remove Button -->
-                        <form action="{% url 'cart:cart_remove' item.id %}" method="post"
+                        <form action="{% url 'cart:cart_remove' product_id=item.product.id  %}" method="post"
                               class="flex-shrink-0 ml-4">
                             {% csrf_token %}
                             <button type="submit"
