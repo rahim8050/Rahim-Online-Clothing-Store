@@ -1,11 +1,13 @@
+{% load static %}
 <nav class="bg-white shadow-lg">
     <div class="container mx-auto px-4">
         <div class="flex justify-between items-center py-3 md:py-4">
             <!-- Logo -->
-            <a href='/' class="text-xl md:text-2xl font-bold text-indigo-600 hover:text-indigo-800 transition-colors duration-300">
+            <a href='/' class=" flex items-center  text-xl md:text-2xl font-bold text-indigo-600 hover:text-indigo-800 transition-colors duration-300">
                 Rahim Clothes Store
-            </a>
-
+            
+            <img src="{% static 'images/logo.jpg' %}" alt="Rahim Store Logo" class="h-10 md:h-10">
+</a>
             <!-- Desktop Menu -->
             <div class="hidden md:flex items-center space-x-6">
                 <!-- Search Form -->
