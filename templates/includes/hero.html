@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rahim Online Clothing Store</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#4f46e5', // indigo-600
+                        secondary: '#ff6b6b',
+                        dark: '#1e293b',
+                    },
+                    backgroundImage: {
+                        'hero-pattern': "url('https://images.unsplash.com/photo-1489987707025-afc232f7ea0f?ixlib=rb-4.0.3&auto=format&fit=crop&w=1350&q=80')",
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="font-sans">
+    <!-- Hero Section -->
+    <section class="bg-[linear-gradient(rgba(0,0,0,0.6),rgba(0,0,0,0.6))] bg-cover bg-center bg-no-repeat min-h-[80vh] flex items-center justify-center relative" style="background-image: url('https://images.unsplash.com/photo-1489987707025-afc232f7ea0f?ixlib=rb-4.0.3&auto=format&fit=crop&w=1350&q=80')">
+        <div class="absolute inset-0 bg-black/60 z-0"></div>
+        <div class="container mx-auto px-4 relative z-10">
+            <div class="flex flex-col items-center text-center max-w-3xl mx-auto">
+                <h1 class="text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-6">
+                    Discover Your Perfect Style
+                </h1>
+                <p class="text-lg md:text-xl text-white/90 mb-8 max-w-2xl">
+                    Shop the latest fashion trends at Rahim Online Clothing Store
+                </p>
+                
+                <!-- Search Form -->
+                <div class="w-full max-w-xl">
+                    <form class="flex" action="{% url 'product_search' %}" method="GET">
+                        <input 
+                            type="text" 
+                            class="flex-grow py-4 px-6 rounded-l-full focus:outline-none focus:ring-2 focus:ring-primary"
+                            placeholder="Search for jeans, shirts, dresses..." 
+                            name="search"
+                            value="{{ request.GET.search }}"
+                            aria-label="Search"
+                        >
+                        <button 
+                            class="bg-secondary hover:bg-[#ff5252] transition-colors duration-300 text-white py-4 px-8 rounded-r-full font-medium flex items-center justify-center"
+                            type="submit"
+                        >
+                            <i class="fas fa-search mr-2"></i> Search
+                        </button>
+                    </form>
+                </div>
+                
+                {% comment %} <div class="mt-10 flex flex-col sm:flex-row gap-4">
+                    <a href="#featured" class="px-8 py-3 bg-transparent border-2 border-white text-white rounded-full hover:bg-white/10 transition-colors duration-300 text-lg font-medium">
+                        Shop Now
+                    </a>
+                    <a href="#collections" class="px-8 py-3 bg-white text-dark rounded-full hover:bg-gray-100 transition-colors duration-300 text-lg font-medium">
+                        New Arrivals
+                    </a>
+                </div> {% endcomment %}
+            </div>
+        </div>
+    </section>
+
+ 
+   
+
+   
+
+    
+</body>
+</html>
