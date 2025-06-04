@@ -9,14 +9,14 @@
             <div class="grid grid-cols-1 md:grid-cols-4 gap-8">
                 <div>
                     <h3 class="text-xl font-bold mb-4">Rahim Store</h3>
-                    <p class="text-gray-400">Your one-stop shop for all your electronic needs. Quality products at competitive prices.</p>
+                    <p class="text-gray-400">Your one-stop shop for all your clothing and fashion needs. Quality products at competitive prices.</p>
                 </div>
                 <div>
                     <h4 class="font-semibold mb-4">Quick Links</h4>
                     <ul class="space-y-2">
-                        <li><a href="#" class="text-gray-400 hover:text-white transition-colors">Home</a></li>
-                        <li><a href="#" class="text-gray-400 hover:text-white transition-colors">Shop</a></li>
-                        <li><a href="{url 'utilities:about'}" class="text-gray-400 hover:text-white transition-colors">About Us</a></li>
+                        <li><a href="{% url 'index' %}" class="text-gray-400 hover:text-white transition-colors">Home</a></li>
+                        <li><a href="{% url 'index'  %}" class="text-gray-400 hover:text-white transition-colors">Shop With Us</a></li>
+                        <li><a href="{% url 'utilities:about' %}" class="text-gray-400 hover:text-white transition-colors">About Us</a></li>
                         <li><a href="#" class="text-gray-400 hover:text-white transition-colors">Contact</a></li>
                     </ul>
                 </div>
