@@ -32,7 +32,7 @@ def product_detail(request,id,slug):
     })
 
 
-# Example view
+
 def SearchProduct(request, category_slug=None):
     category = None
     products = Product.objects.all()
