@@ -216,3 +216,16 @@ MEDIA_ROOT = BASE_DIR/'mediafiles'
 AUTH_USER_MODEL = 'users.CustomUser'
 # LOGIN_REDIRECT_URL = 'home'
 # LOGOUT_REDIRECT_URL = 'home'
+
+
+
+# Email Configuration
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'  # For production
+# EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'  # For development (prints to console)
+
+EMAIL_HOST = 'smtp.gmail.com'  # e.g., for Gmail
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = 'your-email@gmail.com'  # Use environment variables in production!
+EMAIL_HOST_PASSWORD = 'your-app-password'  # Use app-specific password for Gmail
+DEFAULT_FROM_EMAIL = 'noreply@yourdomain.com'  # Optional
