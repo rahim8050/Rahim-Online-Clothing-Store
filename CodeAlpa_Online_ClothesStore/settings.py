@@ -12,6 +12,11 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 
 from pathlib import Path
 import os
+from environ import Env
+env = Env()
+Env.read_env()
+ENVIRONMENT = env('ENVIRONMENT', default='production')
+
 # import MySQLdb
 
 from django.contrib import messages
@@ -220,12 +225,17 @@ AUTH_USER_MODEL = 'users.CustomUser'
 
 
 # Email Configuration
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'  # For production
-# EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'  # For development (prints to console)
 
-EMAIL_HOST = 'smtp.gmail.com'  # e.g., for Gmail
-EMAIL_PORT = 587
-EMAIL_USE_TLS = True
-EMAIL_HOST_USER = 'your-email@gmail.com'  # Use environment variables in production!
-EMAIL_HOST_PASSWORD = 'your-app-password'  # Use app-specific password for Gmail
-DEFAULT_FROM_EMAIL = 'noreply@yourdomain.com'  # Optional
+POSTGRES_LOCALLY = env.bool('POSTGRES_LOCALLY', default=False)
+
+if ENVIRONMENT == 'production' or POSTGRES_LOCALLY == True: 
+    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+    EMAIL_HOST = 'smtp.gmail.com'
+    EMAIL_HOST_USER = env('EMAIL_ADDRESS')
+    EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD') 
+    EMAIL_PORT = 587
+    EMAIL_USE_TLS = True
+    DEFAULT_FROM_EMAIL = f'Awesome {env("EMAIL_ADDRESS")}'
+    ACCOUNT_EMAIL_SUBJECT_PREFIX = ''
+else:
+    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
