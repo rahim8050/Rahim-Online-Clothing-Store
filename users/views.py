@@ -9,12 +9,7 @@ from django.template.loader import render_to_string
 from django.utils.encoding import force_bytes, force_str
 from django.utils.http import  urlsafe_base64_encode, urlsafe_base64_decode
 from django.views.generic import FormView
-
-
 from django.db import IntegrityError
-
-
-
 from users.forms import RegisterUserForm
 from emailverification.tokens import account_activation_token
 
@@ -32,12 +27,6 @@ class RegisterUser(FormView):
     template_name = "users/accounts/register.html"
     form_class = RegisterUserForm
     success_url = "/"
-    
-
-
-
-    
- 
     def form_valid(self, form):
         user = form.save(commit=False)
         user.is_active = False
