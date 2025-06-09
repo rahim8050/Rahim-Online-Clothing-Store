@@ -1,4 +1,6 @@
+
 {% load static %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <nav class="bg-white shadow-lg">
     <div class="container mx-auto px-4">
         <div class="flex justify-between items-center py-3 md:py-4">
@@ -23,7 +25,7 @@
                 <!-- Navigation Items -->
                 <div class="flex items-center space-x-6">
                     <a href="{% url 'users:register'%}" class="text-indigo-600 hover:text-indigo-800 transition-colors duration-300">
-                        Create account
+                         <i class="fas fa-user-plus mr-1"></i>Create account
                     </a>
 
                     <!-- Auth Section -->
@@ -32,12 +34,12 @@
                         <form method="post" action="{% url 'users:logout' %}">
                             {% csrf_token %}
                             <button class="text-indigo-600 hover:text-indigo-800 transition-colors duration-300"
-                                    type="submit">Logout</button>
+                                    type="submit">  <i class="fas fa-sign-out-alt mr-1"></i>Logout</button>
                         </form>
                         {% else %}
                         <a href="{% url 'users:login' %}"
                            class="text-indigo-600 hover:text-indigo-800 transition-colors duration-300">
-                            Login
+                            <i class="fas fa-sign-in-alt mr-1"></i> Login
                         </a>
                         {% endif %}
                     </div>
@@ -65,12 +67,9 @@
                     </a>
                 </div>
 
-                <!-- Mobile Menu Button -->
+                           <!-- Mobile Menu Button -->
                 <button id="mobile-menu-button" class="md:hidden text-indigo-600 hover:text-indigo-800">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                              d="M4 6h16M4 12h16M4 18h16"/>
-                    </svg>
+                    <i class="fas fa-bars text-xl"></i>
                 </button>
             </div>
         </div>
@@ -90,18 +89,18 @@
             <!-- Mobile Navigation Links -->
             <div class="flex flex-col space-y-2 border-t pt-4">
                 <a href="{% url 'users:register'%}" class="px-4 py-2 text-indigo-600 hover:text-indigo-800">
-                    Create account
+                   <i class="fa-solid fa-user-plus"></i> Create account
                 </a>
                 {% if user.is_authenticated %}
                 <form method="post" action="{% url 'users:logout' %}" class="px-4 py-2">
                     {% csrf_token %}
                     <button type="submit" class="text-indigo-600 hover:text-indigo-800">
-                        Logout
+                       <i class="fa-solid fa-user-plus"></i> Logout
                     </button>
                 </form>
                 {% else %}
                 <a href="{% url 'users:login'%}" class="px-4 py-2 text-indigo-600 hover:text-indigo-800">
-                    Login
+                    <i class="fa-solid fa-door-closed"></i> Login
                 </a>
                 {% endif %}
             </div>
