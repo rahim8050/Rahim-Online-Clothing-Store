@@ -1,7 +1,6 @@
 from django.contrib.auth.models import AbstractUser
-from django.db import models
 
-from product_app.models import Product
+
 
 
 # Create your models here.

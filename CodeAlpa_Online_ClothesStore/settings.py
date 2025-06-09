@@ -224,13 +224,20 @@ AUTH_USER_MODEL = 'users.CustomUser'
 
 
 # Email Configuration
-mail = os.environ.get('MAIL_USERNAME')
-email_password = os.environ.get('MAIL_PASSWORD')
-EMAIL_HOST = 'smtp-mail.outlook.com'
-EMAIL_PORT = 587    
-EMAIL_USE_TLS = True
-EMAIL_HOST_USER = mail
-EMAIL_HOST_PASSWORD = email_password
-DEFAULT_FROM_EMAIL = mail
+# mail = os.environ.get('MAIL_USERNAME')
+# EMAIL_HOST = 'smtp.com'
+# EMAIL_PORT = 587    
+# EMAIL_USE_TLS = True
+# EMAIL_HOST_USER = mail
+# EMAIL_HOST_PASSWORD =  os.environ.get('MAIL_PASSWORD')
+# DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', mail)
+# EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = os.environ.get('EMAIL_HOST')
+EMAIL_PORT = os.environ.get('EMAIL_PORT', default=587)
+EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', default=True)
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER')
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD')
+print(EMAIL_HOST_PASSWORD)
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', default=EMAIL_HOST_USER)
 
