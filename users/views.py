@@ -9,8 +9,9 @@ from django.template.loader import render_to_string
 from django.utils.encoding import force_bytes, force_str
 from django.utils.http import  urlsafe_base64_encode, urlsafe_base64_decode
 from django.views.generic import FormView
-from django.http import HttpResponse
-from django.core.mail import send_mail
+
+
+from django.db import IntegrityError
 
 
 
@@ -31,7 +32,12 @@ class RegisterUser(FormView):
     template_name = "users/accounts/register.html"
     form_class = RegisterUserForm
     success_url = "/"
+    
 
+
+
+    
+ 
     def form_valid(self, form):
         user = form.save(commit=False)
         user.is_active = False
@@ -64,22 +70,7 @@ class RegisterUser(FormView):
 
 def profile(request):
     return render(request, 'users/accounts/profile.html')
-# def activate(request, uidb64, token):
-#     user =get_user_model() 
-#     try:
-#         uid = force_str(urlsafe_base64_encode(uidb64))
-#         user = user.objects.get(pk=uid)
-#     except (TypeError, ValueError, OverflowError, user.DoesNotExist):
-#         user = None
-#     if user is not None and account_activation_token.check_token(user, token):
-#         user.is_active = True
-#         user.save()
-#         login(request, user)
-#         messages.success(request, "Your account has been activated successfully.")
-#         return render(request, 'users/accounts/activation_success.html')
-#     else:
-#         messages.error(request, "Activation link is invalid!")
-#         return render(request, 'users/accounts/activation_invalid.html')
+
 
 
 
