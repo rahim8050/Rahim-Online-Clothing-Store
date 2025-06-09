@@ -7,8 +7,11 @@ from django.core.mail import EmailMessage
 from django.shortcuts import render
 from django.template.loader import render_to_string
 from django.utils.encoding import force_bytes, force_str
-from django.utils.http import urlsafe_base64_encode
+from django.utils.http import  urlsafe_base64_encode, urlsafe_base64_decode
 from django.views.generic import FormView
+from django.http import HttpResponse
+from django.core.mail import send_mail
+
 
 
 from users.forms import RegisterUserForm
@@ -61,19 +64,47 @@ class RegisterUser(FormView):
 
 def profile(request):
     return render(request, 'users/accounts/profile.html')
+# def activate(request, uidb64, token):
+#     user =get_user_model() 
+#     try:
+#         uid = force_str(urlsafe_base64_encode(uidb64))
+#         user = user.objects.get(pk=uid)
+#     except (TypeError, ValueError, OverflowError, user.DoesNotExist):
+#         user = None
+#     if user is not None and account_activation_token.check_token(user, token):
+#         user.is_active = True
+#         user.save()
+#         login(request, user)
+#         messages.success(request, "Your account has been activated successfully.")
+#         return render(request, 'users/accounts/activation_success.html')
+#     else:
+#         messages.error(request, "Activation link is invalid!")
+#         return render(request, 'users/accounts/activation_invalid.html')
+
+
+
+
 def activate(request, uidb64, token):
-    user =get_user_model() 
+    User = get_user_model()
     try:
-        uid = force_str(urlsafe_base64_encode(uid))
-        user = user.objects.get(pk=uid)
-    except (TypeError, ValueError, OverflowError, user.DoesNotExist):
+        uid = force_str(urlsafe_base64_decode(uidb64))
+        user = User.objects.get(pk=uid)
+    except (TypeError, ValueError, OverflowError, User.DoesNotExist):
         user = None
+
     if user is not None and account_activation_token.check_token(user, token):
-        user.is_active = True
-        user.save()
-        login(request, user)
-        messages.success(request, "Your account has been activated successfully.")
-        return render(request, 'users/accounts/activation_success.html')
+        if not user.is_active:  # Only activate if not already active
+            user.is_active = True
+            user.save()
+            login(request, user)
+            messages.success(request, "Your account has been activated successfully.")
+            return render(request, 'users/accounts/activation_success.html')
+        else:
+            messages.info(request, "Your account is already active.")
+            return render(request, 'users/accounts/activation_success.html')
     else:
-        messages.error(request, "Activation link is invalid!")
+        messages.error(request, "Activation link is invalid or has expired!")
         return render(request, 'users/accounts/activation_invalid.html')
+    
+    
+    

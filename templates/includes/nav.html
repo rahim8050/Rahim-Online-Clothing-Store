@@ -22,20 +22,20 @@
 
                 <!-- Navigation Items -->
                 <div class="flex items-center space-x-6">
-                    <a href="{% url 'register'%}" class="text-indigo-600 hover:text-indigo-800 transition-colors duration-300">
+                    <a href="{% url 'users:register'%}" class="text-indigo-600 hover:text-indigo-800 transition-colors duration-300">
                         Create account
                     </a>
 
                     <!-- Auth Section -->
                     <div class="flex items-center">
                         {% if user.is_authenticated %}
-                        <form method="post" action="{% url 'logout' %}">
+                        <form method="post" action="{% url 'users:logout' %}">
                             {% csrf_token %}
                             <button class="text-indigo-600 hover:text-indigo-800 transition-colors duration-300"
                                     type="submit">Logout</button>
                         </form>
                         {% else %}
-                        <a href="{% url 'login' %}"
+                        <a href="{% url 'users:login' %}"
                            class="text-indigo-600 hover:text-indigo-800 transition-colors duration-300">
                             Login
                         </a>
@@ -89,18 +89,18 @@
 
             <!-- Mobile Navigation Links -->
             <div class="flex flex-col space-y-2 border-t pt-4">
-                <a href="{% url 'register'%}" class="px-4 py-2 text-indigo-600 hover:text-indigo-800">
+                <a href="{% url 'users:register'%}" class="px-4 py-2 text-indigo-600 hover:text-indigo-800">
                     Create account
                 </a>
                 {% if user.is_authenticated %}
-                <form method="post" action="{% url 'logout' %}" class="px-4 py-2">
+                <form method="post" action="{% url 'users:logout' %}" class="px-4 py-2">
                     {% csrf_token %}
                     <button type="submit" class="text-indigo-600 hover:text-indigo-800">
                         Logout
                     </button>
                 </form>
                 {% else %}
-                <a href="{% url 'login'%}" class="px-4 py-2 text-indigo-600 hover:text-indigo-800">
+                <a href="{% url 'users:login'%}" class="px-4 py-2 text-indigo-600 hover:text-indigo-800">
                     Login
                 </a>
                 {% endif %}
