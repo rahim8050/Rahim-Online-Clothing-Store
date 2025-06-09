@@ -12,10 +12,9 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 
 from pathlib import Path
 import os
-from environ import Env
-env = Env()
-Env.read_env()
-ENVIRONMENT = env('ENVIRONMENT', default='production')
+from dotenv import load_dotenv
+# Load environment variables from .env file
+load_dotenv()
 
 # import MySQLdb
 
@@ -225,17 +224,13 @@ AUTH_USER_MODEL = 'users.CustomUser'
 
 
 # Email Configuration
+mail = os.environ.get('MAIL_USERNAME')
+email_password = os.environ.get('MAIL_PASSWORD')
+EMAIL_HOST = 'smtp-mail.outlook.com'
+EMAIL_PORT = 587    
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = mail
+EMAIL_HOST_PASSWORD = email_password
+DEFAULT_FROM_EMAIL = mail
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 
-POSTGRES_LOCALLY = env.bool('POSTGRES_LOCALLY', default=False)
-
-if ENVIRONMENT == 'production' or POSTGRES_LOCALLY == True: 
-    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-    EMAIL_HOST = 'smtp.gmail.com'
-    EMAIL_HOST_USER = env('EMAIL_ADDRESS')
-    EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD') 
-    EMAIL_PORT = 587
-    EMAIL_USE_TLS = True
-    DEFAULT_FROM_EMAIL = f'Awesome {env("EMAIL_ADDRESS")}'
-    ACCOUNT_EMAIL_SUBJECT_PREFIX = ''
-else:
-    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
