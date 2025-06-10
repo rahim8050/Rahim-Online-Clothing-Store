@@ -1,19 +1,14 @@
 {% load static %}
-<!-- Add Font Awesome CDN in the head section -->
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <nav class="bg-white shadow-lg">
     <div class="container mx-auto px-4">
         <div class="flex justify-between items-center py-3 md:py-4">
-            <!-- Logo -->
             <a href='/' class="flex items-center text-xl md:text-2xl font-bold text-indigo-600 hover:text-indigo-800 transition-colors duration-300">
                 Rahim Clothes Store
                 <img src="{% static 'images/logo.jpg' %}" alt="Rahim Store Logo" class="h-10 md:h-10 ml-2">
             </a>
 
-            <!-- Desktop Menu -->
             <div class="hidden md:flex items-center space-x-6">
-                <!-- Search Form -->
                 <form method="get" action="{% url 'product_search' %}" class="flex items-center">
                     <input type="text" name="search" placeholder="Search products..."
                            value="{{ request.GET.search }}"
@@ -23,7 +18,12 @@
                     </button>
                 </form>
 
-                <!-- Navigation Items -->
+                {% if user.is_authenticated %}
+                <a href="{% url 'users:profile' %}" class="text-indigo-600 hover:text-indigo-800 transition-colors duration-300">
+                    <i class="fas fa-user-circle text-xl mr-1"></i> Profile
+                </a>
+                {% endif %}
+
                 <div class="flex items-center space-x-6">
                     {% if not user.is_authenticated %}
                     <a href="{% url 'users:register'%}" class="text-indigo-600 hover:text-indigo-800 transition-colors duration-300">
@@ -31,19 +31,16 @@
                     </a>
                     {% endif %}
 
-                    <!-- Auth Section -->
                     <div class="flex items-center">
                         {% if user.is_authenticated %}
                         <form method="post" action="{% url 'users:logout' %}">
                             {% csrf_token %}
-                            <button class="text-indigo-600 hover:text-indigo-800 transition-colors duration-300"
-                                    type="submit">
+                            <button type="submit" class="text-indigo-600 hover:text-indigo-800 transition-colors duration-300">
                                 <i class="fas fa-sign-out-alt mr-1"></i> Logout
                             </button>
                         </form>
                         {% else %}
-                        <a href="{% url 'users:login' %}"
-                           class="text-indigo-600 hover:text-indigo-800 transition-colors duration-300">
+                        <a href="{% url 'users:login' %}" class="text-indigo-600 hover:text-indigo-800 transition-colors duration-300">
                             <i class="fas fa-sign-in-alt mr-1"></i> Login
                         </a>
                         {% endif %}
@@ -51,9 +48,7 @@
                 </div>
             </div>
 
-            <!-- Mobile Menu Icons -->
             <div class="flex items-center space-x-4">
-                <!-- Cart Icon -->
                 <div class="relative">
                     <a href="{% url 'cart:cart_detail'%}" class="text-indigo-600 hover:text-indigo-800">
                         <i class="fas fa-shopping-cart text-2xl"></i>
@@ -64,16 +59,14 @@
                     </a>
                 </div>
 
-                <!-- Mobile Menu Button -->
                 <button id="mobile-menu-button" class="md:hidden text-indigo-600 hover:text-indigo-800">
                     <i class="fas fa-bars text-xl"></i>
                 </button>
             </div>
         </div>
-
         <!-- Mobile Menu -->
+
         <div id="mobile-menu" class="hidden md:hidden pb-4 space-y-4">
-            <!-- Mobile Search Form -->
             <form method="get" action="{% url 'product_search' %}" class="flex flex-col space-y-2 px-2">
                 <input type="text" name="search" placeholder="Search products..."
                        value="{{ request.GET.search }}"
@@ -82,23 +75,22 @@
                     Search
                 </button>
             </form>
-
-            <!-- Mobile Navigation Links -->
+                <!-- Mobile Navigation Links -->
             <div class="flex flex-col space-y-2 border-t pt-4">
-                {% if not user.is_authenticated %}
-                <a href="{% url 'users:register'%}" class="px-4 py-2 text-indigo-600 hover:text-indigo-800">
-                    <i class="fas fa-user-plus mr-2"></i> Create account
-                </a>
-                {% endif %}
-
                 {% if user.is_authenticated %}
+                <a href="{% url 'users:profile' %}" class="px-4 py-2 text-indigo-600 hover:text-indigo-800">
+                    <i class="fas fa-user-circle mr-2"></i> Profile
+                </a>
                 <form method="post" action="{% url 'users:logout' %}" class="px-4 py-2">
                     {% csrf_token %}
                     <button type="submit" class="text-indigo-600 hover:text-indigo-800 w-full text-left">
-                       <i class="fas fa-sign-out-alt mr-2"></i> Logout
+                        <i class="fas fa-sign-out-alt mr-2"></i> Logout
                     </button>
                 </form>
                 {% else %}
+                <a href="{% url 'users:register'%}" class="px-4 py-2 text-indigo-600 hover:text-indigo-800">
+                    <i class="fas fa-user-plus mr-2"></i> Create account
+                </a>
                 <a href="{% url 'users:login'%}" class="px-4 py-2 text-indigo-600 hover:text-indigo-800">
                     <i class="fas fa-sign-in-alt mr-2"></i> Login
                 </a>
@@ -108,22 +100,23 @@
     </div>
 </nav>
 
-<!-- Cart Animation & Update Scripts -->
+
+
+
+
+
 <script>
-    // Mobile menu toggle
     const mobileMenuButton = document.getElementById('mobile-menu-button');
     const mobileMenu = document.getElementById('mobile-menu');
     mobileMenuButton.addEventListener('click', () => {
         mobileMenu.classList.toggle('hidden');
     });
 
-    // Cart animation logic
     function showCartAddedAnimation() {
         const counter = document.getElementById('cart-counter');
         counter.classList.remove('opacity-0', 'scale-50');
-        void counter.offsetWidth; // Reflow
+        void counter.offsetWidth;
         counter.classList.add('opacity-100', 'scale-100');
-
         setTimeout(() => {
             counter.classList.remove('opacity-100', 'scale-100');
             counter.classList.add('opacity-0', 'scale-50');
@@ -134,11 +127,9 @@
         const counter = document.getElementById('cart-counter');
         const current = parseInt(counter.textContent) || 0;
         counter.textContent = count;
-
         if (count > current) {
             showCartAddedAnimation();
         }
-
         if (count > 0) {
             counter.classList.remove('opacity-0', 'scale-50');
         }
@@ -174,3 +165,5 @@
         });
     });
 </script>
+
+
