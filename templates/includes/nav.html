@@ -1,206 +1,3 @@
-{% comment %} 
-{% load static %}
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-<nav class="bg-white shadow-lg">
-    <div class="container mx-auto px-4">
-        <div class="flex justify-between items-center py-3 md:py-4">
-            <!-- Logo -->
-            <a href='/' class=" flex items-center  text-xl md:text-2xl font-bold text-indigo-600 hover:text-indigo-800 transition-colors duration-300">
-                Rahim Clothes Store
-            
-            <img src="{% static 'images/logo.jpg' %}" alt="Rahim Store Logo" class="h-10 md:h-10">
-</a>
-            <!-- Desktop Menu -->
-            <div class="hidden md:flex items-center space-x-6">
-                <!-- Search Form -->
-                 <form method="get" action="{% url 'product_search' %}" class="flex items-center">
-                    <input type="text" name="search" placeholder="Search products..."
-                           value="{{ request.GET.search }}"
-                           class="border p-2 w-48 lg:w-64 rounded-l focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                    <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded-r hover:bg-blue-600 transition-colors">
-                        Search
-                    </button>
-                </form> 
-
-                <!-- Navigation Items -->
-                <div class="flex items-center space-x-6">
-                    <a href="{% url 'users:register'%}" class="text-indigo-600 hover:text-indigo-800 transition-colors duration-300">
-                         <i class="fas fa-user-plus mr-1"></i>Create account
-                    </a>
-
-                    <!-- Auth Section -->
-                    <div class="flex items-center">
-                        {% if user.is_authenticated %}
-                        <form method="post" action="{% url 'users:logout' %}">
-                            {% csrf_token %}
-                            <button class="text-indigo-600 hover:text-indigo-800 transition-colors duration-300"
-                                    type="submit">  <i class="fas fa-sign-out-alt mr-1"></i>Logout</button>
-                        </form>
-                        {% else %}
-                        <a href="{% url 'users:login' %}"
-                           class="text-indigo-600 hover:text-indigo-800 transition-colors duration-300">
-                            <i class="fas fa-sign-in-alt mr-1"></i> Login
-                        </a>
-                        {% endif %}
-                    </div>
-                </div>
-            </div>
-
-            <!-- Mobile Menu Icons -->
-            <div class="flex items-center space-x-4">
-                <!-- Cart Icon -->
-                <div class="relative">
-                    <a href="{% url 'cart:cart_detail'%}" class="text-indigo-600 hover:text-indigo-800">
-                        <svg class="w-6 md:w-8" viewBox="0 0 40 36">
-                            <g id="Page-1_4_" sketch:type="MSPage">
-	<g id="Desktop_4_" transform="translate(-84.000000, -410.000000)" sketch:type="MSArtboardGroup">
-		<path id="Cart" sketch:type="MSShapeGroup" class="st0" d="M94.5,434.6h24.8l4.7-15.7H92.2l-1.3-8.9H84v4.8h3.1l3.7,27.8h0.1
-			c0,1.9,1.8,3.4,3.9,3.4c2.2,0,3.9-1.5,3.9-3.4h12.8c0,1.9,1.8,3.4,3.9,3.4c2.2,0,3.9-1.5,3.9-3.4h1.7v-3.9l-25.8-0.1L94.5,434.6"
-			/>
-	</g>
-</g>
-                        </svg>
-                        <span id="cart-counter"
-                              class="absolute -top-2 -right-2 bg-red-500 text-white rounded-full text-xs px-2 py-1 transition-all duration-300 opacity-0 scale-50">
-                            +1
-                        </span>
-                    </a>
-                </div>
-
-                           <!-- Mobile Menu Button -->
-                <button id="mobile-menu-button" class="md:hidden text-indigo-600 hover:text-indigo-800">
-                    <i class="fas fa-bars text-xl"></i>
-                </button>
-            </div>
-        </div>
-
-        <!-- Mobile Menu -->
-        <div id="mobile-menu" class="hidden md:hidden pb-4 space-y-4">
-            <!-- Mobile Search Form -->
-            <form method="get" action="{% url 'product_search' %}" class="flex flex-col space-y-2 px-2">
-                <input type="text" name="search" placeholder="Search products..."
-                       value="{{ request.GET.search }}"
-                       class="border p-2 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition-colors">
-                    Search
-                </button>
-            </form>
-
-            <!-- Mobile Navigation Links -->
-            <div class="flex flex-col space-y-2 border-t pt-4">
-                <a href="{% url 'users:register'%}" class="px-4 py-2 text-indigo-600 hover:text-indigo-800">
-                   <i class="fa-solid fa-user-plus"></i> Create account
-                </a>
-                {% if user.is_authenticated %}
-                <form method="post" action="{% url 'users:logout' %}" class="px-4 py-2">
-                    {% csrf_token %}
-                    <button type="submit" class="text-indigo-600 hover:text-indigo-800">
-                       <i class="fa-solid fa-user-plus"></i> Logout
-                    </button>
-                </form>
-                {% else %}
-                <a href="{% url 'users:login'%}" class="px-4 py-2 text-indigo-600 hover:text-indigo-800">
-                    <i class="fa-solid fa-door-closed"></i> Login
-                </a>
-                {% endif %}
-            </div>
-        </div>
-    </div>
-</nav>
-
-<script>
-    // Mobile menu toggle
-    const mobileMenuButton = document.getElementById('mobile-menu-button');
-    const mobileMenu = document.getElementById('mobile-menu');
-    mobileMenuButton.addEventListener('click', () => {
-        mobileMenu.classList.toggle('hidden');
-    });
-
-    // Cart animation logic
-    function showCartAddedAnimation() {
-        const counter = document.getElementById('cart-counter');
-
-        // Reset animation
-        counter.classList.remove('opacity-0', 'scale-50');
-
-        // Trigger animation
-        void counter.offsetWidth; // Trigger reflow
-        counter.classList.add('opacity-100', 'scale-100');
-
-        // Reset after animation
-        setTimeout(() => {
-            counter.classList.remove('opacity-100', 'scale-100');
-            counter.classList.add('opacity-0', 'scale-50');
-        }, 2000);
-    }
-
-    // Example usage - call this when an item is added to cart
-    // document.querySelector('.add-to-cart-button').addEventListener('click', showCartAddedAnimation);
-</script>
-
-<!-- In your nav template -->
-<span id="cart-counter"
-    class="absolute -top-2 -right-2 bg-red-500 text-white rounded-full text-xs px-2 py-1 transition-all duration-300 opacity-0 scale-50">
-    {{ cart.total_items|default:0 }}  <!-- Initial value from context -->
-</span>
-
-<script>
-    // Add this to your existing JavaScript
-    function updateCartCounter(count) {
-        const counter = document.getElementById('cart-counter');
-        counter.textContent = count;
-
-        // Only animate if count increased
-        if (parseInt(counter.textContent) < parseInt(count)) {
-            showCartAddedAnimation();
-        }
-    }
-
-    // Fetch initial cart count on page load
-    document.addEventListener('DOMContentLoaded', function() {
-        fetch('/cart/count/')  // Add this endpoint (see below)
-            .then(response => response.json())
-            .then(data => {
-                updateCartCounter(data.count);
-                // Fade in counter if items exist
-                if (data.count > 0) {
-                    const counter = document.getElementById('cart-counter');
-                    counter.classList.remove('opacity-0', 'scale-50');
-                }
-            });
-    });
-
-    // Example AJAX add to cart implementation
-    document.querySelectorAll('.add-to-cart').forEach(button => {
-        button.addEventListener('click', function(e) {
-            e.preventDefault();
-            const productId = this.dataset.productId;
-
-            fetch(`/cart/add/${productId}/`, {
-                method: 'POST',
-                headers: {
-                    'X-CSRFToken': '{{ csrf_token }}',
-                    'Content-Type': 'application/json'
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    updateCartCounter(data.cart_total_items);
-                }
-            })
-            .catch(error => console.error('Error:', error));
-        });
-    });
-</script>
-
-
-
-
-
-
-
- {% endcomment %}
 {% load static %}
 <!-- Add Font Awesome CDN in the head section -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -228,9 +25,11 @@
 
                 <!-- Navigation Items -->
                 <div class="flex items-center space-x-6">
+                    {% if not user.is_authenticated %}
                     <a href="{% url 'users:register'%}" class="text-indigo-600 hover:text-indigo-800 transition-colors duration-300">
                         <i class="fas fa-user-plus mr-1"></i> Create account
                     </a>
+                    {% endif %}
 
                     <!-- Auth Section -->
                     <div class="flex items-center">
@@ -260,7 +59,7 @@
                         <i class="fas fa-shopping-cart text-2xl"></i>
                         <span id="cart-counter"
                               class="absolute -top-2 -right-2 bg-red-500 text-white rounded-full text-xs px-2 py-1 transition-all duration-300 opacity-0 scale-50">
-                            +1
+                            {{ cart.total_items|default:0 }}
                         </span>
                     </a>
                 </div>
@@ -286,9 +85,12 @@
 
             <!-- Mobile Navigation Links -->
             <div class="flex flex-col space-y-2 border-t pt-4">
+                {% if not user.is_authenticated %}
                 <a href="{% url 'users:register'%}" class="px-4 py-2 text-indigo-600 hover:text-indigo-800">
-                   <i class="fas fa-user-plus mr-2"></i> Create account
+                    <i class="fas fa-user-plus mr-2"></i> Create account
                 </a>
+                {% endif %}
+
                 {% if user.is_authenticated %}
                 <form method="post" action="{% url 'users:logout' %}" class="px-4 py-2">
                     {% csrf_token %}
@@ -306,7 +108,7 @@
     </div>
 </nav>
 
-
+<!-- Cart Animation & Update Scripts -->
 <script>
     // Mobile menu toggle
     const mobileMenuButton = document.getElementById('mobile-menu-button');
@@ -314,63 +116,44 @@
     mobileMenuButton.addEventListener('click', () => {
         mobileMenu.classList.toggle('hidden');
     });
- // Cart animation logic
+
+    // Cart animation logic
     function showCartAddedAnimation() {
         const counter = document.getElementById('cart-counter');
-
-        // Reset animation
         counter.classList.remove('opacity-0', 'scale-50');
-
-        // Trigger animation
-        void counter.offsetWidth; // Trigger reflow
+        void counter.offsetWidth; // Reflow
         counter.classList.add('opacity-100', 'scale-100');
 
-        // Reset after animation
         setTimeout(() => {
             counter.classList.remove('opacity-100', 'scale-100');
             counter.classList.add('opacity-0', 'scale-50');
         }, 2000);
     }
 
-    // Example usage - call this when an item is added to cart
-    // document.querySelector('.add-to-cart-button').addEventListener('click', showCartAddedAnimation);
-</script>
-
-
-<span id="cart-counter"
-    class="absolute -top-2 -right-2 bg-red-500 text-white rounded-full text-xs px-2 py-1 transition-all duration-300 opacity-0 scale-50">
-    {{ cart.total_items|default:0 }}  <!-- Initial value from context -->
-</span>
-
-<script>
-  
     function updateCartCounter(count) {
         const counter = document.getElementById('cart-counter');
+        const current = parseInt(counter.textContent) || 0;
         counter.textContent = count;
 
-        // Only animate if count increased
-        if (parseInt(counter.textContent) < parseInt(count)) {
+        if (count > current) {
             showCartAddedAnimation();
+        }
+
+        if (count > 0) {
+            counter.classList.remove('opacity-0', 'scale-50');
         }
     }
 
-    // Fetch initial cart count on page load
-    document.addEventListener('DOMContentLoaded', function() {
-        fetch('/cart/count/')  
+    document.addEventListener('DOMContentLoaded', function () {
+        fetch('/cart/count/')
             .then(response => response.json())
             .then(data => {
                 updateCartCounter(data.count);
-                // Fade in counter if items exist
-                if (data.count > 0) {
-                    const counter = document.getElementById('cart-counter');
-                    counter.classList.remove('opacity-0', 'scale-50');
-                }
             });
     });
 
-   // cart implementation
     document.querySelectorAll('.add-to-cart').forEach(button => {
-        button.addEventListener('click', function(e) {
+        button.addEventListener('click', function (e) {
             e.preventDefault();
             const productId = this.dataset.productId;
 
@@ -390,5 +173,4 @@
             .catch(error => console.error('Error:', error));
         });
     });
-
 </script>
