@@ -4,9 +4,9 @@
 <div class="max-w-md mx-auto mt-10 bg-white p-8 rounded-lg shadow-md">
     <h2 class="text-2xl font-bold text-green-600 mb-4">Activation Successful</h2>
     <p class="mb-4">Your account has been successfully activated!</p>
-    <a href="{% url 'users:login' %}" 
+    {% comment %} <a href="{% url 'users:login' %}" 
        class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
         Log In
-    </a>
+    </a> {% endcomment %}
 </div>
 {% endblock %}

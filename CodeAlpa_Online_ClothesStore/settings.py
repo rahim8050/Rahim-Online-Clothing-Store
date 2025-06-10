@@ -16,7 +16,7 @@ from dotenv import load_dotenv
 # Load environment variables from .env file
 load_dotenv()
 
-# import MySQLdb
+
 
 from django.contrib import messages
 
@@ -104,8 +104,8 @@ MPESA_ENVIRONMENT = 'sandbox'
 
 # Credentials for the daraja app
 
-MPESA_CONSUMER_KEY = os.getenv('MPESA_CONSUMER_KEY')
-MPESA_CONSUMER_SECRET = os.getenv('MPESA_CONSUMER_SECRET')
+MPESA_CONSUMER_KEY = os.environ.get('MPESA_CONSUMER_KEY')
+MPESA_CONSUMER_SECRET = os.environ.get('MPESA_CONSUMER_SECRET')
 
 #Shortcode to use for transactions. For sandbox  use the Shortcode 1 provided on test credentials page
 
@@ -128,7 +128,7 @@ MPESA_SHORTCODE_TYPE = 'paybill'
 # Sandbox passkey is available on test credentials page
 # Production passkey is sent via email once you go live
 
-MPESA_PASSKEY = os.getenv('MPESA_PASSKEY')
+MPESA_PASSKEY = os.environ.get('MPESA_PASS_KEY')
 
 # Username for initiator (to be used in B2C, B2B, AccountBalance and TransactionStatusQuery Transactions)
 
@@ -150,6 +150,10 @@ DATABASES = {
         'PASSWORD' : '',
         'HOST' : 'localhost',
         'PORT' : '3306',
+          'OPTIONS': {
+            'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
+           
+        }
 
 
     }
@@ -224,20 +228,11 @@ AUTH_USER_MODEL = 'users.CustomUser'
 
 
 # Email Configuration
-# mail = os.environ.get('MAIL_USERNAME')
-# EMAIL_HOST = 'smtp.com'
-# EMAIL_PORT = 587    
-# EMAIL_USE_TLS = True
-# EMAIL_HOST_USER = mail
-# EMAIL_HOST_PASSWORD =  os.environ.get('MAIL_PASSWORD')
-# DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', mail)
-# EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = os.environ.get('EMAIL_HOST')
 EMAIL_PORT = os.environ.get('EMAIL_PORT', default=587)
 EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', default=True)
 EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER')
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD')
-print(EMAIL_HOST_PASSWORD)
 DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', default=EMAIL_HOST_USER)
 

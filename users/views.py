@@ -1,5 +1,6 @@
 from django.contrib import messages
 from django.contrib.auth import login, get_user_model
+from django.urls import reverse_lazy
 from django.contrib.auth.models import User
 from django.contrib.auth.views import LoginView, LogoutView
 from django.contrib.sites.shortcuts import get_current_site
@@ -11,6 +12,11 @@ from django.utils.http import  urlsafe_base64_encode, urlsafe_base64_decode
 from django.views.generic import FormView
 from django.db import IntegrityError
 from users.forms import RegisterUserForm
+from users.models import CustomUser
+from django.shortcuts import render, redirect
+
+
+
 from emailverification.tokens import account_activation_token
 
 
@@ -23,39 +29,51 @@ class Login(LoginView):
 class Logout(LogoutView):
     next_page = "/"
 
+
 class RegisterUser(FormView):
     template_name = "users/accounts/register.html"
     form_class = RegisterUserForm
-    success_url = "/"
+    success_url = reverse_lazy("index")  # Use a named URL if possible
+
     def form_valid(self, form):
-        user = form.save(commit=False)
-        user.is_active = False
-        user.save()
-        
-        current_site = get_current_site(self.request)
-        
-        # Render both subject and message templates
-        mail_subject = 'Activate your account'
-        message = render_to_string("users/accounts/acc_activate_email.html", {
-            'user': user,
-            'domain': current_site.domain,
-            'uid': urlsafe_base64_encode(force_bytes(user.pk)),
-            'token': account_activation_token.make_token(user),
-        })
-        
-        to_email = form.cleaned_data.get('email')
-        email = EmailMessage(
-            mail_subject,
-            message,
-            to=[to_email]
-        )
-        email.send()
-        
-        messages.success(self.request, "Please confirm your email address to complete the registration.")
-        messages.success(self.request, f"Account created for {user.username}")
-        
-        
-        return super().form_valid(form)
+        try:
+            user = form.save(commit=False)
+            user.is_active = False  # Require email activation
+            user.save()
+
+            current_site = get_current_site(self.request)
+            mail_subject = 'Activate your account'
+            message = render_to_string("users/accounts/acc_activate_email.html", {
+                'user': user,
+                'domain': current_site.domain,
+                'uid': urlsafe_base64_encode(force_bytes(user.pk)),
+                'token': account_activation_token.make_token(user),
+            })
+
+            email = EmailMessage(mail_subject, message, to=[user.email])
+            email.send()
+
+            messages.success(self.request, "Account created successfully.")
+            messages.success(self.request, "Please check your email to activate your account.")
+            return redirect(self.get_success_url())
+
+        except Exception as e:
+            messages.error(self.request, f"An error occurred: {str(e)}")
+            return self.form_invalid(form)
+
+    def form_invalid(self, form):
+        # Collect and display all form errors via messages
+        for field, errors in form.errors.items():
+            for error in errors:
+                if field == '__all__':
+                    messages.error(self.request, error)
+                else:
+                    messages.error(self.request, f"{form.fields[field].label}: {error}")
+        return super().form_invalid(form)
+
+    
+
+
 
 def profile(request):
     return render(request, 'users/accounts/profile.html')
