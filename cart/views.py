@@ -50,8 +50,18 @@ def cart_add(request, product_id):
 
 
 def cart_count(request):
-    cart = Cart(request)
-    return JsonResponse({'count': len(cart)})
+    cart_id = request.session.get('cart_id')
+
+    if not cart_id:
+        return JsonResponse({'count': 0})
+
+    try:
+        cart = Cart.objects.get(id=cart_id)
+        total_items = sum(item.quantity for item in cart.items.all())  # Count quantity across items
+        return JsonResponse({'count': total_items})
+    except Cart.DoesNotExist:
+        return JsonResponse({'count': 0})
+
 
 
 
