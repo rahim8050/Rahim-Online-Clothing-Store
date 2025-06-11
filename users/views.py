@@ -14,6 +14,8 @@ from django.db import IntegrityError
 from users.forms import RegisterUserForm
 from users.models import CustomUser
 from django.shortcuts import render, redirect
+from django.contrib.auth.tokens import default_token_generator
+from .forms import EmailOrUsernameAuthenticationForm
 
 
 
@@ -26,6 +28,7 @@ def home (request):
     pass
 class Login(LoginView):
     template_name = "users/accounts/login.html"
+    authentication_form = EmailOrUsernameAuthenticationForm
 class Logout(LogoutView):
     next_page = "/"
 
@@ -79,30 +82,26 @@ def profile(request):
     return render(request, 'users/accounts/profile.html')
 
 
-
-
-
 def activate(request, uidb64, token):
-    User = get_user_model()
     try:
         uid = force_str(urlsafe_base64_decode(uidb64))
-        user = User.objects.get(pk=uid)
-    except (TypeError, ValueError, OverflowError, User.DoesNotExist):
+        user = CustomUser.objects.get(pk=uid)
+    except (TypeError, ValueError, OverflowError, CustomUser.DoesNotExist):
         user = None
 
-    if user is not None and account_activation_token.check_token(user, token):
-        if not user.is_active:  # Only activate if not already active
-            user.is_active = True
-            user.save()
-            login(request, user)
-            messages.success(request, "Your account has been activated successfully.")
-            return render(request, 'users/accounts/activation_success.html')
-        else:
-            messages.info(request, "Your account is already active.")
-            return render(request, 'users/accounts/activation_success.html')
+    if user is not None and default_token_generator.check_token(user, token):
+        user.is_active = True
+        user.save()
+
+        #  Explicitly tells Django which backend you're using:
+        login(request, user, backend='users.backends.EmailOrUsernameModelBackend')
+
+        return redirect('home')
     else:
-        messages.error(request, "Activation link is invalid or has expired!")
         return render(request, 'users/accounts/activation_invalid.html')
+
+
+
     
     
     

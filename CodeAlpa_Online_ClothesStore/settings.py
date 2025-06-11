@@ -12,6 +12,8 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 
 from pathlib import Path
 import os
+from django.db import models
+from django.db.models import CharField
 from dotenv import load_dotenv
 # Load environment variables from .env file
 load_dotenv()
@@ -70,6 +72,12 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 
 ]
+AUTHENTICATION_BACKENDS = [
+    'users.backends.EmailOrUsernameModelBackend',
+    'django.contrib.auth.backends.ModelBackend',
+]
+
+
 
 CSRF_TRUSTED_ORIGINS = [
     'https://codealpa-online-clothesstore.onrender.com',
@@ -151,6 +159,7 @@ DATABASES = {
         'HOST' : 'localhost',
         'PORT' : '3306',
           'OPTIONS': {
+              'charset': 'utf8mb4',
             'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
            
         }
@@ -203,6 +212,12 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+
+CharField.register_lookup(models.functions.Length)
+
+# But better: just always manually set max_length <=191 on unique fields
+
 STATICFILES_DIRS = [BASE_DIR / "static"]
 
 
