@@ -19,7 +19,8 @@ from django.contrib.auth import get_user_model
 
 
 
-from emailverification.tokens import account_activation_token
+# from emailverification.tokens import account_activation_token
+
 
 
 
@@ -30,6 +31,7 @@ class Login(LoginView):
     template_name = "users/accounts/login.html"
 class Logout(LogoutView):
     next_page = "/"
+    http_method_names = ['post']
 
 User = get_user_model()
 

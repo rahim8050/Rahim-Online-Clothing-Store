@@ -7,6 +7,27 @@
     <meta http-equiv="X-UA-Compatible" content="ie=edge" />
     
     <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+    .plus-one-badge {
+        position: absolute;
+        top: -10px;
+        right: -10px;
+        background:rgb(236, 18, 36); /* green */
+        color: white;
+        border-radius: 9999px;
+        padding: 4px 8px;
+        font-size: 0.75rem;
+        font-weight: bold;
+        opacity: 1;
+        transition: opacity 0.5s ease;
+        z-index: 10;
+    }
+
+    .plus-one-badge.fade-out {
+        opacity: 0;
+    }
+</style>
+
 
     <!-- Font Awesome -->
     <link rel="stylesheet"
@@ -50,7 +71,8 @@
     </div>
 
     <!-- Main Content -->
-    <main class="flex-grow py-8 px-4 md:px-0">
+    <main class="flex-grow py-8 px-4 md:px-0" id="main-content">
+        
         <div class="max-w-screen-xl mx-auto">
             {% block content %}{% endblock %}
         </div>
@@ -85,6 +107,7 @@
             });
         });
     </script>
+    
 
 </body>
 </html>

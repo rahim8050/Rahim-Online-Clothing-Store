@@ -49,7 +49,6 @@
     </div>
 </div>
 
-<!-- Cart JavaScript -->
 <script>
     function showToast(message) {
         const toast = document.querySelector('.toast-message');
@@ -78,7 +77,25 @@
             .catch(error => console.error("Cart count update failed:", error));
     }
 
-    // Add to Cart Form Handling
+    // Sticky +1 badge
+    function showStickyPlusOne() {
+        const cartIcon = document.getElementById('cart-icon');
+        if (!cartIcon) return;
+
+        let plusOne = document.createElement('div');
+        plusOne.textContent = '+1';
+        plusOne.classList.add('plus-one-badge');
+
+        // Position inside cart icon
+        cartIcon.appendChild(plusOne);
+
+        // Auto-remove after 1.5 seconds
+        setTimeout(() => {
+            plusOne.classList.add('fade-out');
+            plusOne.addEventListener('transitionend', () => plusOne.remove());
+        }, 1500);
+    }
+
     document.getElementById('add_to_cart-form').addEventListener('submit', function(event) {
         event.preventDefault();
         const form = event.target;
@@ -95,12 +112,11 @@
         .then(response => response.json())
         .then(data => {
             const messageElement = document.getElementById('message');
-            messageElement.textContent = data.success
-                ? data.message
-                : 'Failed to add to cart';
+            messageElement.textContent = data.success ? data.message : 'Failed to add to cart';
 
             if (data.success) {
-                updateCartCounterDisplay(); 
+                showStickyPlusOne(); 
+                updateCartCounterDisplay();
             }
         })
         .catch(error => {
@@ -108,9 +124,10 @@
         });
     });
 
-    // Optional: update on page load
     document.addEventListener("DOMContentLoaded", function () {
         updateCartCounterDisplay();
     });
 </script>
+
+
 {% endblock %}
