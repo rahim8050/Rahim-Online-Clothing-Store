@@ -58,9 +58,11 @@ INSTALLED_APPS = [
     'Mpesa',
     'utilities',
     
+    
 
 
 ]
+
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',

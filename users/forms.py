@@ -3,12 +3,12 @@ from django.contrib.auth.forms import UserCreationForm
 from django.views.generic import FormView
 from django.contrib.auth.forms import AuthenticationForm
 from django import forms
-
 from .models import  CustomUser
-
 from django import forms
 from django.contrib.auth.forms import UserCreationForm
 from .models import CustomUser
+from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
 
 class RegisterUserForm(UserCreationForm):
     class Meta:
@@ -33,3 +33,27 @@ class RegisterUserForm(UserCreationForm):
         })
 class EmailOrUsernameAuthenticationForm(AuthenticationForm):
     username = forms.CharField(label='Username or Email')
+    
+    
+
+
+User = get_user_model()
+
+
+
+
+
+class ResendActivationEmailForm(forms.Form):
+    email = forms.EmailField()
+
+    def clean_email(self):
+        email = self.cleaned_data.get('email')
+        try:
+            user = User.objects.get(email=email)
+            if not user.is_active:
+                # optionally resend activation email here
+                raise ValidationError("You already have an account that needs activation. Check your email.")
+        except User.DoesNotExist:
+            pass
+        return email
+

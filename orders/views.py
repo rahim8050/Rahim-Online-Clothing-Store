@@ -7,9 +7,6 @@ from django.urls import reverse_lazy
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_http_methods
 from django.db import transaction
-
-
-
 # Create your views here.
 # def order_create(request):
 #     # cart = None

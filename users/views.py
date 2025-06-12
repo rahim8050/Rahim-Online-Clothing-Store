@@ -16,14 +16,9 @@ from users.models import CustomUser
 from django.shortcuts import render, redirect
 from django.contrib.auth.tokens import default_token_generator
 from django.contrib.auth import get_user_model
-
-
-
-# from emailverification.tokens import account_activation_token
-
-
-
-
+from .tokens import account_activation_token
+from .forms import ResendActivationEmailForm
+from django.views import View
 # Create your views here.
 def home (request):
     pass
@@ -85,6 +80,41 @@ def activate(request, uidb64, token):
         return render(request, 'users/accounts/activation_success.html')
     else:
         return render(request, 'users/accounts/activation_failed.html')
+    
+
+
+class ResendActivationEmailView(View):
+    template_name = 'users/accounts/resend_activation.html'
+
+    def get(self, request):
+        form = ResendActivationEmailForm()
+        return render(request, self.template_name, {'form': form})
+
+    def post(self, request):
+        form = ResendActivationEmailForm(request.POST)
+        if form.is_valid():
+            email = form.cleaned_data['email']
+            try:
+                user = User.objects.get(email=email)
+                if user.is_active:
+                    messages.info(request, 'This account is already active.')
+                else:
+                    current_site = get_current_site(request)
+                    mail_subject = 'Activate your account'
+                    message = render_to_string('users/accounts/acc_activate_email.html', {
+                        'user': user,
+                        'domain': current_site.domain,
+                        'uid': urlsafe_base64_encode(force_bytes(user.pk)),
+                        'token': account_activation_token.make_token(user),
+                    })
+                    email_message = EmailMessage(mail_subject, message, to=[user.email])
+                    email_message.send()
+                    messages.success(request, 'A new activation link has been sent to your email.')
+            except User.DoesNotExist:
+                messages.error(request, 'No account found with that email.')
+            return redirect('users:resend_activation')
+        return render(request, self.template_name, {'form': form})
+    
     
     
     

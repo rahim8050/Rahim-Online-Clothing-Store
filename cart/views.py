@@ -42,13 +42,6 @@ def cart_add(request, product_id):
 
      return JsonResponse(response_data)
 
-
-
-
-
-
-
-
 def cart_count(request):
     cart_id = request.session.get('cart_id')
 
@@ -61,9 +54,6 @@ def cart_count(request):
         return JsonResponse({'count': total_items})
     except Cart.DoesNotExist:
         return JsonResponse({'count': 0})
-
-
-
 
 def cart_detail(request):
     try:
