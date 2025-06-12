@@ -2,7 +2,9 @@
 """Django's command-line utility for administrative tasks."""
 import os
 import sys
-
+from django.utils import timezone
+from datetime import timedelta
+from django.contrib.auth import get_user_model
 
 def main():
     """Run administrative tasks."""
@@ -20,3 +22,8 @@ def main():
 
 if __name__ == '__main__':
     main()
+    
+
+
+
+   
