@@ -19,6 +19,8 @@ from django.contrib.auth import get_user_model
 from .tokens import account_activation_token
 from .forms import ResendActivationEmailForm
 from django.views import View
+from django.views.decorators.csrf import csrf_protect
+from django.utils.decorators import method_decorator
 # Create your views here.
 def home (request):
     pass
@@ -26,7 +28,10 @@ class Login(LoginView):
     template_name = "users/accounts/login.html"
 class Logout(LogoutView):
     next_page = "/"
-    http_method_names = ['post']
+   
+@method_decorator(csrf_protect)
+def post(self, request, *args, **kwargs):
+        return super().post(request, *args, **kwargs)
 
 User = get_user_model()
 
@@ -47,9 +52,11 @@ class RegisterUser(FormView):
             'domain': current_site.domain,
             'uid': urlsafe_base64_encode(force_bytes(user.pk)),
             'token': account_activation_token.make_token(user),
+            'protocol': 'https' if self.request.is_secure() else 'http',
         })
 
         email = EmailMessage(mail_subject, message, to=[user.email])
+        email.content_subtype = "html"  # If you want to send HTML content
         email.send()
 
         messages.success(self.request, "Account created successfully. Please check your email to activate your account.")
