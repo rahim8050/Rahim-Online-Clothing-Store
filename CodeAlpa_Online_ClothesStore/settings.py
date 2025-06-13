@@ -15,6 +15,7 @@ import os
 from django.db import models
 from django.db.models import CharField
 from dotenv import load_dotenv
+from datetime import timedelta
 # Load environment variables from .env file
 load_dotenv()
 
@@ -57,6 +58,9 @@ INSTALLED_APPS = [
     'django_daraja',
     'Mpesa',
     'utilities',
+    'rest_framework',
+    'apis.apps.ApisConfig',
+    
     
     
 
@@ -78,7 +82,15 @@ AUTHENTICATION_BACKENDS = [
     'users.backends.EmailOrUsernameModelBackend',
     'django.contrib.auth.backends.ModelBackend',
 ]
-
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ],
+}
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
+}
 
 
 CSRF_TRUSTED_ORIGINS = [
