@@ -63,7 +63,7 @@ def order_create(request):
     # Authentication check 
     if not request.user.is_authenticated:
         messages.warning(request, "Please log in to place an order")
-        return redirect('login')  # Use your login URL name
+        return redirect('users:login')  
 
     # Cart handling 
     cart_id = request.session.get('cart_id')

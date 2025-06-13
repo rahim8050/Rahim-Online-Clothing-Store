@@ -53,8 +53,7 @@
                     <a href="{% url 'cart:cart_detail'%}" class="text-indigo-600 hover:text-indigo-800">
                         <i class="fas fa-shopping-cart text-2xl"></i>
                         <span id="cart-counter"
-                              {% comment %} class="absolute -top-4 -right-4 text-red-700 bg-red-500 rounded-full text-xl px-2 py-1 "> {% endcomment %}
-                              class="absolute -top-3 -right-3 bg-red-600 text-white rounded-full text-xs font-semibold px-2 py-1 shadow-md"
+                              class="absolute -top-3 -right-3 text-white bg-red-500 rounded-full text-xs px-2 py-1 font-semibold shadow-md "> 
 
                               {{ cart_total_items|default:0 }}
                         </span>
