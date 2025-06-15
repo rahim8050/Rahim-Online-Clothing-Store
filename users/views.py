@@ -21,6 +21,7 @@ from .forms import ResendActivationEmailForm
 from django.views import View
 from django.views.decorators.csrf import csrf_protect
 from django.utils.decorators import method_decorator
+from .forms import ProfileUpdateForm
 # Create your views here.
 def home (request):
     pass
@@ -69,7 +70,19 @@ class RegisterUser(FormView):
         return super().form_invalid(form)
 
 def profile(request):
-    return render(request, 'users/accounts/profile.html')
+    if request.method == 'POST':
+        form = ProfileUpdateForm(request.POST, instance=request.user)
+        print("POST DATA:", request.POST)
+        if form.is_valid():
+            form.save()
+            print("Form valid. Saved.")
+            return redirect('profile')
+        else:
+            print("Form errors:", form.errors)
+    else:
+        form = ProfileUpdateForm(instance=request.user)
+
+    return render(request, 'users/accounts/profile.html', {'form': form})
 def activate(request, uidb64, token):
     try:
         uid = force_str(urlsafe_base64_decode(uidb64))
