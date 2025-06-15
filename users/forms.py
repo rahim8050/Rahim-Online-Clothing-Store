@@ -57,17 +57,32 @@ class ResendActivationEmailForm(forms.Form):
         except User.DoesNotExist:
             pass
         return email
- 
+class RemoveHelpTextMixin:
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            field.help_text = ''
+class OptionalFieldsMixin:
+    """
+    Mixin to make all fields optional automatically.
+    """
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            field.required = False
 class ProfileUpdateForm(forms.ModelForm):
     class Meta:
         model = CustomUser
         fields = ['username', 'email']
         widgets = {
             'username': forms.TextInput(attrs={
-                'class': 'w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent'
+                'class': 'w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent',
+                'placeholder': 'Enter your username'
             }),
             'email': forms.EmailInput(attrs={
-                'class': 'w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent'
+                'class': 'w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent',
+                'placeholder': 'Enter your email'
             }),
-        }    
+        }
+
 
