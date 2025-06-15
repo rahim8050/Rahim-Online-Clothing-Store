@@ -1,12 +1,56 @@
 {% extends "base.html" %}
+{% load widget_tweaks%}
+
 {% load static %}
-{% block title %}Profile{% endblock %}
+{% block title %}Profile Settings{% endblock %}
 {% block content %}
 
+<div class="container mx-auto p-6 max-w-4xl">
+    <!-- Header -->
+    <h1 class="text-3xl font-bold text-blue-600 mb-6">Account Settings</h1>
 
-        <h1 class="text-3xl font-bold text-blue-600 mb-4">Welcome, {{ request.user.username }}!</h1>
-        <p class="text-gray-700 mb-6">This is your profile page.</p>
+    <!-- Navigation Tabs -->
+    <div class="flex mb-8 border-b border-gray-300">
+        <a href="#" class="px-4 py-2 border-b-2 border-blue-600 text-blue-600 font-semibold">Profile</a>
+        <a href="#" class="px-4 py-2 text-gray-600 hover:text-blue-600">Security</a>
+        <a href="#" class="px-4 py-2 text-gray-600 hover:text-blue-600">Orders</a>
+        <a href="#" class="px-4 py-2 text-gray-600 hover:text-blue-600">Payment</a>
+    </div>
 
-   
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <!-- Current Profile Info -->
+        <div class="bg-white p-6 rounded-lg shadow">
+            <h2 class="text-2xl font-semibold mb-4">Profile Information</h2>
+            <p><span class="font-semibold">Username:</span> {{ request.user.username }}</p>
+            <p><span class="font-semibold">Email:</span> {{ request.user.email }}</p>
+            <p class="mt-4 text-gray-600">Here you can update your profile details.</p>
+        </div>
 
-{% endblock%}
+        <!-- Update Profile Form -->
+        <div class="bg-white p-6 rounded-lg shadow">
+            <h2 class="text-2xl font-semibold mb-4">Update Profile</h2>
+            
+            <form method="POST">
+                {% csrf_token %}
+                {{ form.as_p }}
+
+                {% if form.errors %}
+                    <div class="text-red-500 mb-4">
+                        {{ form.errors }}
+                    </div>
+                {% endif %}
+
+                <button type="submit" class="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 transition">
+                    Save Changes
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Back to homepage -->
+    <div class="mt-8">
+        <a href="{% url 'index' %}" class="text-blue-600 hover:underline">&larr; Back to Home</a>
+    </div>
+</div>
+
+{% endblock %}
