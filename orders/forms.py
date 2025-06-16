@@ -4,3 +4,50 @@ class OrderForm(forms.ModelForm):
     class Meta:
         model = Order
         fields = ["full_name","email","address"]
+        
+
+
+class OrderForm(forms.ModelForm):
+    PAYMENT_CHOICES = [
+        ('mpesa', 'M-Pesa'),
+        ('card', 'Credit/Debit Card'),
+        ('paypal', 'PayPal'),
+    ]
+
+    payment_method = forms.ChoiceField(
+        choices=PAYMENT_CHOICES,
+        widget=forms.RadioSelect(attrs={
+            'class': 'mr-2 text-blue-600 focus:ring-blue-500',
+            'id': 'payment-method'
+        }),
+        label="Select Payment Method"
+    )
+
+    mpesa_phone = forms.CharField(
+        required=False,  # Not required unless mpesa selected
+        widget=forms.TextInput(attrs={
+            'class': 'w-full px-3 py-2 border border-gray-300 rounded-md',
+            'placeholder': 'Enter M-Pesa Phone Number',
+            'id': 'mpesa-phone'
+        }),
+        label="M-Pesa Phone"
+    )
+
+    class Meta:
+        model = Order
+        fields = ["full_name", "email", "address", "payment_method", "mpesa_phone"]
+
+        widgets = {
+            'full_name': forms.TextInput(attrs={
+                'class': 'w-full px-3 py-2 border border-gray-300 rounded-md',
+                'placeholder': 'Enter your full name'
+            }),
+            'email': forms.EmailInput(attrs={
+                'class': 'w-full px-3 py-2 border border-gray-300 rounded-md',
+                'placeholder': 'Enter your email'
+            }),
+            'address': forms.TextInput(attrs={
+                'class': 'w-full px-3 py-2 border border-gray-300 rounded-md',
+                'placeholder': 'Enter your address'
+            }),
+        }
