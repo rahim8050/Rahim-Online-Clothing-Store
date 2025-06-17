@@ -97,32 +97,41 @@
     }
 
     document.getElementById('add_to_cart-form').addEventListener('submit', function(event) {
-        event.preventDefault();
-        const form = event.target;
-        const url = form.action;
-        const formData = new FormData(form);
+    event.preventDefault();
 
-        fetch(url, {
-            method: 'POST',
-            headers: {
-                'X-CSRFToken': formData.get('csrfmiddlewaretoken')
-            },
-            body: formData
-        })
-        .then(response => response.json())
-        .then(data => {
-            const messageElement = document.getElementById('message');
-            messageElement.textContent = data.success ? data.message : 'Failed to add to cart';
+    const form = event.target;
+    const url = form.action;
+    const formData = new FormData(form);
 
-            if (data.success) {
-                showStickyPlusOne(); 
-                updateCartCounterDisplay();
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-        });
+    fetch(url, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': formData.get('csrfmiddlewaretoken')
+        },
+        body: formData
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`Server responded with ${response.status}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        const messageElement = document.getElementById('message');
+        messageElement.textContent = data.success ? data.message : 'Failed to add to cart';
+
+        if (data.success) {
+            showStickyPlusOne(); 
+            updateCartCounterDisplay();
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        const messageElement = document.getElementById('message');
+        messageElement.textContent = 'Something went wrong. Please try again.';
     });
+});
+
 
     document.addEventListener("DOMContentLoaded", function () {
         updateCartCounterDisplay();
