@@ -9,11 +9,15 @@ from django.contrib.auth.forms import UserCreationForm
 from .models import CustomUser
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
+
 from django.contrib.auth.forms import PasswordChangeForm
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
 from django.contrib.auth.forms import PasswordChangeForm
+
+CustomUser = get_user_model()
+
 
 class RegisterUserForm(UserCreationForm):
     class Meta:
@@ -62,6 +66,7 @@ class ResendActivationEmailForm(forms.Form):
 
 
 
+
 class UserUpdateForm(forms.ModelForm):
     class Meta:
         model = CustomUser
@@ -91,4 +96,44 @@ class CustomPasswordChangeForm(PasswordChangeForm):
                 'class': 'w-full px-4 py-2 border rounded-lg focus:ring-blue-500 focus:border-blue-500',
                 'autocomplete': 'new-password'
             })
+
+    def clean_email(self):
+        email = self.cleaned_data.get('email')
+        try:
+            user = User.objects.get(email=email)
+            if not user.is_active:
+                # optionally resend activation email here
+                raise ValidationError("You already have an account that needs activation. Check your email.")
+        except User.DoesNotExist:
+            pass
+        return email
+class RemoveHelpTextMixin:
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            field.help_text = ''
+class OptionalFieldsMixin:
+    """
+    Mixin to make all fields optional automatically.
+    """
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            field.required = False
+class ProfileUpdateForm(forms.ModelForm):
+    class Meta:
+        model = CustomUser
+        fields = ['username', 'email']
+        widgets = {
+            'username': forms.TextInput(attrs={
+                'class': 'w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent',
+                'placeholder': 'Enter your username'
+            }),
+            'email': forms.EmailInput(attrs={
+                'class': 'w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent',
+                'placeholder': 'Enter your email'
+            }),
+        }
+
+
 
