@@ -130,6 +130,7 @@ MPESA_ENVIRONMENT = 'sandbox'
 MPESA_CONSUMER_KEY = os.environ.get('MPESA_CONSUMER_KEY')
 MPESA_CONSUMER_SECRET = os.environ.get('MPESA_CONSUMER_SECRET')
 
+
 #Shortcode to use for transactions. For sandbox  use the Shortcode 1 provided on test credentials page
 
 MPESA_SHORTCODE = '174379'
@@ -152,6 +153,7 @@ MPESA_SHORTCODE_TYPE = 'paybill'
 # Production passkey is sent via email once you go live
 
 MPESA_PASSKEY = os.environ.get('MPESA_PASS_KEY')
+
 
 # Username for initiator (to be used in B2C, B2B, AccountBalance and TransactionStatusQuery Transactions)
 

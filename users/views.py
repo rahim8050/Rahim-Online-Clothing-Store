@@ -21,6 +21,14 @@ from .forms import ResendActivationEmailForm
 from django.views import View
 from django.views.decorators.csrf import csrf_protect
 from django.utils.decorators import method_decorator
+from django.contrib.auth.decorators import login_required
+
+from django.urls import reverse_lazy
+from django.contrib.messages.views import SuccessMessageMixin
+from django.shortcuts import render, redirect
+from .forms import UserUpdateForm, CustomPasswordChangeForm
+from django.contrib.auth import update_session_auth_hash
+
 # Create your views here.
 def home (request):
     pass
@@ -68,8 +76,48 @@ class RegisterUser(FormView):
                 messages.error(self.request, f"{field}: {error}")
         return super().form_invalid(form)
 
-def profile(request):
-    return render(request, 'users/accounts/profile.html')
+# def profile(request):
+#     return render(request, 'users/accounts/profile.html')
+# from django.contrib.auth.decorators import login_required
+
+from django.contrib import messages
+from django.contrib.auth import update_session_auth_hash
+from django.shortcuts import render, redirect
+from .forms import UserUpdateForm, CustomPasswordChangeForm
+
+def profile_view(request):
+    if request.method == 'POST':
+        if 'full_name' in request.POST:
+            # Handle profile update
+            user_form = UserUpdateForm(request.POST, request.FILES, instance=request.user)
+            if user_form.is_valid():
+                user_form.save()
+                messages.success(request, "Your profile has been updated successfully.")
+                return redirect('users:profile')
+            else:
+                messages.error(request, "Please correct the errors in your profile form.")
+            password_form = CustomPasswordChangeForm(user=request.user)  # Unbound
+        elif 'old_password' in request.POST:
+            # Handle password change
+            password_form = CustomPasswordChangeForm(user=request.user, data=request.POST)
+            if password_form.is_valid():
+                user = password_form.save()
+                update_session_auth_hash(request, user)
+                messages.success(request, "Your password was updated successfully.")
+                return redirect('users:profile')
+            else:
+                messages.error(request, "Please correct the errors in your password form.")
+            user_form = UserUpdateForm(instance=request.user)  # Unbound
+    else:
+        user_form = UserUpdateForm(instance=request.user)
+        password_form = CustomPasswordChangeForm(user=request.user)
+
+    return render(request, 'users/accounts/profile.html', {
+        'user_form': user_form,
+        'password_form': password_form,
+    })
+
+
 def activate(request, uidb64, token):
     try:
         uid = force_str(urlsafe_base64_decode(uidb64))
@@ -88,6 +136,7 @@ def activate(request, uidb64, token):
     else:
         return render(request, 'users/accounts/activation_failed.html')
     
+
 
 
 class ResendActivationEmailView(View):
@@ -121,6 +170,8 @@ class ResendActivationEmailView(View):
                 messages.error(request, 'No account found with that email.')
             return redirect('users:resend_activation')
         return render(request, self.template_name, {'form': form})
+    
+ 
     
     
     
