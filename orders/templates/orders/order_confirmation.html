@@ -79,20 +79,39 @@
         </a>
     </div>
 
-    <form action="{% url 'Mpesa:mpesa_trigger' %}" method="post" class="space-y-6">
-        {% csrf_token %}
+    <form action="{% url 'Mpesa:mpesa_trigger' %}" method="post" class="max-w-md mx-auto bg-white p-6 rounded-xl shadow-md space-y-6">
+    {% csrf_token %}
 
-        <div class="flex justify-center items-center">
-            <button class="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-3 rounded-lg shadow-sm transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
-                <div class="inline-flex items-center space-x-2">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                        <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd" />
-                    </svg>
-                    <span>Make M-Pesa Payment</span>
-                </div>
-            </button>
-        </div>
-    </form>
+    <div>
+        <label for="phone_number" class="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
+        <input
+            type="text"
+            name="phone_number"
+            id="phone_number"
+            placeholder="e.g., 254712345678"
+            required
+            class="w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+    </div>
+
+   
+
+    <!-- Styled CTA button with icon -->
+    <div class="flex justify-center items-center">
+        <button
+            type="submit"
+            class="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-3 rounded-lg shadow-md transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+        >
+            <div class="inline-flex items-center space-x-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd" />
+                </svg>
+                <span>Make M-Pesa Payment</span>
+            </div>
+        </button>
+    </div>
+</form>
+
 </div>
 </div>
 {% endblock %}

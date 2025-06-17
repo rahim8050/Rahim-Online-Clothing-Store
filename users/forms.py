@@ -9,6 +9,11 @@ from django.contrib.auth.forms import UserCreationForm
 from .models import CustomUser
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
+from django.contrib.auth.forms import PasswordChangeForm
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError
+from django.utils.translation import gettext_lazy as _
+from django.contrib.auth.forms import PasswordChangeForm
 
 class RegisterUserForm(UserCreationForm):
     class Meta:
@@ -44,16 +49,46 @@ User = get_user_model()
 
 
 class ResendActivationEmailForm(forms.Form):
-    email = forms.EmailField()
+    email = forms.EmailField(
+        label="Email",
+        widget=forms.EmailInput(attrs={
+            "placeholder": "you@example.com",
+            "class": "w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"
+        })
+    )
+    
+    
+    
 
-    def clean_email(self):
-        email = self.cleaned_data.get('email')
-        try:
-            user = User.objects.get(email=email)
-            if not user.is_active:
-                # optionally resend activation email here
-                raise ValidationError("You already have an account that needs activation. Check your email.")
-        except User.DoesNotExist:
-            pass
-        return email
+
+
+class UserUpdateForm(forms.ModelForm):
+    class Meta:
+        model = CustomUser
+        fields = ['first_name', 'last_name', 'email', 'phone_number', 'avatar']
+        widgets = {
+            'avatar': forms.FileInput(attrs={
+                'class': 'hidden',
+                'id': 'avatar-upload',
+                'accept': 'image/*'
+            }),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Add common classes to all fields
+        for field in self.fields:
+            self.fields[field].widget.attrs.update({
+                'class': 'w-full px-4 py-2 border rounded-lg focus:ring-blue-500 focus:border-blue-500'
+            })
+
+class CustomPasswordChangeForm(PasswordChangeForm):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Style all password fields consistently
+        for field in self.fields:
+            self.fields[field].widget.attrs.update({
+                'class': 'w-full px-4 py-2 border rounded-lg focus:ring-blue-500 focus:border-blue-500',
+                'autocomplete': 'new-password'
+            })
 
