@@ -1,9 +1,14 @@
 from django.db import models
-
 from product_app.models import Product
+
 from django.contrib.auth import get_user_model
 
 User = get_user_model()
+
+from django.conf import settings
+
+
+
 
 
 # Create your models here.
@@ -12,6 +17,8 @@ class Order(models.Model):
     full_name = models.CharField(max_length=100)
     email = models.EmailField()
     address = models.CharField(max_length=250)
+    phone = models.CharField(max_length=15, blank=True, null=True)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     created_at = models.DateTimeField(auto_now_add=True)
     update_at = models.DateTimeField(auto_now=True)
     paid = models.BooleanField(default=False)

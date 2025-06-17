@@ -21,6 +21,7 @@ from .forms import ResendActivationEmailForm
 from django.views import View
 from django.views.decorators.csrf import csrf_protect
 from django.utils.decorators import method_decorator
+
 from django.contrib.auth.decorators import login_required
 
 from django.urls import reverse_lazy
@@ -28,6 +29,9 @@ from django.contrib.messages.views import SuccessMessageMixin
 from django.shortcuts import render, redirect
 from .forms import UserUpdateForm, CustomPasswordChangeForm
 from django.contrib.auth import update_session_auth_hash
+
+
+from .forms import ProfileUpdateForm
 
 # Create your views here.
 def home (request):
@@ -76,6 +80,7 @@ class RegisterUser(FormView):
                 messages.error(self.request, f"{field}: {error}")
         return super().form_invalid(form)
 
+
 # def profile(request):
 #     return render(request, 'users/accounts/profile.html')
 # from django.contrib.auth.decorators import login_required
@@ -117,6 +122,22 @@ def profile_view(request):
         'password_form': password_form,
     })
 
+
+
+def profile(request):
+    if request.method == 'POST':
+        form = ProfileUpdateForm(request.POST, instance=request.user)
+        print("POST DATA:", request.POST)
+        if form.is_valid():
+            form.save()
+            print("Form valid. Saved.")
+            return redirect('profile')
+        else:
+            print("Form errors:", form.errors)
+    else:
+        form = ProfileUpdateForm(instance=request.user)
+
+    return render(request, 'users/accounts/profile.html', {'form': form})
 
 def activate(request, uidb64, token):
     try:
