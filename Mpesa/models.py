@@ -19,5 +19,10 @@ class Payment(models.Model):
         ordering = ['-created_at']
         db_table = 'payments'
 
+
     def __str__(self):
         return f"{self.merchant_request_id} - {self.code} - {self.amount}"
+
+    def __str__(self):
+        return f"{self.merchant_request_id} - {self.code} - {self.amount}"
+

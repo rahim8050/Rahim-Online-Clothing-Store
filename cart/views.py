@@ -7,41 +7,44 @@ from product_app.models import Product
 from .models import Cart,CartItem
 from django.contrib.auth.decorators import login_required, permission_required
 from django.contrib import messages
+import traceback
 
 
 
 @require_POST
 def cart_add(request, product_id):
-    
-     cart_id = request.session.get('cart_id')
+    try:
+        cart_id = request.session.get('cart_id')
 
-     if cart_id:
-        try:
-            cart = Cart.objects.get(id=cart_id)
-        except Cart.DoesNotExist:
+        if cart_id:
+            cart, created = Cart.objects.get_or_create(id=cart_id)
+        else:
             cart = Cart.objects.create()
-     else:
+            request.session['cart_id'] = cart.id
+
+        product = get_object_or_404(Product, id=product_id)
+
+        cart_item, created = CartItem.objects.get_or_create(cart=cart, product=product)
+        if not created:
+            cart_item.quantity += 1
+        cart_item.save()
+
+        request.session['cart_count'] = request.session.get('cart_count', 0) + 1
+
+        return JsonResponse({
+            "success": True,
+            "message": f'Added {product.name} to cart'
+        })
+
+    except Exception as e:
+        print("Error in cart_add:", e)
+        traceback.print_exc()
+        return JsonResponse({
+            "success": False,
+            "message": "Something went wrong. Please try again."
+        }, status=500)
         
-        cart = Cart.objects.create()
-        request.session['cart_id'] = cart.id
-
-     product = get_object_or_404(Product, id=product_id)
-
-     cart_item, created = CartItem.objects.get_or_create(cart=cart, product=product)
-
-     if not created:
-        cart_item.quantity += 1
-
-     cart_item.save()
-     request.session['cart_count'] = request.session.get('cart_count', 0) + 1
-
-     response_data = {
-        "success": True,
-        "message": f'Added {product.name} to cart'
-    }
-
-     return JsonResponse(response_data)
-
+        
 def cart_count(request):
     cart_id = request.session.get('cart_id')
 
