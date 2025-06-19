@@ -16,8 +16,11 @@ class Order(models.Model):
     update_at = models.DateTimeField(auto_now=True)
     paid = models.BooleanField(default=False)
 
-    def get_total_cost(self):
-        return int(sum(item.get_cost() for item in self.items.all()))
+    # def get_total_cost(self):
+    #     return int(sum(item.get_cost() for item in self.items.all()))
+def get_total_cost(self):
+       return int(sum(item.get_cost() for item in self.items.all()))
+
 
 
 class OrderItem(models.Model):
@@ -26,5 +29,7 @@ class OrderItem(models.Model):
     price = models.DecimalField(max_digits=10, decimal_places=2)
     quantity = models.PositiveIntegerField(default=1)
 
-    def get_cost(self):
-        return self.price * self.quantity
+    # def get_cost(self):
+    #     return self.price * self.quantity
+def get_cost(self):
+    return int(self.price * self.quantity)
