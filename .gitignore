@@ -2,7 +2,12 @@
 __pycache__/
 *.pyc
 
+
 *.py[cod]
+
+*.pyo
+*.pyd
+
 .venv/
 .idea/
 .env
