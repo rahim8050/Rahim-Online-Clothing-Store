@@ -60,6 +60,7 @@ INSTALLED_APPS = [
     'utilities',
     'rest_framework',
     'apis.apps.ApisConfig',
+      'django_extensions',
     
     
     

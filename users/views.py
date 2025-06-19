@@ -21,6 +21,7 @@ from .forms import ResendActivationEmailForm
 from django.views import View
 from django.views.decorators.csrf import csrf_protect
 from django.utils.decorators import method_decorator
+from django.contrib.auth.views import PasswordResetView
 
 from django.contrib.auth.decorators import login_required
 
@@ -192,6 +193,7 @@ class ResendActivationEmailView(View):
             return redirect('users:resend_activation')
         return render(request, self.template_name, {'form': form})
     
+
  
     
     
