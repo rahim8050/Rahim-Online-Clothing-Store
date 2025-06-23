@@ -4,7 +4,7 @@ from orders.models import Order
 
 # Create your models here.
 class Payment(models.Model):
-    transaction = models.ForeignKey(Order, on_delete=models.CASCADE)
+    order = models.ForeignKey(Order, related_name='payments', on_delete=models.CASCADE)
     merchant_request_id = models.CharField(max_length=100)
     checkout_request_id = models.CharField(max_length=100)
     code = models.CharField(max_length=30, null=True)

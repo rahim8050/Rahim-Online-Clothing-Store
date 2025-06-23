@@ -13,7 +13,6 @@ from django.conf import settings
 
 # Create your models here.
 class Order(models.Model):
-    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='orders')
     full_name = models.CharField(max_length=100)
     email = models.EmailField()
     address = models.CharField(max_length=250)
