@@ -9,14 +9,6 @@ import json
 from django.shortcuts import redirect 
 
 
-  
-
-from django.shortcuts import get_object_or_404
-from orders.models import Order
-from Mpesa.models import Payment
-from django.views.decorators.csrf import csrf_exempt
-import json
-
 
 # Initialize MpesaClient once (avoid re-initializing in every request)
 cl = MpesaClient()
@@ -60,83 +52,6 @@ def trigger_stk_push(request):
     
     return JsonResponse({'error': 'Invalid request method'}, status=405)
 
-# @csrf_exempt
-# def trigger_stk_push(request):
-#     try:
-#         phone_number = '254769690483'
-#         amount = 1  
-#         account_reference = 'ORDER-01'  
-#         transaction_desc = 'Payment for Clothes'
-#         callback_url = 'https://your-ngrok-url.ngrok-free.app/mpesa/callback/'
-
-#         # Initiate STK push
-#         response = cl.stk_push(
-#             phone_number=phone_number,
-#             amount=amount,
-#             account_reference=account_reference,
-#             transaction_desc=transaction_desc,
-#             callback_url=callback_url
-#         )
-
-   
-#         return JsonResponse(response.json())  
-
-      
-
-#     except Exception as e:
-#         return JsonResponse({'error': str(e)}, status=500)
-# @csrf_exempt
-# def trigger_stk_push(request):
-#     try:
-#         phone_number = '254769690483'
-#         amount = 1  
-#         account_reference = 'ORDER-01'  
-#         transaction_desc = 'Payment for Clothes'
-#         callback_url = 'https://your-ngrok-url.ngrok-free.app/mpesa/callback/'
-
-#         # Initiate STK push
-#         response = cl.stk_push(
-#             phone_number=phone_number,
-#             amount=amount,
-#             account_reference=account_reference,
-#             transaction_desc=transaction_desc,
-#             callback_url=callback_url
-#         )
-        
-#         return JsonResponse(response, safe=False)  # Returns raw Safaricom response
-    
-#     except Exception as e:
-#         return JsonResponse({'error': str(e)}, status=500)
-
-def trigger_stk_push(request,order_id):
-    from orders.models import Transaction 
-    transaction = Transaction.objects.get(id=order_id)
-    total = transaction.get_total_cost()
-    phone = transaction.phone.order.phone
-    phone_number = '254769690483'
-    amount = 1  
-    account_reference = transaction.user.username  
-    transaction_desc = 'Payment for Clothes'
-    callback_url = 'https://your-ngrok-url.ngrok-free.app/mpesa/callback/'
-    if response.response_code == '0':
-        payment = payment.objects.create(transaction=transaction,
-                                         merchant_request_id=response.merchant_request_id,
-                                         checkout_request_id=response.checkout_request_id,
-                                        
-                                         )
-        payment.save()
-        messages.success(request, 'Payment initiated successfully.')
-
-        # Initiate STK push
-    response = cl.stk_push(
-            phone_number=phone_number,
-            amount=amount,
-            account_reference=transaction.account_reference,
-            transaction_desc='Payment for Clothes',
-            callback_url=callback_url
-        )
-        
-    return redirect('mpesa:mpesa', order_id=order_id)
 
 
 
@@ -160,15 +75,3 @@ def stk_callback(request):
         transaction.status = "COMPLETED"
         transaction.save()
     return HttpResponse("OK")
-# def mpesa_payment  (request,order_id):
-#     transaction = Transaction.objects.get(id=order_id)
-#     total = transaction.get_total_cost()
-    
-    
-#     return render(request, 'mpesa/payment.html')
-def mpesa(request):
-    """Renders the M-Pesa payment page."""
-    return render(request, 'mpesa/index.html', {
-        'title': 'M-Pesa Payment',
-        'description': 'Pay for your order using M-Pesa'
-    })
