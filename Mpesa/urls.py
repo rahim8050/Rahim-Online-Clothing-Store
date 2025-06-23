@@ -3,7 +3,7 @@ from . import views
 app_name = "Mpesa"
 
 urlpatterns = [
-    path('', views.mpesa, name='mpesa'),
+    # path('', views.mpesa, name='mpesa'),
     # path('trigger/', views.trigger, name='trigger-payment'),
     # path('mpesa/callback/', views.callback, name='mpesa-callback'),
       path('trigger/', views.trigger_stk_push, name='mpesa_trigger'),
