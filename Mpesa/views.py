@@ -7,10 +7,38 @@ from django.conf import settings
 from django.contrib import messages
 import json
 from django.shortcuts import redirect 
+from django.shortcuts import get_object_or_404
+from .models import Order, Payment
+ 
+
+# def stk_push(request, id):
+#     order = get_object_or_404(Order, pk=id)
+#     cl = MpesaClient()
+
+#     phone_number = order.phone             # Get phone number from the order
+#     amount = order.total_amount            # Get amount from the order
+#     account_reference = order.student.adm_no
+#     transaction_desc = 'Fines'
+#     callback_url = 'https://mature-octopus-causal.ngrok-free.app/handle/payment/transactions'
+
+#     response = cl.stk_push(
+#         phone_number, amount, account_reference, transaction_desc, callback_url
+#     )
+
+#     if response.response_code == "0":
+#         Payment.objects.create(
+#             order=order,
+#             merchant_request_id=response.merchant_request_id,
+#             checkout_request_id=response.checkout_request_id,
+#             amount=amount
+#         )
+#         messages.success(request, "Your payment was triggered successfully")
+
+#     return redirect('order_confirmation')  
 
 
 
-# Initialize MpesaClient once (avoid re-initializing in every request)
+# # Initialize MpesaClient once (avoid re-initializing in every request)
 cl = MpesaClient()
 
 
