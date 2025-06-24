@@ -1,52 +1,43 @@
 from django.contrib import messages
-from django.contrib.auth import login, get_user_model
-from django.urls import reverse_lazy
+from django.contrib.auth import login, get_user_model, update_session_auth_hash
 from django.contrib.auth.models import User
 from django.contrib.auth.views import LoginView, LogoutView
 from django.contrib.sites.shortcuts import get_current_site
 from django.core.mail import EmailMessage
-from django.shortcuts import render
+from django.shortcuts import render, redirect
 from django.template.loader import render_to_string
 from django.utils.encoding import force_bytes, force_str
-from django.utils.http import  urlsafe_base64_encode, urlsafe_base64_decode
-from django.views.generic import FormView
-from django.db import IntegrityError
-from users.forms import RegisterUserForm
-from users.models import CustomUser
-from django.shortcuts import render, redirect
-from django.contrib.auth.tokens import default_token_generator
-from django.contrib.auth import get_user_model
-from .tokens import account_activation_token
-from .forms import ResendActivationEmailForm
-from django.views import View
+from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
+from django.views.generic import FormView, View
 from django.views.decorators.csrf import csrf_protect
 from django.utils.decorators import method_decorator
-from django.contrib.auth.views import PasswordResetView
-
-from django.contrib.auth.decorators import login_required
-
 from django.urls import reverse_lazy
-from django.contrib.messages.views import SuccessMessageMixin
-from django.shortcuts import render, redirect
-from .forms import UserUpdateForm, CustomPasswordChangeForm
-from django.contrib.auth import update_session_auth_hash
+from django.contrib.auth.decorators import login_required
+from django.http import HttpResponse
+from orders.models import Order
 
-
-from .forms import ProfileUpdateForm
-
-# Create your views here.
-def home (request):
-    pass
-class Login(LoginView):
-    template_name = "users/accounts/login.html"
-class Logout(LogoutView):
-    next_page = "/"
-   
-@method_decorator(csrf_protect)
-def post(self, request, *args, **kwargs):
-        return super().post(request, *args, **kwargs)
+from .tokens import account_activation_token
+from .forms import (
+    RegisterUserForm,
+    UserUpdateForm,
+    CustomPasswordChangeForm,
+    ResendActivationEmailForm,
+)
 
 User = get_user_model()
+
+def home(request):
+    pass
+
+class Login(LoginView):
+    template_name = "users/accounts/login.html"
+
+class Logout(LogoutView):
+    next_page = "/"
+
+@method_decorator(csrf_protect)
+def post(self, request, *args, **kwargs):
+    return super().post(request, *args, **kwargs)
 
 class RegisterUser(FormView):
     template_name = "users/accounts/register.html"
@@ -59,20 +50,26 @@ class RegisterUser(FormView):
         user.save()
 
         current_site = get_current_site(self.request)
-        mail_subject = 'Activate your account'
-        message = render_to_string("users/accounts/acc_activate_email.html", {
-            'user': user,
-            'domain': current_site.domain,
-            'uid': urlsafe_base64_encode(force_bytes(user.pk)),
-            'token': account_activation_token.make_token(user),
-            'protocol': 'https' if self.request.is_secure() else 'http',
-        })
+        mail_subject = "Activate your account"
+        message = render_to_string(
+            "users/accounts/acc_activate_email.html",
+            {
+                "user": user,
+                "domain": current_site.domain,
+                "uid": urlsafe_base64_encode(force_bytes(user.pk)),
+                "token": account_activation_token.make_token(user),
+                "protocol": "https" if self.request.is_secure() else "http",
+            },
+        )
 
         email = EmailMessage(mail_subject, message, to=[user.email])
-        email.content_subtype = "html"  # If you want to send HTML content
+        email.content_subtype = "html"
         email.send()
 
-        messages.success(self.request, "Account created successfully. Please check your email to activate your account.")
+        messages.success(
+            self.request,
+            "Account created successfully. Please check your email to activate your account.",
+        )
         return redirect(self.get_success_url())
 
     def form_invalid(self, form):
@@ -81,64 +78,48 @@ class RegisterUser(FormView):
                 messages.error(self.request, f"{field}: {error}")
         return super().form_invalid(form)
 
-
-# def profile(request):
-#     return render(request, 'users/accounts/profile.html')
-# from django.contrib.auth.decorators import login_required
-
-from django.contrib import messages
-from django.contrib.auth import update_session_auth_hash
-from django.shortcuts import render, redirect
-from .forms import UserUpdateForm, CustomPasswordChangeForm
-
+# ✅ UPDATED profile_view
 def profile_view(request):
-    if request.method == 'POST':
-        if 'full_name' in request.POST:
-            # Handle profile update
-            user_form = UserUpdateForm(request.POST, request.FILES, instance=request.user)
-            if user_form.is_valid():
-                user_form.save()
+    if request.method == "POST":
+        if "update_profile" in request.POST:
+            profile_form = UserUpdateForm(
+                request.POST, request.FILES, instance=request.user
+            )
+            password_form = CustomPasswordChangeForm(user=request.user)
+            if profile_form.is_valid():
+                profile_form.save()
                 messages.success(request, "Your profile has been updated successfully.")
-                return redirect('users:profile')
+                return redirect("users:profile")
             else:
-                messages.error(request, "Please correct the errors in your profile form.")
-            password_form = CustomPasswordChangeForm(user=request.user)  # Unbound
-        elif 'old_password' in request.POST:
-            # Handle password change
-            password_form = CustomPasswordChangeForm(user=request.user, data=request.POST)
+                messages.error(
+                    request, "Please correct the errors in your profile form."
+                )
+        elif "change_password" in request.POST:
+            password_form = CustomPasswordChangeForm(
+                user=request.user, data=request.POST
+            )
+            profile_form = UserUpdateForm(instance=request.user)
             if password_form.is_valid():
                 user = password_form.save()
                 update_session_auth_hash(request, user)
                 messages.success(request, "Your password was updated successfully.")
-                return redirect('users:profile')
+                return redirect("users:profile")
             else:
-                messages.error(request, "Please correct the errors in your password form.")
-            user_form = UserUpdateForm(instance=request.user)  # Unbound
+                messages.error(
+                    request, "Please correct the errors in your password form."
+                )
     else:
-        user_form = UserUpdateForm(instance=request.user)
+        profile_form = UserUpdateForm(instance=request.user)
         password_form = CustomPasswordChangeForm(user=request.user)
 
-    return render(request, 'users/accounts/profile.html', {
-        'user_form': user_form,
-        'password_form': password_form,
-    })
-
-
-
-def profile(request):
-    if request.method == 'POST':
-        form = ProfileUpdateForm(request.POST, instance=request.user)
-        print("POST DATA:", request.POST)
-        if form.is_valid():
-            form.save()
-            print("Form valid. Saved.")
-            return redirect('profile')
-        else:
-            print("Form errors:", form.errors)
-    else:
-        form = ProfileUpdateForm(instance=request.user)
-
-    return render(request, 'users/accounts/profile.html', {'form': form})
+    return render(
+        request,
+        "users/accounts/profile.html",
+        {
+            "profile_form": profile_form,
+            "password_form": password_form,
+        },
+    )
 
 def activate(request, uidb64, token):
     try:
@@ -150,52 +131,54 @@ def activate(request, uidb64, token):
     if user is not None and account_activation_token.check_token(user, token):
         user.is_active = True
         user.save()
-
-        # VERY IMPORTANT! Specify backend explicitly:
-        login(request, user, backend='django.contrib.auth.backends.ModelBackend')
-
-        return render(request, 'users/accounts/activation_success.html')
+        login(request, user, backend="django.contrib.auth.backends.ModelBackend")
+        return render(request, "users/accounts/activation_success.html")
     else:
-        return render(request, 'users/accounts/activation_failed.html')
-    
-
+        return render(request, "users/accounts/activation_failed.html")
 
 
 class ResendActivationEmailView(View):
-    template_name = 'users/accounts/resend_activation.html'
+    template_name = "users/accounts/resend_activation.html"
 
     def get(self, request):
         form = ResendActivationEmailForm()
-        return render(request, self.template_name, {'form': form})
+        return render(request, self.template_name, {"form": form})
 
     def post(self, request):
         form = ResendActivationEmailForm(request.POST)
         if form.is_valid():
-            email = form.cleaned_data['email']
+            email = form.cleaned_data["email"]
             try:
                 user = User.objects.get(email=email)
                 if user.is_active:
-                    messages.info(request, 'This account is already active.')
+                    messages.info(request, "This account is already active.")
                 else:
                     current_site = get_current_site(request)
-                    mail_subject = 'Activate your account'
-                    message = render_to_string('users/accounts/acc_activate_email.html', {
-                        'user': user,
-                        'domain': current_site.domain,
-                        'uid': urlsafe_base64_encode(force_bytes(user.pk)),
-                        'token': account_activation_token.make_token(user),
-                    })
-                    email_message = EmailMessage(mail_subject, message, to=[user.email])
+                    mail_subject = "Activate your account"
+                    message = render_to_string(
+                        "users/accounts/acc_activate_email.html",
+                        {
+                            "user": user,
+                            "domain": current_site.domain,
+                            "uid": urlsafe_base64_encode(force_bytes(user.pk)),
+                            "token": account_activation_token.make_token(user),
+                        },
+                    )
+                    email_message = EmailMessage(
+                        mail_subject, message, to=[user.email]
+                    )
                     email_message.send()
-                    messages.success(request, 'A new activation link has been sent to your email.')
+                    messages.success(
+                        request,
+                        "A new activation link has been sent to your email.",
+                    )
             except User.DoesNotExist:
-                messages.error(request, 'No account found with that email.')
-            return redirect('users:resend_activation')
-        return render(request, self.template_name, {'form': form})
-    
+                messages.error(request, "No account found with that email.")
+            return redirect("users:resend_activation")
+        return render(request, self.template_name, {"form": form})
 
- 
-    
-    
-    
-    
+
+@login_required
+def my_orders(request):
+    orders = Order.objects.filter(user=request.user).order_by('-created_at')
+    return render(request, 'users/accounts/my_orders.html', {'orders': orders})

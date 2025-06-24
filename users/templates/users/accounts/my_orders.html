@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+
+{% block title %}My Orders{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto px-4 py-6">
+    <h1 class="text-3xl font-bold text-blue-600 mb-4">My Orders</h1>
+
+    {% if orders %}
+        <div class="space-y-4">
+            {% for order in orders %}
+                <div class="border rounded-lg p-4 shadow-sm">
+                    <p><span class="font-semibold">Order ID:</span> {{ order.id }}</p>
+                    <p><span class="font-semibold">Placed on:</span> {{ order.created_at|date:"Y-m-d H:i" }}</p>
+                    <p><span class="font-semibold">Status:</span> 
+                        {% if order.paid %}
+                            <span class="text-green-600 font-medium">Paid</span>
+                        {% else %}
+                            <span class="text-red-500 font-medium">Pending</span>
+                        {% endif %}
+                    </p>
+                    <p><span class="font-semibold">Address:</span> {{ order.address }}</p>
+                    <p><span class="font-semibold">Phone:</span> {{ order.phone }}</p>
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p class="text-gray-500">You have no orders yet.</p>
+    {% endif %}
+</div>
+{% endblock %}
