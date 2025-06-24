@@ -45,10 +45,13 @@ cl = MpesaClient()
 
 @csrf_exempt
 
+
+
+
 def trigger_stk_push(request):
     if request.method == 'POST':
         try:
-            # Get phone number from form or JSON
+            # Get phone number
             if request.content_type == 'application/json':
                 data = json.loads(request.body)
                 phone_number = data.get('phone_number')
@@ -56,7 +59,9 @@ def trigger_stk_push(request):
                 phone_number = request.POST.get('phone_number')
 
             if not phone_number:
-                return JsonResponse({'error': 'Phone number is required'}, status=400)
+                return render(request, "payment_result.html", {
+                    "error": "Phone number is required"
+                })
 
             amount = 1
             account_reference = 'ORDER-01'
@@ -71,14 +76,29 @@ def trigger_stk_push(request):
                 transaction_desc=transaction_desc,
                 callback_url=callback_url
             )
+            resp_json = response.json() if hasattr(response, 'json') else response
 
-            # Parse response to dict if necessary
-            return JsonResponse(response.json())  # Or use .to_dict() if available
-
+            # Check response
+            if resp_json.get('ResponseCode') == '0':
+                context = {
+                    "message": "Order confirmed. Please check your phone to complete the payment.",
+                    "order_reference": account_reference,
+                    "amount": amount,
+                    "phone_number": phone_number,
+                    "transaction_description": transaction_desc
+                }
+                return render(request, "orders/order_confirmation.html", context)
+            else:
+                return render(request, "orders/order_confirmation.html", {
+                    "error": "Unable to initiate M-Pesa payment",
+                    "mpesa_error": resp_json
+                })
         except Exception as e:
-            return JsonResponse({'error': str(e)}, status=500)
-    
-    return JsonResponse({'error': 'Invalid request method'}, status=405)
+            return render(request, "orders/order_confirmation.html", {"error": str(e)})
+
+    return render(request, "orders/order_confirmation.html", {"error": "Invalid request method"})
+
+
 
 
 

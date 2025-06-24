@@ -1,8 +1,9 @@
 from django.urls import path
 from .views import ResendActivationEmailView
 from django.contrib.auth import views as auth_views
-from users.views import Login,Logout,RegisterUser,activate, profile_view
+from users.views import Login,Logout,RegisterUser,activate, profile_view,my_orders
 from django.urls import reverse_lazy
+
 app_name = "users"
 urlpatterns = [
 path("login/",Login.as_view(),name="login"),
@@ -16,5 +17,6 @@ path("logout/", Logout.as_view(), name="logout"),
     path('password-reset/done/', auth_views.PasswordResetDoneView.as_view(), name='password_reset_done'),
     path('reset/<uidb64>/<token>/', auth_views.PasswordResetConfirmView.as_view(), name='password_reset_confirm'),
     path('reset/done/', auth_views.PasswordResetCompleteView.as_view(), name='password_reset_complete'),
+    path('my-orders/', my_orders, name='my_orders'),
 #  path('test-email/', test_email, name='test_email'),
 ]

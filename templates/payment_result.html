@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Payment Status</title>
+</head>
+<body>
+    <h1>Payment Status</h1>
+    {% if error %}
+        <p style="color: red;">{{ error }}</p>
+        {% if mpesa_error %}
+            <pre>{{ mpesa_error|safe }}</pre>
+        {% endif %}
+    {% elif message %}
+        <p style="color: green;">{{ message }}</p>
+        <ul>
+            <li>Reference: {{ order_reference }}</li>
+            <li>Amount: {{ amount }}</li>
+            <li>Phone: {{ phone_number }}</li>
+            <li>Description: {{ transaction_description }}</li>
+        </ul>
+    {% else %}
+        <p>No information available.</p>
+    {% endif %}
+</body>
+</html>
