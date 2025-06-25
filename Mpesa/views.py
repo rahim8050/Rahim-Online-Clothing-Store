@@ -1,85 +1,56 @@
-from django.shortcuts import render
-from django_daraja.mpesa.core import MpesaClient
-from django.http import HttpResponse, JsonResponse
+from django.shortcuts import render, get_object_or_404
+from django.http import HttpResponse
 from django.views.decorators.csrf import csrf_exempt
-from django.conf import settings
-
-from django.contrib import messages
+from django_daraja.mpesa.core import MpesaClient
 import json
-from django.shortcuts import redirect 
-from django.shortcuts import get_object_or_404
+
 from .models import Order, Payment
- 
 
-# def stk_push(request, id):
-#     order = get_object_or_404(Order, pk=id)
-#     cl = MpesaClient()
-
-#     phone_number = order.phone             # Get phone number from the order
-#     amount = order.total_amount            # Get amount from the order
-#     account_reference = order.student.adm_no
-#     transaction_desc = 'Fines'
-#     callback_url = 'https://mature-octopus-causal.ngrok-free.app/handle/payment/transactions'
-
-#     response = cl.stk_push(
-#         phone_number, amount, account_reference, transaction_desc, callback_url
-#     )
-
-#     if response.response_code == "0":
-#         Payment.objects.create(
-#             order=order,
-#             merchant_request_id=response.merchant_request_id,
-#             checkout_request_id=response.checkout_request_id,
-#             amount=amount
-#         )
-#         messages.success(request, "Your payment was triggered successfully")
-
-#     return redirect('order_confirmation')  
-
-
-
-# # Initialize MpesaClient once (avoid re-initializing in every request)
+# ✅ Initialize MpesaClient once
 cl = MpesaClient()
 
-
-
 @csrf_exempt
-
-
-
-
 def trigger_stk_push(request):
     if request.method == 'POST':
         try:
-            # Get phone number
-            if request.content_type == 'application/json':
-                data = json.loads(request.body)
-                phone_number = data.get('phone_number')
-            else:
-                phone_number = request.POST.get('phone_number')
+            phone_number = request.POST.get('phone_number')
+            order_id = request.POST.get('order_id')
 
             if not phone_number:
-                return render(request, "payment_result.html", {
+                return render(request, "orders/order_confirmation.html", {
                     "error": "Phone number is required"
                 })
+            if not order_id:
+                return render(request, "orders/order_confirmation.html", {
+                    "error": "Order ID is required"
+                })
 
-            amount = 1
-            account_reference = 'ORDER-01'
-            transaction_desc = 'Payment for Clothes'
+            # ✅ Fetch order and amount
+            order = get_object_or_404(Order, id=order_id)
+            amount = order.get_total_cost()
+            account_reference = f'ORDER-{order.id}'
+            transaction_desc = f'Payment for Order #{order.id}'
             callback_url = 'https://your-ngrok-url.ngrok-free.app/mpesa/callback/'
 
-            # Initiate STK push
+            # ✅ Initiate STK push
             response = cl.stk_push(
-                phone_number=phone_number,
-                amount=amount,
-                account_reference=account_reference,
-                transaction_desc=transaction_desc,
-                callback_url=callback_url
+                phone_number,
+                amount,
+                account_reference,
+                transaction_desc,
+                callback_url
             )
             resp_json = response.json() if hasattr(response, 'json') else response
 
-            # Check response
             if resp_json.get('ResponseCode') == '0':
+                # ✅ Save Payment as PENDING
+                Payment.objects.create(
+                    order=order,
+                    merchant_request_id=resp_json.get('MerchantRequestID'),
+                    checkout_request_id=resp_json.get('CheckoutRequestID'),
+                    amount=amount,
+                    status='PENDING'
+                )
                 context = {
                     "message": "Order confirmed. Please check your phone to complete the payment.",
                     "order_reference": account_reference,
@@ -94,32 +65,37 @@ def trigger_stk_push(request):
                     "mpesa_error": resp_json
                 })
         except Exception as e:
-            return render(request, "orders/order_confirmation.html", {"error": str(e)})
-
-    return render(request, "orders/order_confirmation.html", {"error": "Invalid request method"})
-
-
-
-
-
+            return render(request, "orders/order_confirmation.html", {
+                "error": str(e)
+            })
+    return render(request, "orders/order_confirmation.html", {
+        "error": "Invalid request method"
+    })
 
 @csrf_exempt
 def stk_callback(request):
-    """Handles M-Pesa STK Push callback."""
     resp = json.loads(request.body)
-    data = resp['Body']['stkCallback']
-    if data["ResultCode"] == "0":
-        m_id = data["MerchantRequestID"]
-        c_id = data["CheckoutRequestID"]
-        code =""
-        item = data["CallbackMetadata"]["Item"]
-        for i in item:
-            name = i["Name"]
-            if name == "MpesaReceiptNumber":
-                code= i["Value"]
-        from orders.models import Transaction
-        transaction = Transaction.objects.get(merchant_request_id=m_id, checkout_request_id=c_id)
-        transaction.code = code
-        transaction.status = "COMPLETED"
-        transaction.save()
+    data = resp.get('Body', {}).get('stkCallback', {})
+
+    if data.get('ResultCode') == 0:
+        merchant_request_id = data.get('MerchantRequestID')
+        checkout_request_id = data.get('CheckoutRequestID')
+        code = ""
+
+        for i in data.get('CallbackMetadata', {}).get('Item', []):
+            if i.get('Name') == "MpesaReceiptNumber":
+                code = i.get('Value')
+
+        # ✅ Get Payment record and update
+        try:
+            payment = Payment.objects.get(
+                merchant_request_id=merchant_request_id,
+                checkout_request_id=checkout_request_id
+            )
+            payment.code = code
+            payment.status = "COMPLETED"
+            payment.save()
+        except Payment.DoesNotExist:
+            pass
+
     return HttpResponse("OK")
