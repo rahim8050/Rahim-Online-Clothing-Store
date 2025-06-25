@@ -72,6 +72,9 @@ def trigger_stk_push(request):
         "error": "Invalid request method"
     })
 
+from django.core.mail import send_mail
+from django.conf import settings
+
 @csrf_exempt
 def stk_callback(request):
     try:
@@ -85,7 +88,7 @@ def stk_callback(request):
             checkout_request_id = data.get('CheckoutRequestID')
             mpesa_receipt = ""
 
-            # Loop through callback metadata
+            # Extract the receipt number
             for item in data.get('CallbackMetadata', {}).get('Item', []):
                 if item.get('Name') == "MpesaReceiptNumber":
                     mpesa_receipt = item.get('Value')
@@ -100,17 +103,43 @@ def stk_callback(request):
                 payment.status = "COMPLETED"
                 payment.save()
 
+                #  Get the order and user information
+                order = payment.order
+                user = order.user  # assuming Order has a ForeignKey to User
+
+                #  Compose the confirmation email
+                subject = "Your Order Payment Was Successful"
+                message = (
+                    f"Hi {user.username},\n\n"
+                    f"We've received your payment for Order #{order.id}.\n"
+                    f"Amount paid: KES {payment.amount}\n"
+                    f"Transaction code: {mpesa_receipt}\n\n"
+                    f"Your order is being processed and we'll update you on its status.\n\n"
+                    f"Thank you for shopping with us!\n\n"
+                    f"- The Rahim Online Clothing Store Team"
+                )
+
+                recipient_list = [user.email]
+
+                #  Send the email
+                send_mail(
+                    subject,
+                    message,
+                    settings.DEFAULT_FROM_EMAIL,
+                    recipient_list,
+                    fail_silently=False
+                )
+
             except Payment.DoesNotExist:
-                # Payment was not found — optional logging
                 print(
                     f"Payment not found for MerchantRequestID={merchant_request_id}, CheckoutRequestID={checkout_request_id}"
                 )
         else:
-            # Optional: log failed transactions for debugging
             print(f"STK push failed with ResultCode={result_code}")
 
     except json.JSONDecodeError as e:
         print(f"Error decoding JSON in stk_callback: {e}")
 
     return HttpResponse("OK")
+
 
