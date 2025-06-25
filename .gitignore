@@ -3,6 +3,7 @@ __pycache__/
 *.pyc
 
 
+
 *.py[cod]
 
 *.pyo
@@ -17,3 +18,5 @@ db.sqlite3
 media/
 __pycache__/
 *.pyc
+**/migrations/__pycache__/
+**/migrations/*.pyc
