@@ -24,19 +24,11 @@ class OrderForm(forms.ModelForm):
         label="Select Payment Method"
     )
 
-    mpesa_phone = forms.CharField(
-        required=False,  # Not required unless mpesa selected
-        widget=forms.TextInput(attrs={
-            'class': 'w-full px-3 py-2 border border-gray-300 rounded-md',
-            'placeholder': 'Enter M-Pesa Phone Number',
-            'id': 'mpesa-phone'
-        }),
-        label="M-Pesa Phone"
-    )
+
 
     class Meta:
         model = Order
-        fields = ["full_name", "email", "address", "payment_method", "mpesa_phone"]
+        fields = ["full_name", "email", "address", "payment_method"]
 
         widgets = {
             'full_name': forms.TextInput(attrs={

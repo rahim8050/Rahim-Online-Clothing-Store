@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% load widget_tweaks %}
+
+{% block title %}Profile Settings{% endblock %}
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 py-6 flex">
+    <!-- Sidebar -->
+    <aside class="w-64 bg-white shadow rounded p-4 space-y-2">
+        <h2 class="text-lg font-semibold text-gray-800 mb-2">My Account</h2>
+        <a href="{% url 'users:profile_settings' %}"
+           class="block px-4 py-2 bg-blue-200 font-medium rounded">Profile Settings</a>
+        <a href="{% url 'users:change_password' %}"
+           class="block px-4 py-2 hover:bg-blue-100">Change Password</a>
+        <a href="{% url 'users:my_orders' %}"
+           class="block px-4 py-2 hover:bg-blue-100">My Orders</a>
+        <!-- other links -->
+    </aside>
+
+    <!-- Main content -->
+    <div class="flex-1 ml-6 bg-white p-6 shadow rounded-lg">
+        <h1 class="text-xl font-semibold mb-4 border-b pb-2">Profile Settings</h1>
+        <form method="post" enctype="multipart/form-data" class="space-y-4">
+            {% csrf_token %}
+            <!-- Avatar -->
+            ...
+            <!-- Other profile fields -->
+            <button type="submit" name="update_profile"
+                    class="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700">Save Changes</button>
+        </form>
+    </div>
+</div>
+{% endblock %}
