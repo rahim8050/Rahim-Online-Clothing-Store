@@ -30,7 +30,7 @@ def trigger_stk_push(request):
             amount = order.get_total_cost()
             account_reference = f'ORDER-{order.id}'
             transaction_desc = f'Payment for Order #{order.id}'
-            callback_url = 'https://your-ngrok-url.ngrok-free.app/mpesa/callback/'
+            callback_url = 'https://5a1c-41-90-172-139.ngrok-free.app/mpesa/callback/'
 
             #  Initiate STK push
             response = cl.stk_push(
@@ -52,7 +52,7 @@ def trigger_stk_push(request):
                     status='PENDING'
                 )
                 context = {
-                    "message": "Order confirmed. Please check your phone to complete the payment.",
+                    "message": "Order confirmed. Please check your phone to complete the payment, youll receive a prompt to enter your M-Pesa PIN and after confirmation that an email will be sent to you.",
                     "order_reference": account_reference,
                     "amount": amount,
                     "phone_number": phone_number,
