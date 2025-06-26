@@ -10,13 +10,13 @@
     <!-- Main flex container -->
     <div class="flex flex-col md:flex-row md:space-x-6 space-y-4 md:space-y-0">
 
-        <!-- Three-dot mobile menu -->
+        <!-- Mobile Hamburger Menu -->
         <div class="md:hidden mb-4">
-            <details class="bg-white shadow rounded-lg overflow-hidden transition-all duration-300 hover:shadow-md">
-                <summary class="px-4 py-3 cursor-pointer flex justify-center items-center">
-                    <!-- Three-dot icon -->
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h.01M12 12h.01M19 12h.01M6 12a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0z" />
+            <details class="bg-white shadow rounded-lg overflow-hidden transition-all duration-300 hover:shadow-md group">
+                <summary class="px-4 py-3 cursor-pointer flex justify-center items-center list-none">
+                    <!-- Hamburger icon -->
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-gray-700 transition-transform duration-300 group-open:rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
                     </svg>
                 </summary>
                 <div class="p-2 space-y-1 border-t">
@@ -40,7 +40,7 @@
             </details>
         </div>
 
-        <!-- Sidebar Navigation - Hidden on mobile, shown on medium+ -->
+        <!-- Sidebar Navigation - Hidden on mobile -->
         <aside class="hidden md:block w-full md:w-64 bg-white shadow rounded-lg p-4 space-y-2 transition-all duration-300 hover:shadow-md">
             <h2 class="text-lg font-semibold text-gray-800 mb-2 flex items-center">
                 <i class="fas fa-user-circle mr-2 text-green-600"></i>My Account
@@ -71,14 +71,13 @@
                 <h1 class="text-2xl sm:text-3xl font-bold text-blue-600 mb-4 sm:mb-0">
                     Welcome, {{ request.user.username }}!
                 </h1>
-              
             </div>
 
             <!-- Account Info -->
             <div class="flex flex-col sm:flex-row items-center mb-8 bg-white p-4 rounded-lg shadow-sm">
                 <div class="mb-4 sm:mb-0 sm:mr-6 relative">
                     {% if request.user.avatar %}
-                        <img src="{{ request.user.avatar.url }}" class="w-20 h-20 sm:w-24 sm:h-24 rounded-full object-cover border-4 border-white shadow">
+                        <img src="{{ request.user.avatar.url }}" class="w-20 h-20 sm:w-24 sm:h-24 rounded-full object-cover border-4 border-white shadow" alt="{{ request.user.username }}'s avatar">
                     {% else %}
                         <div class="w-20 h-20 sm:w-24 sm:h-24 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-full flex items-center justify-center text-gray-500 text-2xl shadow">
                             <i class="fas fa-user"></i>
@@ -113,9 +112,8 @@
                         <h2 class="text-xl font-bold text-gray-800">
                             <i class="fas fa-user-edit mr-2 text-blue-500"></i>Profile Settings
                         </h2>
-                      
                     </div>
-                    
+
                     <form method="post" enctype="multipart/form-data" class="space-y-4">
                         {% csrf_token %}
                         <!-- Avatar -->
@@ -124,7 +122,7 @@
                             <div class="flex items-center space-x-4">
                                 <div class="shrink-0">
                                     {% if request.user.avatar %}
-                                        <img id="avatar-preview" src="{{ request.user.avatar.url }}" class="w-16 h-16 sm:w-20 sm:h-20 rounded-full object-cover border-2 border-white shadow">
+                                        <img id="avatar-preview" src="{{ request.user.avatar.url }}" class="w-16 h-16 sm:w-20 sm:h-20 rounded-full object-cover border-2 border-white shadow" alt="Avatar preview">
                                     {% else %}
                                         <div id="avatar-preview" class="w-16 h-16 sm:w-20 sm:h-20 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-full flex items-center justify-center text-gray-500 text-xl shadow">
                                             <i class="fas fa-user"></i>
@@ -132,7 +130,7 @@
                                     {% endif %}
                                 </div>
                                 <div>
-                                    <label class="cursor-pointer px-4 py-2 text-sm bg-white border border-gray-300 rounded-lg shadow-sm text-gray-700 hover:bg-gray-50 transition-colors duration-200 flex items-center">
+                                    <label class="cursor-pointer px-4 py-2 text-sm bg-white border border-gray-300 rounded-lg shadow-sm text-gray-700 hover:bg-gray-50 flex items-center">
                                         <i class="fas fa-upload mr-2"></i>Change
                                         {% render_field profile_form.avatar class="hidden" id="avatar-upload" %}
                                     </label>
@@ -146,38 +144,35 @@
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 mb-1">First Name</label>
                                 <div class="relative">
-                                    {% render_field profile_form.first_name class="w-full px-4 py-2.5 pl-10 text-sm sm:text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" %}
+                                    {% render_field profile_form.first_name class="w-full px-4 py-2.5 pl-10 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" %}
                                     <i class="fas fa-user absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
                                 </div>
                             </div>
-
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 mb-1">Last Name</label>
                                 <div class="relative">
-                                    {% render_field profile_form.last_name class="w-full px-4 py-2.5 pl-10 text-sm sm:text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" %}
+                                    {% render_field profile_form.last_name class="w-full px-4 py-2.5 pl-10 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" %}
                                     <i class="fas fa-user absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
                                 </div>
                             </div>
-
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
                                 <div class="relative">
-                                    {% render_field profile_form.email class="w-full px-4 py-2.5 pl-10 text-sm sm:text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" %}
+                                    {% render_field profile_form.email class="w-full px-4 py-2.5 pl-10 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" %}
                                     <i class="fas fa-envelope absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
                                 </div>
                             </div>
-
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
                                 <div class="relative">
-                                    {% render_field profile_form.phone_number class="w-full px-4 py-2.5 pl-10 text-sm sm:text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="+254700333777" %}
+                                    {% render_field profile_form.phone_number class="w-full px-4 py-2.5 pl-10 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="+254700333777" %}
                                     <i class="fas fa-phone absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
                                 </div>
                             </div>
                         </div>
 
                         <!-- Save Button -->
-                        <button type="submit" name="update_profile" class="w-full mt-4 bg-gradient-to-r from-blue-600 to-indigo-700 text-white py-3 px-4 rounded-lg hover:from-blue-700 hover:to-indigo-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-300 flex items-center justify-center">
+                        <button type="submit" name="update_profile" class="w-full mt-4 bg-gradient-to-r from-blue-600 to-indigo-700 text-white py-3 px-4 rounded-lg hover:from-blue-700 hover:to-indigo-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 flex items-center justify-center">
                             <i class="fas fa-save mr-2"></i>Save Changes
                         </button>
                     </form>
@@ -193,14 +188,12 @@
                             <i class="fas fa-shield-alt mr-1"></i>Security
                         </div>
                     </div>
-                    
+
                     <form method="post" class="space-y-4">
                         {% csrf_token %}
                         {% if password_form.errors %}
                             <div class="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg relative mb-4 text-sm">
-                                <strong class="font-bold flex items-center">
-                                    <i class="fas fa-exclamation-circle mr-2"></i>Please fix the following errors:
-                                </strong>
+                                <strong class="font-bold flex items-center"><i class="fas fa-exclamation-circle mr-2"></i>Please fix the following errors:</strong>
                                 <ul class="mt-2 list-disc list-inside">
                                     {% for field in password_form %}
                                         {% for error in field.errors %}
@@ -220,7 +213,7 @@
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 mb-1">Current Password</label>
                                 <div class="relative">
-                                    {% render_field password_form.old_password class="w-full px-4 py-2.5 pl-10 pr-10 text-sm sm:text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" %}
+                                    {% render_field password_form.old_password class="w-full px-4 py-2.5 pl-10 pr-10 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" %}
                                     <i class="fas fa-key absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
                                     <button type="button" class="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 password-toggle" data-target="old_password">
                                         <i class="fas fa-eye"></i>
@@ -232,7 +225,7 @@
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 mb-1">New Password</label>
                                 <div class="relative">
-                                    {% render_field password_form.new_password1 class="w-full px-4 py-2.5 pl-10 pr-10 text-sm sm:text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" %}
+                                    {% render_field password_form.new_password1 class="w-full px-4 py-2.5 pl-10 pr-10 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" %}
                                     <i class="fas fa-lock absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
                                     <button type="button" class="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 password-toggle" data-target="new_password1">
                                         <i class="fas fa-eye"></i>
@@ -245,7 +238,7 @@
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 mb-1">Confirm New Password</label>
                                 <div class="relative">
-                                    {% render_field password_form.new_password2 class="w-full px-4 py-2.5 pl-10 pr-10 text-sm sm:text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" %}
+                                    {% render_field password_form.new_password2 class="w-full px-4 py-2.5 pl-10 pr-10 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" %}
                                     <i class="fas fa-lock absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
                                     <button type="button" class="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 password-toggle" data-target="new_password2">
                                         <i class="fas fa-eye"></i>
@@ -260,17 +253,12 @@
                                 <i class="fas fa-lightbulb mr-2 text-yellow-500"></i> Not to do on your password
                             </h3>
                             <ul class="text-sm text-gray-600 space-y-1">
-                            
-    
-                                <li class="flex items-start">
-                                    <i class="fas fa-check-circle text-green-500 mr-2 mt-1"></i>
-                                    <span>Avoid common words or personal information</span>
-                                </li>
+                                <li class="flex items-start"><i class="fas fa-check-circle text-green-500 mr-2 mt-1"></i><span>Avoid common words or personal information</span></li>
                             </ul>
                         </div>
 
                         <!-- Save Button -->
-                        <button type="submit" name="change_password" class="w-full mt-4 bg-gradient-to-r from-orange-500 to-amber-600 text-white py-3 px-4 rounded-lg hover:from-orange-600 hover:to-amber-700 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 transition-all duration-300 flex items-center justify-center">
+                        <button type="submit" name="change_password" class="w-full mt-4 bg-gradient-to-r from-orange-500 to-amber-600 text-white py-3 px-4 rounded-lg hover:from-orange-600 hover:to-amber-700 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 flex items-center justify-center">
                             <i class="fas fa-sync-alt mr-2"></i>Update Password
                         </button>
                     </form>
@@ -286,6 +274,11 @@
     document.getElementById('avatar-upload').addEventListener('change', function(e) {
         const file = e.target.files[0];
         if (file) {
+            if (file.size > 2 * 1024 * 1024) {
+                alert('File too large! Maximum 2MB.');
+                e.target.value = '';
+                return;
+            }
             const reader = new FileReader();
             reader.onload = function(e) {
                 const preview = document.getElementById('avatar-preview');
@@ -309,53 +302,17 @@
         button.addEventListener('click', function() {
             const targetId = this.getAttribute('data-target');
             const input = document.getElementById(`id_${targetId}`);
-            const icon = this.querySelector('i');
-            
-            // Toggle password visibility
-            if (input.type === 'password') {
-                input.type = 'text';
-                icon.classList.remove('fa-eye');
-                icon.classList.add('fa-eye-slash');
-            } else {
-                input.type = 'password';
-                icon.classList.remove('fa-eye-slash');
-                icon.classList.add('fa-eye');
+            if (input) {
+                if (input.type === 'password') {
+                    input.type = 'text';
+                    this.innerHTML = '<i class="fas fa-eye-slash"></i>';
+                } else {
+                    input.type = 'password';
+                    this.innerHTML = '<i class="fas fa-eye"></i>';
+                }
             }
         });
     });
 </script>
 
-<style>
-    details > summary {
-        list-style: none;
-    }
-    details > summary::-webkit-details-marker {
-        display: none;
-    }
-    details[open] summary svg {
-        transform: rotate(90deg);
-        transition: transform 0.3s ease;
-    }
-    
-    /* Password field styling */
-    .password-toggle {
-        cursor: pointer;
-        background: none;
-        border: none;
-        outline: none;
-    }
-    
-    .password-toggle i {
-        transition: all 0.2s ease;
-    }
-    
-    .password-toggle:hover i {
-        color: #4b5563;
-    }
-    
-    /* Form field enhancements */
-    input[type="password"], input[type="text"] {
-        padding-right: 2.5rem !important;
-    }
-</style>
 {% endblock %}
