@@ -134,13 +134,13 @@ MPESA_CONSUMER_SECRET = os.environ.get('MPESA_CONSUMER_SECRET')
 
 #Shortcode to use for transactions. For sandbox  use the Shortcode 1 provided on test credentials page
 
-MPESA_SHORTCODE = '174379'
+MPESA_SHORTCODE = os.environ.get('MPESA_SHORTCODE')
 
 # Shortcode to use for Lipa na MPESA Online (MPESA Express) transactions
 # This is only used on sandbox, do not set this variable in production
 # For sandbox use the Lipa na MPESA Online Shorcode provided on test credentials page
 
-MPESA_EXPRESS_SHORTCODE = '174379'
+MPESA_EXPRESS_SHORTCODE = os.environ.get('MPESA_EXPRESS_SHORTCODE')
 
 # Type of shortcode
 # Possible values:
@@ -170,12 +170,12 @@ MPESA_INITIATOR_SECURITY_CREDENTIAL = 'initiator_security_credential'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'CodeAlpha',
-        'USER' : 'root',
-        'PASSWORD' : '',
-        'HOST' : 'localhost',
-        'PORT' : '3306',
+        'ENGINE': os.environ.get('ENGINE'),
+        'NAME':os.environ.get('NAME'),
+        'USER' : os.environ.get('User'),
+        'PASSWORD' :os.environ.get('PASSWORD'),
+        'HOST' : os.environ.get('HOST'),
+        'PORT' : os.environ.get('PORT'),
           'OPTIONS': {
               'charset': 'utf8mb4',
             'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
