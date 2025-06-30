@@ -33,6 +33,7 @@ urlpatterns = [
                   path('products/search/', views.SearchProduct, name='product_search'),
                   path('product/<int:id>/<slug:slug>/', views.product_detail, name='product_detail'),
                   path('users/', include("users.urls")),
+                  path('users/', include('django.contrib.auth.urls')), 
                   path('products/', include('product_app.urls', namespace='product_app')),  # Fixed syntax
                   path('accounts/profile/', views.profile, name='profile'),
                 
