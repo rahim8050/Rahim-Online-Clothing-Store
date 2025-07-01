@@ -1,22 +1,69 @@
-# Python
-__pycache__/
+# ===== Python =====
 *.pyc
-
-
-
-*.py[cod]
-
 *.pyo
 *.pyd
-
-.venv/
-.idea/
-.env
-config.py
-# Django
-db.sqlite3
-media/
+*.py[cod]
 __pycache__/
-*.pyc
+**/__pycache__/
+
+# ===== Virtual Environments =====
+.venv/
+venv/
+env/
+ENV/
+
+# ===== Environment Variables =====
+.env
+.env.*     # Optional: .env.dev, .env.prod, etc.
+
+# ===== macOS/Linux System Files =====
+.DS_Store
+Thumbs.db
+
+# ===== VS Code / JetBrains IDEs =====
+.vscode/
+.idea/
+
+# ===== Django =====
+db.sqlite3
+db.sqlite3-journal
+media/
+staticfiles/     # Optional if you collectstatic locally
+*.log
+
+# Django migrations cache
 **/migrations/__pycache__/
 **/migrations/*.pyc
+**/migrations/*.pyo
+
+# If you use coverage or testing tools
+htmlcov/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.log
+
+# ===== Tailwind / Node.js / PostCSS =====
+node_modules/
+package-lock.json
+pnpm-lock.yaml
+yarn.lock
+tailwind.config.js
+postcss.config.js
+
+# ===== Build artifacts (optional) =====
+build/
+dist/
+*.egg-info/
+.eggs/
+*.spec
+
+# ===== Celery / Redis / Other Services (if used) =====
+celerybeat-schedule
+*.pid
+
+# ===== Pytest =====
+.pytest_cache/

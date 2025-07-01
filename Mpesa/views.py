@@ -3,7 +3,8 @@ from django.http import HttpResponse
 from django.views.decorators.csrf import csrf_exempt
 from django_daraja.mpesa.core import MpesaClient
 import json
-
+from django.core.mail import send_mail
+from django.conf import settings
 from .models import Order, Payment
 
 # Initialize MpesaClient once
@@ -30,7 +31,7 @@ def trigger_stk_push(request):
             amount = order.get_total_cost()
             account_reference = f'ORDER-{order.id}'
             transaction_desc = f'Payment for Order #{order.id}'
-            callback_url = 'https://5a1c-41-90-172-139.ngrok-free.app/mpesa/callback/'
+            callback_url = 'https://d3bc-41-209-3-220.ngrok-free.app/mpesa/callback/'
 
             #  Initiate STK push
             response = cl.stk_push(
@@ -72,29 +73,26 @@ def trigger_stk_push(request):
         "error": "Invalid request method"
     })
 
-from django.core.mail import send_mail
-from django.conf import settings
-
 @csrf_exempt
 def stk_callback(request):
     try:
         resp = json.loads(request.body)
         data = resp.get('Body', {}).get('stkCallback', {})
-        result_code = data.get('ResultCode', -1)  # -1 is default if not present
+        result_code = data.get('ResultCode', -1)
 
-        # Only process successful payments
-        if result_code == 0:
+        if result_code == 0:  # pyPayment successful
             merchant_request_id = data.get('MerchantRequestID')
             checkout_request_id = data.get('CheckoutRequestID')
-            mpesa_receipt = ""
 
-            # Extract the receipt number
-            for item in data.get('CallbackMetadata', {}).get('Item', []):
-                if item.get('Name') == "MpesaReceiptNumber":
-                    mpesa_receipt = item.get('Value')
+            # Extract MpesaReceiptNumber safely
+            mpesa_receipt = next(
+                (item["Value"] for item in data.get("CallbackMetadata", {}).get("Item", [])
+                 if item.get("Name") == "MpesaReceiptNumber"),
+                ""
+            )
 
-            # Update Payment record
             try:
+                #  Find the matching payment
                 payment = Payment.objects.get(
                     merchant_request_id=merchant_request_id,
                     checkout_request_id=checkout_request_id
@@ -103,11 +101,14 @@ def stk_callback(request):
                 payment.status = "COMPLETED"
                 payment.save()
 
-                #  Get the order and user information
+                #  Mark order as paid
                 order = payment.order
-                user = order.user  # assuming Order has a ForeignKey to User
+                order.paid = True
+                order.save()
 
-                #  Compose the confirmation email
+                user = order.user
+
+                #  Compose and send confirmation email
                 subject = "Your Order Payment Was Successful"
                 message = (
                     f"Hi {user.username},\n\n"
@@ -118,28 +119,26 @@ def stk_callback(request):
                     f"Thank you for shopping with us!\n\n"
                     f"- The Rahim Online Clothing Store Team"
                 )
-
-                recipient_list = [user.email]
-
-                #  Send the email
                 send_mail(
                     subject,
                     message,
                     settings.DEFAULT_FROM_EMAIL,
-                    recipient_list,
+                    [user.email],
                     fail_silently=False
                 )
 
             except Payment.DoesNotExist:
                 print(
-                    f"Payment not found for MerchantRequestID={merchant_request_id}, CheckoutRequestID={checkout_request_id}"
+                    f"[ERROR] Payment not found for MerchantRequestID={merchant_request_id}, CheckoutRequestID={checkout_request_id}"
                 )
         else:
-            print(f"STK push failed with ResultCode={result_code}")
+            print(f"[INFO] STK Push failed with ResultCode={result_code}")
 
     except json.JSONDecodeError as e:
-        print(f"Error decoding JSON in stk_callback: {e}")
+        print(f"[ERROR] JSON decode error in stk_callback: {e}")
 
     return HttpResponse("OK")
+
+
 
 

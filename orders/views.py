@@ -60,18 +60,19 @@ from django.db import transaction
 #     })
 
 
-@require_http_methods(["GET", "POST"])  # Explicitly allow GET and POST
+@require_http_methods(["GET", "POST"])
 def order_create(request):
-    # Authentication check 
+    print("METHOD:", request.method)
+
+    #  Check if user is logged in
     if not request.user.is_authenticated:
         messages.warning(request, "Please log in to place an order")
-        return redirect('users:login')  
+        return redirect('users:login')
 
-    # Cart handling 
+    #  Get cart
     cart_id = request.session.get('cart_id')
     cart = None
-    
-    # Validate cart existence 
+
     if cart_id:
         try:
             cart = get_object_or_404(Cart, id=cart_id)
@@ -79,26 +80,24 @@ def order_create(request):
                 messages.warning(request, "Your cart is empty")
                 return redirect("cart:cart_detail")
         except Cart.DoesNotExist:
-            if 'cart_id' in request.session:
-                del request.session['cart_id']
+            request.session.pop('cart_id', None)
             messages.warning(request, "Your cart has expired")
             return redirect("cart:cart_detail")
     else:
         messages.warning(request, "Your cart is empty")
         return redirect("cart:cart_detail")
 
-    # Order processing 
-    if request.method == 'POST':
+    #  Detect accidental/empty POST (browser resubmits or forced posts)
+    if request.method == 'POST' and 'full_name' in request.POST:
         form = OrderForm(request.POST)
         if form.is_valid():
             try:
-                with transaction.atomic():  # Ensure database integrity
-                    # Create order 
+                with transaction.atomic():
                     order = form.save(commit=False)
-                    order.user = request.user  # Associate user
+                    order.user = request.user
                     order.save()
 
-                    # Create order items 
+                    # Save cart items into order
                     for item in cart.items.all():
                         OrderItem.objects.create(
                             order=order,
@@ -107,21 +106,91 @@ def order_create(request):
                             quantity=item.quantity
                         )
 
-                    # Cleanup 
+                    # Clear cart
                     cart.delete()
-                    if 'cart_id' in request.session:
-                        del request.session['cart_id']
-                    if 'cart_count' in request.session:
-                        del request.session['cart_count']
+                    request.session.pop('cart_id', None)
+                    request.session.pop('cart_count', None)
 
                     messages.success(request, "Order placed successfully!")
                     return redirect("orders:order_confirmation", order.id)
-                    
             except Exception as e:
                 messages.error(request, f"Order failed: {str(e)}")
         else:
-            # Form validation failed
             messages.error(request, "Please correct the errors in your order form")
+    else:
+        # Initial GET or ignored POST
+        form = OrderForm()
+
+    return render(request, "orders/order_create.html", {
+        "form": form,
+        "cart": cart,
+    })
+    
+
+
+# @require_http_methods(["GET", "POST"])  # Explicitly allow GET and POST
+# def order_create(request):
+#     # Authentication check 
+#     if not request.user.is_authenticated:
+#         messages.warning(request, "Please log in to place an order")
+#         return redirect('users:login')  
+
+#     # Cart handling 
+#     cart_id = request.session.get('cart_id')
+#     cart = None
+    
+#     # Validate cart existence 
+#     if cart_id:
+#         try:
+#             cart = get_object_or_404(Cart, id=cart_id)
+#             if not cart.items.exists():
+#                 messages.warning(request, "Your cart is empty")
+#                 return redirect("cart:cart_detail")
+#         except Cart.DoesNotExist:
+#             if 'cart_id' in request.session:
+#                 del request.session['cart_id']
+#             messages.warning(request, "Your cart has expired")
+#             return redirect("cart:cart_detail")
+#     else:
+#         messages.warning(request, "Your cart is empty")
+#         return redirect("cart:cart_detail")
+
+#     # Order processing 
+#     if request.method == 'POST':
+#         form = OrderForm(request.POST)
+#         if form.is_valid():
+#             try:
+#                 with transaction.atomic():  # Ensure database integrity
+#                     # Create order 
+#                     order = form.save(commit=False)
+#                     order.user = request.user  # Associate user
+#                     order.save()
+
+#                     # Create order items 
+#                     for item in cart.items.all():
+#                         OrderItem.objects.create(
+#                             order=order,
+#                             product=item.product,
+#                             price=item.product.price,
+#                             quantity=item.quantity
+#                         )
+
+#                     # Cleanup 
+#                     cart.delete()
+#                     if 'cart_id' in request.session:
+#                         del request.session['cart_id']
+#                     if 'cart_count' in request.session:
+#                         del request.session['cart_count']
+
+#                     messages.success(request, "Order placed successfully!")
+#                     return redirect("orders:order_confirmation", order.id)
+                    
+#             except Exception as e:
+#                 messages.error(request, f"Order failed: {str(e)}")
+                
+#         else:
+#             # Form validation failed
+#             messages.error(request, "Please correct the errors in your order form")
     
   
     # else:
