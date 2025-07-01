@@ -9,12 +9,15 @@
 
     <!-- Order Header -->
     <div class="text-center mb-8">
-        <h2 class="text-2xl md:text-3xl font-bold text-emerald-600 mb-4">
+        <h2 class="text-2xl md:text-3xl font-bold text-emerald-600 mb-2">
             🎉 Your Order Has Been Placed!
         </h2>
         <h3 class="text-lg md:text-xl text-gray-600">
             Order ID: #{{ order.id }}
         </h3>
+        {% if order.user.first_name %}
+            <p class="text-sm text-gray-500 mt-2">Hello {{ order.user.first_name }},</p>
+        {% endif %}
     </div>
 
     <!-- Order Details -->
@@ -65,8 +68,16 @@
         <div class="bg-gray-50 p-6 rounded-lg">
             <h4 class="font-semibold mb-4">Order Status</h4>
             <div class="flex items-center mb-2">
-                <span class="w-3 h-3 bg-emerald-500 rounded-full mr-2"></span>
-                <span class="text-emerald-600 font-medium">Processing</span>
+                {% if order.payment.status == "PAID" %}
+                    <span class="w-3 h-3 bg-green-500 rounded-full mr-2"></span>
+                    <span class="text-green-600 font-medium">Paid</span>
+                {% elif order.payment.status == "PENDING" %}
+                    <span class="w-3 h-3 bg-yellow-400 rounded-full mr-2"></span>
+                    <span class="text-yellow-500 font-medium">Pending</span>
+                {% else %}
+                    <span class="w-3 h-3 bg-red-500 rounded-full mr-2"></span>
+                    <span class="text-red-600 font-medium">Not Paid</span>
+                {% endif %}
             </div>
             <p class="text-sm text-gray-600 mt-2">
                 We'll send a confirmation email to {{ order.email }}
@@ -74,83 +85,88 @@
         </div>
     </div>
 
-    <!-- Action Section -->
+    <!-- Flash Messages -->
+    {% if messages %}
+        <div class="mb-6">
+            {% for msg in messages %}
+                <div class="bg-{{ msg.tags }}-100 border border-{{ msg.tags }}-400 text-{{ msg.tags }}-700 px-4 py-3 rounded mb-4">
+                    {{ msg }}
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+    <!-- Payment Section -->
     <div class="mt-8 space-y-6">
 
+        {% if order.payment.status != "PAID" %}
+            <!-- M-Pesa Payment Form -->
+            <form action="{% url 'Mpesa:mpesa_trigger' %}"
+                  method="post"
+                  class="max-w-md mx-auto bg-white p-6 rounded-xl shadow-md space-y-6">
+                {% csrf_token %}
+                <input type="hidden" name="order_id" value="{{ order.id }}">
+
+                <div>
+                    <label for="phone_number" class="block text-sm font-medium text-gray-700 mb-1">
+                        Phone Number
+                    </label>
+                    <input
+                        type="text"
+                        name="phone_number"
+                        id="phone_number"
+                        placeholder="e.g., 254712345678"
+                        required
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+
+                    <label for="Amount" class="block text-sm font-medium text-gray-700 mt-4 mb-1">
+                        Amount
+                    </label>
+                    <input
+                        type="number"
+                        name="Amount"
+                        id="Amount"
+                        readonly
+                        value="{{ order.get_total_cost }}"
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none"
+                    >
+                </div>
+
+                <!-- Pay Button -->
+                <div class="flex justify-center items-center">
+                    <button
+                        type="submit"
+                        class="bg-green-600 hover:bg-green-700 text-white font-semibold px-6 py-3 rounded-lg shadow-md transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                    >
+                        <div class="inline-flex items-center space-x-2">
+                            <svg xmlns="http://www.w3.org/2000/svg"
+                                 class="h-5 w-5"
+                                 viewBox="0 0 20 20"
+                                 fill="currentColor">
+                                <path fill-rule="evenodd"
+                                      d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z"
+                                      clip-rule="evenodd" />
+                            </svg>
+                            <span>Make M-Pesa Payment</span>
+                        </div>
+                    </button>
+                </div>
+            </form>
+        {% else %}
+            <!-- Payment Already Done -->
+            <div class="text-center text-green-600 font-semibold">
+                ✅ Payment received. Thank you!
+            </div>
+        {% endif %}
+
         <!-- Continue Shopping Link -->
-        <div class="flex justify-center mb-6">
+        <div class="flex justify-center mt-6">
             <a href="/"
                class="inline-block bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-3 rounded-lg transition-colors duration-300">
                 Continue Shopping
             </a>
         </div>
-
-        <!-- Alerts for Message and Error -->
-        {% if message %}
-            <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
-                {{ message }}
-            </div>
-        {% endif %}
-        {% if error %}
-            <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-                {{ error }}
-            </div>
-        {% endif %}
-
-        <!-- M-Pesa Payment Form -->
-        <form action="{% url 'Mpesa:mpesa_trigger' %}"
-              method="post"
-              class="max-w-md mx-auto bg-white p-6 rounded-xl shadow-md space-y-6">
-            {% csrf_token %}
-            <!-- Hidden order_id to pass to view -->
-            <input type="hidden" name="order_id" value="{{ order.id }}">
-
-            <div>
-                <label for="phone_number" class="block text-sm font-medium text-gray-700 mb-1">
-                    Phone Number
-                </label>
-                <input
-                    type="text"
-                    name="phone_number"
-                    id="phone_number"
-                    placeholder="e.g., 254712345678"
-                    required
-                    class="w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-
-                <label for="Amount" class="block text-sm font-medium text-gray-700 mt-4 mb-1">
-                    Amount
-                </label>
-                <input
-                    type="number"
-                    name="Amount"
-                    id="Amount"
-                    readonly
-                    value="{{ order.get_total_cost }}"
-                    class="w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none"
-                >
-            </div>
-
-            <!-- Pay Button -->
-            <div class="flex justify-center items-center">
-                <button
-                    type="submit"
-                    class="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-3 rounded-lg shadow-md transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                >
-                    <div class="inline-flex items-center space-x-2">
-                        <svg xmlns="http://www.w3.org/2000/svg"
-                             class="h-5 w-5"
-                             viewBox="0 0 20 20"
-                             fill="currentColor">
-                            <path fill-rule="evenodd"
-                                  d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z"
-                                  clip-rule="evenodd" />
-                        </svg>
-                        <span>Make M-Pesa Payment</span>
-                    </div>
-                </button>
-            </div>
-        </form>
     </div>
 </div>
 {% endblock %}

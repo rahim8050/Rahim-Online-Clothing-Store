@@ -9,6 +9,8 @@ class Order(models.Model):
     full_name = models.CharField(max_length=100)
     email = models.EmailField()
     address = models.CharField(max_length=250)
+    latitude = models.FloatField(null=True, blank=True)
+    longitude = models.FloatField(null=True, blank=True)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
