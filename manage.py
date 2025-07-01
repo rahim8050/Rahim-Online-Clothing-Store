@@ -8,7 +8,7 @@ from django.contrib.auth import get_user_model
 
 def main():
     """Run administrative tasks."""
-    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'CodeAlpa_Online_ClothesStore.settings')
+    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'Rahim_Online_ClothesStore.settings')
     try:
         from django.core.management import execute_from_command_line
     except ImportError as exc:
