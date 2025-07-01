@@ -31,7 +31,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-_du59u-xto50=+@9y#wkghc5x8e$29!g$!#t$a@5o3rm9-$*a7'
+SECRET_KEY = os.environ.get('SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
@@ -100,7 +100,7 @@ CSRF_TRUSTED_ORIGINS = [
 
 SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True
-ROOT_URLCONF = 'CodeAlpa_Online_ClothesStore.urls'
+ROOT_URLCONF = 'Rahim_Online_ClothesStore.urls'
 
 TEMPLATES = [
     {
@@ -120,7 +120,7 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = 'CodeAlpa_Online_ClothesStore.wsgi.application'
+WSGI_APPLICATION = 'Rahim_Online_ClothesStore.wsgi.application'
 # The Mpesa environment to use
 # Possible values: sandbox, production
 
@@ -163,6 +163,8 @@ MPESA_INITIATOR_USERNAME = 'initiator_username'
 # Plaintext password for initiator (to be used in B2C, B2B, AccountBalance and TransactionStatusQuery Transactions)
 
 MPESA_INITIATOR_SECURITY_CREDENTIAL = 'initiator_security_credential'
+# Geopify settings
+GEOAPIFY_API_KEY = os.environ.get('GEOAPIFY_API_KEY')
 
 
 # Database
