@@ -78,7 +78,7 @@ class RegisterUser(FormView):
                 messages.error(self.request, f"{field}: {error}")
         return super().form_invalid(form)
 
-# ✅ UPDATED profile_view
+#  UPDATED profile_view
 def profile_view(request):
     if request.method == "POST":
         if "update_profile" in request.POST:
