@@ -10,54 +10,7 @@ from orders.models import Order
 from django.db import transaction
 
 # Create your views here.
-# def order_create(request):
-#     # cart = None
-#     # cart = Cart.objects.get(user=request.user)
-#     cart_id = request.session.get('cart_id')
 
-#     # Check if cart exists and is valid
-#     if cart_id:
-#         try:
-#             cart = Cart.objects.get(id=cart_id)
-#             if not cart.items.exists():  # Redirect if cart is empty
-#                 return redirect("cart:cart_detail")
-#         except Cart.DoesNotExist:
-#             del request.session['cart_id']
-#             return redirect("cart:cart_detail")
-# # this form is to be validated that the user must be logged in to place an order
-# # this took me a while to figure out that the form was the issue and not the view
-
-#     # Handle POST (form submission)
-   
-#         form = OrderForm(request.POST)
-#         if form.is_valid():
-#             # Check if cart is still valid
-#             if not cart:  # Add this check!
-#                 return redirect("cart:cart_detail")  # Redirect if cart is missing
-
-#             # Save order and process items
-#             order = form.save(commit=False)
-#             order.save()
-
-#             for item in cart.items.all():  # Now safe to use cart.items
-#                 OrderItem.objects.create(
-#                     order=order,
-#                     product=item.product,
-#                     price=item.product.price,
-#                     quantity=item.quantity
-#                 )
-
-#             # Clean up cart
-#             cart.delete()
-#             del request.session["cart_id"]
-#             return redirect("orders:order_confirmation", order.id)
-#     else:
-#         form = OrderForm()
-
-#     return render(request, "orders/order_create.html", {
-#         "cart": cart,
-#         "form": form
-#     })
 
 
 @require_http_methods(["GET", "POST"])
