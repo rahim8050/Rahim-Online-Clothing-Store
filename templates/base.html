@@ -5,31 +5,12 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, shrink-to-fit=no" />
     <meta http-equiv="X-UA-Compatible" content="ie=edge" />
-    <link rel="stylesheet" href="https://unpkg.com/@geoapify/geocoder-autocomplete/styles/minimal.css" />
 
-
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-    .plus-one-badge {
-        position: absolute;
-        top: -10px;
-        right: -10px;
-        background:rgb(236, 18, 36); /* green */
-        color: white;
-        border-radius: 9999px;
-        padding: 4px 8px;
-        font-size: 0.75rem;
-        font-weight: bold;
-        opacity: 1;
-        transition: opacity 0.5s ease;
-        z-index: 10;
-    }
 
-    .plus-one-badge.fade-out {
-        opacity: 0;
-    }
-</style>
-
+    <!-- Geoapify Autocomplete CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/@geoapify/geocoder-autocomplete@1.2.0/styles/minimal.css" />
 
     <!-- Font Awesome -->
     <link rel="stylesheet"
@@ -37,6 +18,27 @@
           integrity="sha512-1ycn6Ius6AHW7kzY+4CWFJhGf9B8Dj/sOac7gZtqoMAv9yH/CQAGz6yK3pVbLZ6yMMrUBTc8Ujw=="
           crossorigin="anonymous"
           referrerpolicy="no-referrer" />
+
+    <style>
+        .plus-one-badge {
+            position: absolute;
+            top: -10px;
+            right: -10px;
+            background: rgb(236, 18, 36);
+            color: white;
+            border-radius: 9999px;
+            padding: 4px 8px;
+            font-size: 0.75rem;
+            font-weight: bold;
+            opacity: 1;
+            transition: opacity 0.5s ease;
+            z-index: 10;
+        }
+
+        .plus-one-badge.fade-out {
+            opacity: 0;
+        }
+    </style>
 
     <title>{% block title %}Homepage{% endblock %}</title>
 </head>
@@ -46,8 +48,6 @@
     <header class="shadow-md bg-white sticky top-0 z-50">
         {% include 'includes/nav.html' %}
     </header>
-    <!-- Sticky Cart Counter -->
-
 
     <!-- Flash Messages -->
     <div id="flash-messages" class="fixed bottom-4 right-4 z-50 space-y-4 w-80 max-w-full">
@@ -73,8 +73,7 @@
     </div>
 
     <!-- Main Content -->
-    <main class="flex-grow py-8 px-4 md:px-0" id="main-content">
-        
+     <main class="flex-grow py-0 px-4 md:px-0" id="main-content">
         <div class="max-w-screen-xl mx-auto">
             {% block content %}{% endblock %}
         </div>
@@ -109,7 +108,10 @@
             });
         });
     </script>
-    
 
+    <!-- Geoapify Autocomplete JS -->
+    <script src="https://unpkg.com/@geoapify/geocoder-autocomplete@1.2.0/dist/geocoder-autocomplete.min.js"></script>
+
+    {% block extra_js %}{% endblock %}
 </body>
 </html>
