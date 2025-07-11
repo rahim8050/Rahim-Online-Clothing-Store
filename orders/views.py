@@ -9,7 +9,8 @@ from django.views.decorators.http import require_http_methods
 from orders.models import Order
 from django.db import transaction
 from django.conf import settings
-
+from django.http import JsonResponse
+from orders.utils import reverse_geocode
 # Create your views here.
 
 
@@ -148,12 +149,17 @@ def order_create(request):
     
 
 
-
-
-   
-
-
-
 def order_confirmation(request, order_id):
     order = get_object_or_404(Order, id=order_id)
     return render(request, "orders/order_confirmation.html", {"order":order})
+
+
+# views.py
+
+
+def get_location_info(request):
+    lat = request.GET.get("lat", "51.21709661403662")
+    lon = request.GET.get("lon", "6.7782883744862374")
+
+    data = reverse_geocode(lat, lon)
+    return JsonResponse(data)
