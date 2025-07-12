@@ -1,9 +1,12 @@
 # myapp/utils/geoapify.py
 import requests
 from requests.structures import CaseInsensitiveDict
+from django.conf import settings
+api_key = settings.GEOAPIFY_API_KEY
 
 def reverse_geocode(lat, lon):
-    api_key = "bc95771bd9fa46508e031a7a3ede51e1"
+    
+    print("Using loaded key:", api_key)    # Debugging line to check if the key is loaded correctly
     url = f"https://api.geoapify.com/v1/geocode/reverse?lat={lat}&lon={lon}&apiKey={api_key}"
 
     headers = CaseInsensitiveDict()

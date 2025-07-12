@@ -5,32 +5,29 @@
 {% block content %}
 
 <div class="container mx-auto  p-4 flex">
-     <aside class="w-[10%] p-4">
-        <h2 class="font-bold">Categories:</h2>
-        <ul>
-            {% for category in categories %}
-            <li>
-                <a href="{% url 'product_list_by_category' category.slug %}">{{ category.name }}</a>
-            </li>
-            {% endfor %}
-        </ul>
-    </aside> 
-    {% comment %} <div class="mb-4">
-    <label for="categoryDropdown" class="block font-bold mb-1">Filter by Category:</label>
-    <select id="categoryDropdown"
-            class="w-full md:w-1/3 p-2 border border-gray-300 rounded"
-            onchange="location = this.value;">
-        <option value="{% url 'product_list_by_category' %}">All Categories</option>
-        {% for category in categories %}
-            <option value="{% url 'product_list_by_category' category.slug %}"
-                    {% if selected_category == category.slug %}selected{% endif %}>
-                {{ category.name }}
+<aside class="w-full md:w-[10%] p-4">
+    <h2 class="font-bold mb-2">Categories:</h2>
+   <select
+    onchange="if (this.value) window.location.href=this.value"
+    class="block w-full border border-gray-300 rounded-md p-2 text-sm focus:ring focus:ring-orange-200 text-orange-600"
+>
+        <!-- All categories option -->
+        <option value="{% url 'index' %}" {% if not category %}selected{% endif %}>
+            All Categories
+        </option>
+
+        <!-- Loop over categories without overwriting the 'category' context variable -->
+        {% for c in categories %}
+            <option value="{% url 'product_list_by_category' c.slug %}"
+                    {% if category and c.slug == category.slug %}selected{% endif %}>
+                {{ c.name }}
             </option>
         {% endfor %}
     </select>
-</div> {% endcomment %}
+</aside>
 
 
+ 
     <main class="w-[90%] p-4">
         <!-- Search Header and Form -->
         <div class="mb-6">
@@ -45,37 +42,8 @@
             {% endif %}
         </div>
 
-        {% comment %} <!-- Product Grid -->
-        <div class="grid grid-cols-2 gap-4">
-            {% for product in products %}
-                <a href="{% url 'product_detail' product.id product.slug %}">
-                    <div class="border p-2 hover:shadow-lg transition-shadow">
-                        {% if product.image %}
-                            <img src="{{ product.image.url }}" alt="{{ product.name }}"
-                                 class="h-64 w-full object-cover">
-                        {% else %}
-                            <div class="h-64 bg-gray-100 flex items-center justify-center">
-                                <p class="text-emerald-600">Image not available</p>
-                            </div>
-                        {% endif %}
-
-                        <h3 class="font-semibold mt-2">{{ product.name }}</h3>
-                        <p class="text-sm text-gray-600 truncate">{{ product.description }}</p>
-                        <p class="text-indigo-600 mt-2">Ksh{{ product.price }}</p>
-                    </div>
-                </a>
-            {% empty %}
-                <div class="col-span-3 text-center py-8">
-                    <p class="text-gray-500">
-                        {% if request.GET.search %}
-                            No products found matching "{{ request.GET.search }}"
-                        {% else %}
-                            No products available
-                        {% endif %}
-                    </p>
-                </div>
-            {% endfor %}
-        </div> {% endcomment %}
+    
+       
 <!-- Product Grid -->
 <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
   {% for product in products %}

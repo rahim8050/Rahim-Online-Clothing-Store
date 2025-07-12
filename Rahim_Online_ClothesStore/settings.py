@@ -166,7 +166,7 @@ MPESA_INITIATOR_USERNAME = 'initiator_username'
 MPESA_INITIATOR_SECURITY_CREDENTIAL = 'initiator_security_credential'
 # Geopify settings
 GEOAPIFY_API_KEY = os.environ.get('GEOAPIFY_API_KEY')
-print("GEOAPIFY_API_KEY:", GEOAPIFY_API_KEY)  # Debugging line to check if the key is loaded correctly
+
 
 
 # Database
