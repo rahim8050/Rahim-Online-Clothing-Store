@@ -8,20 +8,36 @@ from product_app.models import Product
 
 from .models import Category,Product
 # Create your views here.
-def product_list(request,category_slug=None):
+# def product_list(request,category_slug=None):
     
-    category = None
-    products = Product.objects.filter(available=True)
-    categories = Category.objects.all()
-    if category_slug:
-        category = get_object_or_404(Category,slug=category_slug)
-        products = products.filter(category=category)
+#     category = None
+#     products = Product.objects.filter(available=True)
+#     categories = Category.objects.all()
+#     if category_slug:
+#         category = get_object_or_404(Category,slug=category_slug)
+#         products = products.filter(category=category)
 
-    return render(request, 'products/product/list.html',{
-        'category': category,
-        'products': products,
+#     return render(request, 'products/product/list.html',{
+#         'category': category,
+#         'products': products,
+#         'categories': categories,
+#     })
+def product_list(request, category_slug=None):
+    categories = Category.objects.all()
+    category = None
+
+    if category_slug:
+        category = get_object_or_404(Category, slug=category_slug)
+        products = Product.objects.filter(category=category)
+    else:
+        products = Product.objects.all()
+
+    return render(request, 'products/product/list.html', {
         'categories': categories,
+        'products': products,
+        'category': category,
     })
+
 
     
 
