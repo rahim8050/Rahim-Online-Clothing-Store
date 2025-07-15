@@ -2,9 +2,12 @@
 {% block title %}{{ product.name }}{% endblock %}
 
 {% block content %}
-<div class="min-h-screen flex items-center justify-center bg-gray-50 py-10 px-4">
-    <div class="bg-white rounded-xl shadow-xl overflow-hidden w-full max-w-4xl flex flex-col md:flex-row transition hover:shadow-2xl">
-        
+<div id="product-app" class="min-h-screen flex items-center justify-center bg-gray-50 py-10 px-4">
+    <div class="bg-white rounded-xl shadow-xl overflow-hidden w-full max-w-4xl flex flex-col md:flex-row transition"
+         :class="{ 'shadow-2xl': isHovered }"
+         @mouseenter="isHovered = true"
+         @mouseleave="isHovered = false">
+
         <!-- Image Section -->
         <div class="w-full md:w-1/2">
             {% if product.image %}
@@ -20,123 +23,124 @@
         <!-- Product Details Section -->
         <div class="w-full md:w-1/2 p-6 flex flex-col justify-between">
             <div>
-                <h3 class="font-semibold text-2xl md:text-3xl mb-4">{{ product.name }}</h3>
-                <p class="text-indigo-600 text-xl md:text-2xl mb-6">Ksh{{ product.price }}</p>
+                <h3 class="font-semibold text-2xl md:text-3xl mb-4">{{ productName }}</h3>
+                <p class="text-indigo-600 text-xl md:text-2xl mb-6">{{ formattedPrice }}</p>
 
-                <!-- Description Section -->
                 <div class="mb-6">
-                    <button onclick="toggleDescription(this)"
-                            class="text-indigo-600 hover:text-indigo-800 bg-gray-100 hover:bg-gray-200 px-4 py-2 rounded-lg w-full md:w-auto transition-colors duration-300">
-                        Show Description
+                    <button @click="toggleDescription"
+                            class="text-indigo-600 hover:text-indigo-800 bg-gray-100 hover:bg-gray-200 px-4 py-2 rounded-lg w-full md:w-auto transition-colors duration-300"
+                            v-text="showDescription ? 'Hide Description' : 'Show Description'">
                     </button>
-                    <div id="description" class="hidden bg-gray-50 p-4 rounded-lg mt-2">
-                        <p class="text-gray-700 leading-relaxed">{{ product.description }}</p>
+                    <div v-if="showDescription" class="bg-gray-50 p-4 rounded-lg mt-2">
+                        <p class="text-gray-700 leading-relaxed" v-html="productDescription"></p>
                     </div>
                 </div>
             </div>
 
-            <!-- Add to Cart Form -->
-            <form action="{% url 'cart:cart_add' product.id %}" method="POST" enctype="multipart/form-data"
-                  id="add_to_cart-form" class="mt-6">
-                {% csrf_token %}
+            <form @submit.prevent="addToCart" class="mt-6">
                 <button type="submit"
-                        class="add-to-cart w-full md:w-auto text-white bg-indigo-600 hover:bg-indigo-700 px-6 py-3 rounded-lg transition-colors duration-300 text-sm md:text-base">
+                        class="w-full md:w-auto text-white bg-indigo-600 hover:bg-indigo-700 px-6 py-3 rounded-lg transition-colors duration-300 text-sm md:text-base">
                     Add To Cart
                 </button>
-                <p id="message" class="mt-2 text-sm text-gray-600"></p>
+                <p class="mt-2 text-sm text-gray-600">{{ message }}</p>
             </form>
         </div>
     </div>
 </div>
 
+<!-- Inject product JSON -->
+<script id="product-data" type="application/json">
+    {{ product_json|safe }}
+</script>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.prod.js"></script>
 <script>
-    function showToast(message) {
-        const toast = document.querySelector('.toast-message');
-        toast.textContent = message;
-        toast.classList.add('show');
-        setTimeout(() => toast.classList.remove('show'), 3000);
-    }
+const { createApp } = Vue;
 
-    function toggleDescription(button) {
-        const description = document.getElementById('description');
-        description.classList.toggle('hidden');
-        button.textContent = description.classList.contains('hidden')
-            ? 'Show Description'
-            : 'Hide Description';
-    }
+createApp({
+    data() {
+        const productData = JSON.parse(document.getElementById('product-data').textContent);
+        return {
+            productName: productData.name,
+            productPrice: productData.price,
+            productDescription: productData.description,
 
-    function updateCartCounterDisplay() {
-        fetch("/cart/count/")
-            .then(response => response.json())
-            .then(data => {
+            csrfToken: "{{ csrf_token }}",
+            addToCartUrl: "{% url 'cart:cart_add' product.id %}",
+
+            showDescription: false,
+            isHovered: false,
+            message: '',
+            toastMessage: ''
+        };
+    },
+    computed: {
+        formattedPrice() {
+            console.log('Raw productPrice:', this.productPrice);
+            const price = parseFloat(this.productPrice);
+            console.log('Parsed price:', price);
+            if (isNaN(price)) {
+                return 'Ksh 0.00';
+            }
+            return `Ksh ${price.toLocaleString('en-KE', { minimumFractionDigits: 2 })}`;
+        }
+    },
+    methods: {
+        toggleDescription() {
+            this.showDescription = !this.showDescription;
+        },
+        async addToCart() {
+            try {
+                const formData = new FormData();
+                formData.append('csrfmiddlewaretoken', this.csrfToken);
+
+                const response = await fetch(this.addToCartUrl, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': this.csrfToken
+                    },
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Server responded with ${response.status}`);
+                }
+
+                const data = await response.json();
+                this.message = data.success ? data.message : 'Failed to add to cart';
+                if (data.success) {
+                    this.showToast('Added to cart!');
+                    this.updateCartCounterDisplay();
+                }
+            } catch (error) {
+                console.error('Error adding to cart:', error);
+                this.message = 'Something went wrong. Please try again.';
+                this.showToast('Failed to add to cart');
+            }
+        },
+        showToast(msg) {
+            this.toastMessage = msg;
+            setTimeout(() => this.toastMessage = '', 3000);
+        },
+        async updateCartCounterDisplay() {
+            try {
+                const response = await fetch("/cart/count/");
+                if (!response.ok) return;
+                const data = await response.json();
                 const counter = document.getElementById("cart-counter");
                 if (counter) {
                     counter.textContent = data.count;
                 }
-            })
-            .catch(error => console.error("Cart count update failed:", error));
-    }
-
-    // Sticky +1 badge
-    function showStickyPlusOne() {
-        const cartIcon = document.getElementById('cart-icon');
-        if (!cartIcon) return;
-
-        let plusOne = document.createElement('div');
-        plusOne.textContent = '+1';
-        plusOne.classList.add('plus-one-badge');
-
-        // Position inside cart icon
-        cartIcon.appendChild(plusOne);
-
-        // Auto-remove after 1.5 seconds
-        setTimeout(() => {
-            plusOne.classList.add('fade-out');
-            plusOne.addEventListener('transitionend', () => plusOne.remove());
-        }, 1500);
-    }
-
-    document.getElementById('add_to_cart-form').addEventListener('submit', function(event) {
-    event.preventDefault();
-
-    const form = event.target;
-    const url = form.action;
-    const formData = new FormData(form);
-
-    fetch(url, {
-        method: 'POST',
-        headers: {
-            'X-CSRFToken': formData.get('csrfmiddlewaretoken')
-        },
-        body: formData
-    })
-    .then(response => {
-        if (!response.ok) {
-            throw new Error(`Server responded with ${response.status}`);
+            } catch (err) {
+                console.error("Cart count update failed:", err);
+            }
         }
-        return response.json();
-    })
-    .then(data => {
-        const messageElement = document.getElementById('message');
-        messageElement.textContent = data.success ? data.message : 'Failed to add to cart';
-
-        if (data.success) {
-            showStickyPlusOne(); 
-            updateCartCounterDisplay();
-        }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        const messageElement = document.getElementById('message');
-        messageElement.textContent = 'Something went wrong. Please try again.';
-    });
-});
-
-
-    document.addEventListener("DOMContentLoaded", function () {
-        updateCartCounterDisplay();
-    });
+    },
+    mounted() {
+        this.updateCartCounterDisplay();
+    }
+}).mount('#product-app');
 </script>
-
-
 {% endblock %}
