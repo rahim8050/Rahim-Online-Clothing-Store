@@ -4,7 +4,8 @@ from django.db.models import Q
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.shortcuts import render, get_object_or_404
 from product_app.models import Product
-
+from django.utils.safestring import mark_safe
+import json
 
 from .models import Category,Product
 # Create your views here.
@@ -41,11 +42,37 @@ def product_list(request, category_slug=None):
 
     
 
-def product_detail(request,id,slug):
-    product = get_object_or_404(Product,id=id,slug=slug,available=True)
-    return render(request,'products/product/detail.html',{
+def product_detail(request, id, slug):
+    product = get_object_or_404(Product, id=id, slug=slug, available=True)
+
+    product_data = {
+        'name': product.name,
+        'price': float(product.price),
+        'description': product.description
+    }
+
+    return render(request, 'products/product/detail.html', {
         'product': product,
+        'product_json': mark_safe(json.dumps(product_data))  # ensures Vue receives valid JSON
     })
+    product = get_object_or_404(Product, id=id, slug=slug, available=True)
+
+    # Create JSON-safe product data
+    product_data = json.dumps({
+        'name': product.name,
+        'price': str(product.price),  # Ensure price is string
+        'description': product.description,
+    })
+
+    return render(request, 'products/product/detail.html', {
+        'product': product,
+        'product_json': mark_safe(product_data),
+    })
+# def product_detail(request,id,slug):
+#     product = get_object_or_404(Product,id=id,slug=slug,available=True)
+#     return render(request,'products/product/detail.html',{
+#         'product': product,
+#     })
 
 
 
