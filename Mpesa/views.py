@@ -31,7 +31,7 @@ def trigger_stk_push(request):
             amount = order.get_total_cost()
             account_reference = f'ORDER-{order.id}'
             transaction_desc = f'Payment for Order #{order.id}'
-            callback_url = 'https://d3bc-41-209-3-220.ngrok-free.app/mpesa/callback/'
+            callback_url = 'https://ffee0403ce37.ngrok-free.app/mpesa/callback/'
 
             #  Initiate STK push
             response = cl.stk_push(
