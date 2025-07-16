@@ -16,7 +16,7 @@ from django.db import models
 from django.db.models import CharField
 from dotenv import load_dotenv
 from datetime import timedelta
-# Load environment variables from .env file
+# Load environment   variables from .env file
 load_dotenv()
 
 
