@@ -32,7 +32,6 @@ urlpatterns = [
                   path('<slug:category_slug>/', views.product_list, name='product_list_by_category'),
                 #   path('category/<slug:slug>/', views.product_list, name='product_list_by_category'),
                   path('products/search/', views.SearchProduct, name='product_search'),
-                  path('product/<int:id>/<slug:slug>/', views.product_detail, name='product_detail'),
                   path('users/', include("users.urls")),
                   path('users/', include('django.contrib.auth.urls')), 
                   path('products/', include('product_app.urls', namespace='product_app')),  # Fixed syntax

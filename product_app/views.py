@@ -6,7 +6,7 @@ from django.shortcuts import render, get_object_or_404
 from product_app.models import Product
 from django.utils.safestring import mark_safe
 import json
-
+app_name = 'product_app'
 from .models import Category,Product
 # Create your views here.
 # def product_list(request,category_slug=None):
@@ -23,6 +23,8 @@ from .models import Category,Product
 #         'products': products,
 #         'categories': categories,
 #     })
+
+
 def product_list(request, category_slug=None):
     categories = Category.objects.all()
     category = None
@@ -33,11 +35,55 @@ def product_list(request, category_slug=None):
     else:
         products = Product.objects.all()
 
+    # Serialize products
+    product_list = []
+    for product in products:
+        product_list.append({
+            'id': product.id,
+            'name': product.name,
+            'description': product.description,
+            'price': float(product.price),
+            'image_url': product.image.url if product.image else '',
+            'category_slug': product.category.slug if product.category else '',
+            'detail_url': product.get_absolute_url()
+        })
+
+    # Serialize categories
+    category_list = []
+    for cat in categories:
+        category_list.append({
+            'id': cat.id,
+            'name': cat.name,
+            'slug': cat.slug
+        })
+
+    pagination_data = {
+        'current_page': 1,
+        'total_pages': 1
+    }
+
     return render(request, 'products/product/list.html', {
-        'categories': categories,
-        'products': products,
+        'categories': json.dumps(category_list),
+        'products': json.dumps(product_list),
         'category': category,
+        'pagination_data': json.dumps(pagination_data),
     })
+
+# def product_list(request, category_slug=None):
+#     categories = Category.objects.all()
+#     category = None
+
+#     if category_slug:
+#         category = get_object_or_404(Category, slug=category_slug)
+#         products = Product.objects.filter(category=category)
+#     else:
+#         products = Product.objects.all()
+
+#     return render(request, 'products/product/list.html', {
+#         'categories': categories,
+#         'products': products,
+#         'category': category,
+#     })
 
 
     

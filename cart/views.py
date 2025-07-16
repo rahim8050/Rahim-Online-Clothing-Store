@@ -2,7 +2,8 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from django.views.decorators.http import require_POST
 from django.http import JsonResponse
-
+from django.utils.safestring import mark_safe
+import json
 from product_app.models import Product
 from .models import Cart,CartItem
 from django.contrib.auth.decorators import login_required, permission_required
@@ -60,20 +61,41 @@ def cart_count(request):
 
 def cart_detail(request):
     try:
-        # Get cart from session
         cart_id = request.session.get('cart_id')
         cart = Cart.objects.get(id=cart_id)
 
         if not cart.items.exists():
-            return redirect('products:list')  # Return empty cart redirect
+            return redirect('products:list')
 
-        return render(request, 'cart/cart_detail.html', {'cart': cart})
+        # Serialize cart items to JSON
+        cart_items = []
+        for item in cart.items.select_related('product'):
+            cart_items.append({
+                'id': item.id,
+                'product': {
+                    'id': item.product.id,
+                    'name': item.product.name,
+                    'description': item.product.description,
+                    'price': float(item.product.price),
+                    'image_url': item.product.image.url if item.product.image else '',
+                },
+                'quantity': item.quantity,
+            })
+
+        cart_items_json = mark_safe(json.dumps(cart_items))
+
+        return render(request, 'cart/cart_detail.html', {
+            'cart': cart,
+            'cart_items_json': cart_items_json
+        })
 
     except (Cart.DoesNotExist, KeyError):
-        # Clean up invalid cart session
         if 'cart_id' in request.session:
             del request.session['cart_id']
-        return render(request, 'cart/cart_detail.html', {'cart': None})
+        return render(request, 'cart/cart_detail.html', {
+            'cart': None,
+            'cart_items_json': mark_safe('[]')
+        })
 
 
 
