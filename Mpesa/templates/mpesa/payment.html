@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Payment Successful</title>
+</head>
+<body>
+    <h2>Hi {{ user.first_name }},</h2>
+
+    <p>We have received your payment for <strong>Order #{{ order.id }}</strong>.</p>
+
+    <ul>
+        <li><strong>Amount Paid:</strong> KES {{ payment.amount }}</li>
+        <li><strong>Transaction Code:</strong> {{ payment.code }}</li>
+    </ul>
+
+    <p>Your order is being processed and we'll notify you of further updates.</p>
+
+    <p>Thank you for shopping with us!</p>
+    <p><strong>Rahim Online Clothing Store</strong></p>
+</body>
+</html>

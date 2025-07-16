@@ -3,6 +3,8 @@ from django.http import HttpResponse
 from django.views.decorators.csrf import csrf_exempt
 from django_daraja.mpesa.core import MpesaClient
 import json
+from django.core.mail import EmailMessage
+from django.template.loader import render_to_string
 from django.core.mail import send_mail
 from django.conf import settings
 from .models import Order, Payment
@@ -31,7 +33,7 @@ def trigger_stk_push(request):
             amount = order.get_total_cost()
             account_reference = f'ORDER-{order.id}'
             transaction_desc = f'Payment for Order #{order.id}'
-            callback_url = 'https://ffee0403ce37.ngrok-free.app/mpesa/callback/'
+            callback_url = ' https://8d6ebfce9e93.ngrok-free.app/mpesa/callback/'
 
             #  Initiate STK push
             response = cl.stk_push(
@@ -73,6 +75,75 @@ def trigger_stk_push(request):
         "error": "Invalid request method"
     })
 
+# @csrf_exempt
+# def stk_callback(request):
+#     try:
+#         resp = json.loads(request.body)
+#         data = resp.get('Body', {}).get('stkCallback', {})
+#         result_code = data.get('ResultCode', -1)
+
+#         if result_code == 0:  # pyPayment successful
+#             merchant_request_id = data.get('MerchantRequestID')
+#             checkout_request_id = data.get('CheckoutRequestID')
+
+#             # Extract MpesaReceiptNumber safely
+#             mpesa_receipt = next(
+#                 (item["Value"] for item in data.get("CallbackMetadata", {}).get("Item", [])
+#                  if item.get("Name") == "MpesaReceiptNumber"),
+#                 ""
+#             )
+
+#             try:
+#                 #  Find the matching payment
+#                 payment = Payment.objects.get(
+#                     merchant_request_id=merchant_request_id,
+#                     checkout_request_id=checkout_request_id
+#                 )
+#                 payment.code = mpesa_receipt
+#                 payment.status = "COMPLETED"
+#                 payment.save()
+
+#                 #  Mark order as paid
+#                 order = payment.order
+#                 order.paid = True
+#                 order.save()
+
+#                 user = order.user
+
+#                 #  Compose and send confirmation email
+#                 subject = "Your Order Payment Was Successful"
+#                 message = (
+#                     f"Hi {user.username},\n\n"
+#                     f"We've received your payment for Order #{order.id}.\n"
+#                     f"Amount paid: KES {payment.amount}\n"
+#                     f"Transaction code: {mpesa_receipt}\n\n"
+#                     f"Your order is being processed and we'll update you on its status.\n\n"
+#                     f"Thank you for shopping with us!\n\n"
+#                     f"- The Rahim Online Clothing Store Team"
+#                 )
+#                 send_mail(
+#                     subject,
+#                     message,
+#                     settings.DEFAULT_FROM_EMAIL,
+#                     [user.email],
+#                     fail_silently=False
+#                 )
+
+#             except Payment.DoesNotExist:
+#                 print(
+#                     f"[ERROR] Payment not found for MerchantRequestID={merchant_request_id}, CheckoutRequestID={checkout_request_id}"
+#                 )
+#         else:
+#             print(f"[INFO] STK Push failed with ResultCode={result_code}")
+
+#     except json.JSONDecodeError as e:
+#         print(f"[ERROR] JSON decode error in stk_callback: {e}")
+
+#     return HttpResponse("OK")
+
+
+
+
 @csrf_exempt
 def stk_callback(request):
     try:
@@ -80,11 +151,10 @@ def stk_callback(request):
         data = resp.get('Body', {}).get('stkCallback', {})
         result_code = data.get('ResultCode', -1)
 
-        if result_code == 0:  # pyPayment successful
+        if result_code == 0:
             merchant_request_id = data.get('MerchantRequestID')
             checkout_request_id = data.get('CheckoutRequestID')
 
-            # Extract MpesaReceiptNumber safely
             mpesa_receipt = next(
                 (item["Value"] for item in data.get("CallbackMetadata", {}).get("Item", [])
                  if item.get("Name") == "MpesaReceiptNumber"),
@@ -92,7 +162,6 @@ def stk_callback(request):
             )
 
             try:
-                #  Find the matching payment
                 payment = Payment.objects.get(
                     merchant_request_id=merchant_request_id,
                     checkout_request_id=checkout_request_id
@@ -101,44 +170,42 @@ def stk_callback(request):
                 payment.status = "COMPLETED"
                 payment.save()
 
-                #  Mark order as paid
                 order = payment.order
                 order.paid = True
                 order.save()
 
                 user = order.user
 
-                #  Compose and send confirmation email
                 subject = "Your Order Payment Was Successful"
-                message = (
-                    f"Hi {user.username},\n\n"
-                    f"We've received your payment for Order #{order.id}.\n"
-                    f"Amount paid: KES {payment.amount}\n"
-                    f"Transaction code: {mpesa_receipt}\n\n"
-                    f"Your order is being processed and we'll update you on its status.\n\n"
-                    f"Thank you for shopping with us!\n\n"
-                    f"- The Rahim Online Clothing Store Team"
-                )
-                send_mail(
+
+                # Render HTML email template
+                message = render_to_string('Mpesa/mpesa/payment.html', {
+                    'user': user,
+                    'order': order,
+                    'payment': payment
+                })
+
+                email = EmailMessage(
                     subject,
                     message,
                     settings.DEFAULT_FROM_EMAIL,
-                    [user.email],
-                    fail_silently=False
+                    [user.email]
                 )
+                email.content_subtype = 'html'
+                email.send()
 
             except Payment.DoesNotExist:
-                print(
-                    f"[ERROR] Payment not found for MerchantRequestID={merchant_request_id}, CheckoutRequestID={checkout_request_id}"
-                )
+                print(f"[ERROR] Payment not found for MerchantRequestID={merchant_request_id}, CheckoutRequestID={checkout_request_id}")
+
         else:
             print(f"[INFO] STK Push failed with ResultCode={result_code}")
 
     except json.JSONDecodeError as e:
         print(f"[ERROR] JSON decode error in stk_callback: {e}")
+    except Exception as e:
+        print(f"[GENERAL ERROR] {e}")
 
     return HttpResponse("OK")
-
 
 
 
