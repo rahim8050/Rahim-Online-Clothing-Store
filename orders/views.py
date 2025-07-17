@@ -154,7 +154,7 @@ def order_confirmation(request, order_id):
     return render(request, "orders/order_confirmation.html", {"order":order})
 
 
-# views.py
+
 
 
 def get_location_info(request):
