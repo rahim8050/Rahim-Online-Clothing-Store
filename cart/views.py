@@ -100,6 +100,29 @@ def cart_detail(request):
 
 
 
+def get_cart_data(request):
+    cart_id = request.session.get('cart_id')
+    try:
+        cart = Cart.objects.get(id=cart_id)
+        cart_items = []
+        for item in cart.items.select_related('product'):
+            cart_items.append({
+                'id': item.id,
+                'product': {
+                    'id': item.product.id,
+                    'name': item.product.name,
+                    'description': item.product.description,
+                    'price': float(item.product.price),
+                    'image_url': item.product.image.url if item.product.image else '',
+                    'detail_url': item.product.get_absolute_url(),  # Optional: Add get_absolute_url to Product model
+                },
+                'quantity': item.quantity,
+            })
+
+        return JsonResponse({'cart_items': cart_items, 'exists': True})
+    
+    except Cart.DoesNotExist:
+        return JsonResponse({'cart_items': [], 'exists': False})
 
 
 

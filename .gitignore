@@ -3,7 +3,6 @@
 *.pyo
 *.pyd
 *.py[cod]
-__pycache__/
 **/__pycache__/
 
 # ===== Virtual Environments =====
@@ -14,7 +13,11 @@ ENV/
 
 # ===== Environment Variables =====
 .env
-.env.*     # Optional: .env.dev, .env.prod, etc.
+.env.*
+.env.local
+.env.development
+.env.production
+.env.staging
 
 # ===== macOS/Linux System Files =====
 .DS_Store
@@ -28,11 +31,11 @@ Thumbs.db
 db.sqlite3
 db.sqlite3-journal
 media/
-staticfiles/     # Optional if you collectstatic locally
+staticfiles/
+/static/CACHE/
 *.log
 
 # Django migrations cache
-**/migrations/__pycache__/
 **/migrations/*.pyc
 **/migrations/*.pyo
 
