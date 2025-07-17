@@ -1,100 +1,121 @@
 {% extends 'base.html' %}
-{% block title %}My Shopping Cart{% endblock %}
-
+{% block title %}
+    My Shopping Cart
+{% endblock %}
 {% block content %}
-<div id="cartApp" class="container mx-auto p-4 lg:p-8 max-w-6xl">
+
+
+<div class="container mx-auto p-4 lg:p-8 max-w-6xl">
     <h2 class="text-2xl md:text-3xl font-bold mb-6">My Cart</h2>
 
-    <div v-if="cartItems.length" class="space-y-4">
-        <div v-for="item in cartItems" :key="item.product.id" class="flex flex-col md:flex-row items-start md:items-center p-4 border rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200">
-            <div v-if="item.product.image_url" class="w-full md:w-1/3 lg:w-1/4 mb-4 md:mb-0 md:mr-6">
-                <img :src="item.product.image_url" :alt="item.product.name" class="w-full h-48 object-cover rounded-lg">
-            </div>
+    {% if cart %}
+        <div class="space-y-4">
+            {% for item in cart.items.all %}
+            <div class="flex flex-col md:flex-row items-start md:items-center p-4 border rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200">
+                <!-- Product Image -->
+                {% if item.product.image %}
+                <div class="w-full md:w-1/3 lg:w-1/4 mb-4 md:mb-0 md:mr-6">
+                    <img src="{{ item.product.image.url }}"
+                         alt="{{ item.product.name }}"
+                         class="w-full h-48 object-cover rounded-lg">
+                </div>
+                {% endif %}
 
-            <div class="flex-grow w-full md:w-2/3">
-                <div class="flex justify-between items-start">
-                    <div class="flex-grow">
-                        <a :href="item.product.detail_url" class="hover:text-indigo-600 transition-colors">
-                            <h3 class="font-semibold text-lg md:text-xl mb-2">[[ item.product.name ]]</h3>
-                        </a>
-                        <p class="text-gray-600 text-sm mb-2 line-clamp-2">[[ item.product.description ]]</p>
+                <!-- Product Details -->
+                <div class="flex-grow w-full md:w-2/3">
+                    <div class="flex justify-between items-start">
+                        <div class="flex-grow">
+                            <a href="{% url 'product_app:product_detail' item.product.id item.product.slug %}"
+                               class="hover:text-indigo-600 transition-colors">
+                                <h3 class="font-semibold text-lg md:text-xl mb-2">
+                                    {{ item.product.name }}
+                                </h3>
+                            </a>
+                            <p class="text-gray-600 text-sm mb-2 line-clamp-2">
+                                {{ item.product.description }}
+                            </p>
+                        </div>
+
+                        <!-- Remove Button -->
+                        <form action="{% url 'cart:cart_remove' product_id=item.product.id  %}" method="post"
+                              class="flex-shrink-0 ml-4">
+                            {% csrf_token %}
+                            <button type="submit"
+                                    class="text-red-600 hover:text-red-800 transition-colors">
+                                remove item
+                            </button>
+                        </form>
+
                     </div>
 
-                    <button @click="removeItem(item.product.id)" class="text-red-600 hover:text-red-800 transition-colors ml-4">
-                        Remove item
-                    </button>
-                </div>
-
-                <div class="flex flex-wrap items-center justify-between mt-2">
-                    <p class="text-indigo-600 font-medium text-lg md:text-xl">
-                        Ksh [[ item.product.price ]]
-                    </p>
-                    <div class="flex items-center space-x-4">
-                        <div class="flex items-center border rounded-md">
-                            <button @click="decrementItem(item.product.id)" class="px-3 py-1 bg-red-500 text-white hover:bg-red-600 rounded-md">-</button>
-                            <span class="px-3 py-1 text-gray-800 border-x">[[ item.quantity ]]</span>
-                            <button @click="incrementItem(item.product.id)" class="px-3 py-1 bg-green-500 text-white hover:bg-green-600 rounded-md">+</button>
+                    <!-- Price and Quantity -->
+                    <div class="flex flex-wrap items-center justify-between mt-2">
+                        <p class="text-indigo-600 font-medium text-lg md:text-xl">
+                            Ksh{{ item.product.price }}
+                        </p>
+                        <div class="flex items-center space-x-4">
+                            <!-- INCREMENT/DECREMENT CONTROLS -->
+                            <div class="flex items-center border rounded-md">
+                                <!-- Decrement Button -->
+                                <form action="{% url 'cart:cart_decrement' product_id=item.product.id %}" method="post" class="flex">
+                                    {% csrf_token %}
+                                    <button type="submit" class="px-3 py-1 bg-red-500 text-white hover:bg-red-600 rounded-md transition-colors duration-200">
+    -
+</button>
+                                </form>
+                                
+                                <!-- Quantity Display -->
+                                <span class="px-3 py-1 text-gray-800 border-x">
+                                    {{ item.quantity }}
+                                </span>
+                                
+                                <!-- Increment Button -->
+                                <form action="{% url 'cart:cart_increment' product_id=item.product.id %}" method="post" class="flex">
+                                    {% csrf_token %}
+                                    <button type="submit" class="px-3 py-1 bg-green-500 text-white hover:bg-green-600 rounded-md transition-colors duration-200">
+    +
+</button>
+                                </form>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
+            {% endfor %}
         </div>
 
-        <div class="mt-8 p-4 bg-gray-50 rounded-lg text-right">
-            <p class="text-xl md:text-2xl font-semibold text-emerald-700">Total: Ksh [[ totalPrice ]]</p>
+        <!-- Total Price -->
+        <div class="mt-8 p-4 bg-gray-50 rounded-lg">
+            <p class="text-xl md:text-2xl font-semibold text-emerald-700 text-right">
+                Total: Ksh{{ cart.get_total_price }}
+            </p>
         </div>
 
-        <div class="mt-8 text-right">
-            <form action="{% url 'orders:order_create' %}" method="post">
-                {% csrf_token %}
-                <button type="submit" class="w-full md:w-auto bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-3 rounded-lg transition-colors duration-300 text-sm md:text-base">
-                    Proceed to Checkout
-                </button>
-            </form>
+    {% else %}
+        <!-- Empty Cart -->
+        <div class="text-center py-12">
+            <p class="text-red-600 text-lg md:text-xl mb-4">
+                Your cart is empty
+            </p>
+            <a href="/"
+               class="inline-block text-indigo-600 hover:text-indigo-800 transition-colors">
+                Continue Shopping →
+            </a>
         </div>
+    {% endif %}
+
+    <!-- Checkout Button -->
+    {% if cart %}
+    <div class="mt-8 text-right">
+        <form action="{% url 'orders:order_create' %}" method="post">
+            {% csrf_token %}
+            <button type="submit"
+                    onclick="showCartAddedAnimation()"
+                    class="w-full md:w-auto bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-3 rounded-lg transition-colors duration-300 text-sm md:text-base">
+                Proceed to Checkout
+            </button>
+        </form>
     </div>
-
-    <div v-else class="text-center py-12">
-        <p class="text-red-600 text-lg md:text-xl mb-4">Your cart is empty</p>
-        <a href="/" class="inline-block text-indigo-600 hover:text-indigo-800 transition-colors">Continue Shopping →</a>
-    </div>
+    {% endif %}
 </div>
-
-<script src="https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.prod.js"></script>
-<script>
-const { createApp } = Vue;
-
-createApp({
-    delimiters: ['[[', ']]'],
-    data() {
-        return {
-            cartItems: {{ cart_items_json|safe }},
-            csrfToken: '{{ csrf_token }}'
-        }
-    },
-    computed: {
-        totalPrice() {
-            return this.cartItems.reduce((total, item) => total + (item.product.price * item.quantity), 0).toFixed(2);
-        }
-    },
-    methods: {
-        async incrementItem(productId) {
-            await fetch(`/cart/increment/${productId}/`, { method: 'POST', headers: { 'X-CSRFToken': this.csrfToken } });
-            const item = this.cartItems.find(i => i.product.id === productId);
-            if (item) item.quantity++;
-        },
-        async decrementItem(productId) {
-            await fetch(`/cart/decrement/${productId}/`, { method: 'POST', headers: { 'X-CSRFToken': this.csrfToken } });
-            const item = this.cartItems.find(i => i.product.id === productId);
-            if (item) {
-                item.quantity > 1 ? item.quantity-- : this.removeItem(productId);
-            }
-        },
-        async removeItem(productId) {
-            await fetch(`/cart/remove/${productId}/`, { method: 'POST', headers: { 'X-CSRFToken': this.csrfToken } });
-            this.cartItems = this.cartItems.filter(item => item.product.id !== productId);
-        }
-    }
-}).mount('#cartApp');
-</script>
 {% endblock %}
