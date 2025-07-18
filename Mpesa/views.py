@@ -8,6 +8,7 @@ from django.template.loader import render_to_string
 from django.core.mail import send_mail
 from django.conf import settings
 from .models import Order, Payment
+import traceback
 
 # Initialize MpesaClient once
 cl = MpesaClient()
@@ -23,19 +24,19 @@ def trigger_stk_push(request):
                 return render(request, "orders/order_confirmation.html", {
                     "error": "Phone number is required"
                 })
+
             if not order_id:
                 return render(request, "orders/order_confirmation.html", {
                     "error": "Order ID is required"
                 })
 
-            #  Fetch order and amount
             order = get_object_or_404(Order, id=order_id)
             amount = order.get_total_cost()
             account_reference = f'ORDER-{order.id}'
             transaction_desc = f'Payment for Order #{order.id}'
-            callback_url = ' https://8d6ebfce9e93.ngrok-free.app/mpesa/callback/'
+            callback_url = 'https://intent-in-katydid.ngrok-free.app/mpesa/callback/'  # ✅ Removed leading space
 
-            #  Initiate STK push
+            # Initiate STK Push
             response = cl.stk_push(
                 phone_number,
                 amount,
@@ -43,10 +44,12 @@ def trigger_stk_push(request):
                 transaction_desc,
                 callback_url
             )
+
+            # Debug print response
             resp_json = response.json() if hasattr(response, 'json') else response
+            print("MPESA STK Response:", resp_json)
 
             if resp_json.get('ResponseCode') == '0':
-                #  Save Payment as PENDING
                 Payment.objects.create(
                     order=order,
                     merchant_request_id=resp_json.get('MerchantRequestID'),
@@ -54,27 +57,27 @@ def trigger_stk_push(request):
                     amount=amount,
                     status='PENDING'
                 )
-                context = {
-                    "message": "Order confirmed. Please check your phone to complete the payment, youll receive a prompt to enter your M-Pesa PIN and after confirmation that an email will be sent to you.",
+                return render(request, "orders/order_confirmation.html", {
+                    "message": "STK Push sent. Check your phone to complete the payment.",
                     "order_reference": account_reference,
                     "amount": amount,
-                    "phone_number": phone_number,
-                    "transaction_description": transaction_desc
-                }
-                return render(request, "orders/order_confirmation.html", context)
+                    "phone_number": phone_number
+                })
             else:
                 return render(request, "orders/order_confirmation.html", {
-                    "error": "Unable to initiate M-Pesa payment",
+                    "error": "Failed to initiate M-Pesa payment.",
                     "mpesa_error": resp_json
                 })
-        except Exception as e:
-            return render(request, "orders/order_confirmation.html", {
-                "error": str(e)
-            })
-    return render(request, "orders/order_confirmation.html", {
-        "error": "Invalid request method"
-    })
 
+        except Exception as e:
+            traceback.print_exc()
+            return render(request, "orders/order_confirmation.html", {
+                "error": f"An error occurred: {str(e)}"
+            })
+
+    return render(request, "orders/order_confirmation.html", {
+        "error": "Invalid request method."
+    })
 @csrf_exempt
 def stk_callback(request):
     try:

@@ -65,7 +65,8 @@ window.initialData = {
     </main>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.prod.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/vue@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/vue@2"></script>
 <script>
 new Vue({
     el: '#productApp',
@@ -92,15 +93,18 @@ new Vue({
     methods: {
         filterByCategory() {
             this.applyFilters();
+            this.updateUrl();
         },
         searchProducts() {
             this.applyFilters();
+            this.updateUrl();
         },
         sortProducts() {
             this.applyFilters();
+            this.updateUrl();
         },
         applyFilters() {
-            let filtered = this.products;
+            let filtered = [...this.products];
 
             if (this.selectedCategory) {
                 filtered = filtered.filter(p => p.category_slug === this.selectedCategory);
@@ -127,7 +131,34 @@ new Vue({
         },
         handleMouseLeave() {
             this.hoveredProductId = null;
+        },
+        updateUrl() {
+            const params = new URLSearchParams(window.location.search);
+            if (this.sortOption) params.set('sort', this.sortOption);
+            if (this.selectedCategory) params.set('category', this.selectedCategory);
+            if (this.searchQuery) params.set('search', this.searchQuery);
+            window.history.replaceState({}, '', `${window.location.pathname}?${params}`);
         }
+    },
+    mounted() {
+        const params = new URLSearchParams(window.location.search);
+        
+        const initialSort = params.get('sort');
+        if (initialSort) {
+            this.sortOption = initialSort;
+        }
+
+        const initialCategory = params.get('category');
+        if (initialCategory) {
+            this.selectedCategory = initialCategory;
+        }
+
+        const initialSearch = params.get('search');
+        if (initialSearch) {
+            this.searchQuery = initialSearch;
+        }
+
+        this.applyFilters();
     }
 });
 </script>
