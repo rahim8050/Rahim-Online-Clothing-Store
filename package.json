@@ -17,13 +17,14 @@
     "url": "https://github.com/rahim8050/CodeAlpa_Online_ClothesStore/issues"
   },
   "homepage": "https://github.com/rahim8050/CodeAlpa_Online_ClothesStore#readme",
-  "description": "",
   "devDependencies": {
     "autoprefixer": "^10.4.21",
-    "postcss": "^8.5.3",
+    "postcss": "^8.5.6",
     "tailwindcss": "^4.1.11"
   },
   "dependencies": {
-    "@tailwindcss/cli": "^4.0.12"
-  }
+    "@tailwindcss/cli": "^4.0.12",
+    "vue": "^3.5.17"
+  },
+  "description": ""
 }
