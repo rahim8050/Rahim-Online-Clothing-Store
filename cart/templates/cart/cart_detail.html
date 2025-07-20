@@ -4,92 +4,134 @@
 {% endblock %}
 {% block content %}
 
-
 <div class="container mx-auto p-4 lg:p-8 max-w-6xl">
     <h2 class="text-2xl md:text-3xl font-bold mb-6">My Cart</h2>
 
     {% if cart %}
-        <div class="space-y-4">
-            {% for item in cart.items.all %}
-            <div class="flex flex-col md:flex-row items-start md:items-center p-4 border rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200">
-                <!-- Product Image -->
-                {% if item.product.image %}
-                <div class="w-full md:w-1/3 lg:w-1/4 mb-4 md:mb-0 md:mr-6">
-                    <img src="{{ item.product.image.url }}"
-                         alt="{{ item.product.name }}"
-                         class="w-full h-48 object-cover rounded-lg">
-                </div>
-                {% endif %}
+        <div id="cart-container">
+            <!-- Select All / Deselect All -->
+            <div class="mb-4 flex items-center space-x-4">
+                <label class="flex items-center">
+                    <input type="checkbox" id="select-all" class="mr-2 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded">
+                    <span class="text-sm font-medium">Select All</span>
+                </label>
+                <span id="selected-count" class="text-sm text-gray-600">0 items selected</span>
+            </div>
 
-                <!-- Product Details -->
-                <div class="flex-grow w-full md:w-2/3">
-                    <div class="flex justify-between items-start">
-                        <div class="flex-grow">
-                            <a href="{% url 'product_app:product_detail' item.product.id item.product.slug %}"
-                               class="hover:text-indigo-600 transition-colors">
-                                <h3 class="font-semibold text-lg md:text-xl mb-2">
-                                    {{ item.product.name }}
-                                </h3>
-                            </a>
-                            <p class="text-gray-600 text-sm mb-2 line-clamp-2">
-                                {{ item.product.description }}
-                            </p>
-                        </div>
-
-                        <!-- Remove Button -->
-                        <form action="{% url 'cart:cart_remove' product_id=item.product.id  %}" method="post"
-                              class="flex-shrink-0 ml-4">
-                            {% csrf_token %}
-                            <button type="submit"
-                                    class="text-red-600 hover:text-red-800 transition-colors">
-                                remove item
-                            </button>
-                        </form>
-
+            <div class="space-y-4">
+                {% for item in cart.items.all %}
+                <div class="flex flex-col md:flex-row items-start md:items-center p-4 border rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200 product-item">
+                    <!-- Selection Checkbox -->
+                    <div class="flex items-center mr-4 mb-4 md:mb-0">
+                        <input type="checkbox" 
+                               name="selected_items" 
+                               value="{{ item.product.id }}" 
+                               class="product-checkbox h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                               data-price="{{ item.product.price }}"
+                               data-quantity="{{ item.quantity }}">
                     </div>
 
-                    <!-- Price and Quantity -->
-                    <div class="flex flex-wrap items-center justify-between mt-2">
-                        <p class="text-indigo-600 font-medium text-lg md:text-xl">
-                            Ksh{{ item.product.price }}
-                        </p>
-                        <div class="flex items-center space-x-4">
-                            <!-- INCREMENT/DECREMENT CONTROLS -->
-                            <div class="flex items-center border rounded-md">
-                                <!-- Decrement Button -->
-                                <form action="{% url 'cart:cart_decrement' product_id=item.product.id %}" method="post" class="flex">
-                                    {% csrf_token %}
-                                    <button type="submit" class="px-3 py-1 bg-red-500 text-white hover:bg-red-600 rounded-md transition-colors duration-200">
-    -
-</button>
-                                </form>
-                                
-                                <!-- Quantity Display -->
-                                <span class="px-3 py-1 text-gray-800 border-x">
-                                    {{ item.quantity }}
-                                </span>
-                                
-                                <!-- Increment Button -->
-                                <form action="{% url 'cart:cart_increment' product_id=item.product.id %}" method="post" class="flex">
-                                    {% csrf_token %}
-                                    <button type="submit" class="px-3 py-1 bg-green-500 text-white hover:bg-green-600 rounded-md transition-colors duration-200">
-    +
-</button>
-                                </form>
+                    <!-- Product Image -->
+                    {% if item.product.image %}
+                    <div class="w-full md:w-1/3 lg:w-1/4 mb-4 md:mb-0 md:mr-6">
+                        <img src="{{ item.product.image.url }}"
+                             alt="{{ item.product.name }}"
+                             class="w-full h-48 object-cover rounded-lg">
+                    </div>
+                    {% endif %}
+
+                    <!-- Product Details -->
+                    <div class="flex-grow w-full md:w-2/3">
+                        <div class="flex justify-between items-start">
+                            <div class="flex-grow">
+                                <a href="{% url 'product_app:product_detail' item.product.id item.product.slug %}"
+                                   class="hover:text-indigo-600 transition-colors">
+                                    <h3 class="font-semibold text-lg md:text-xl mb-2">
+                                        {{ item.product.name }}
+                                    </h3>
+                                </a>
+                                <p class="text-gray-600 text-sm mb-2 line-clamp-2">
+                                    {{ item.product.description }}
+                                </p>
+                            </div>
+
+                            <!-- Remove Button -->
+                            <form action="{% url 'cart:cart_remove' product_id=item.product.id  %}" method="post"
+                                  class="flex-shrink-0 ml-4">
+                                {% csrf_token %}
+                                <button type="submit"
+                                        class="text-red-600 hover:text-red-800 transition-colors">
+                                    remove item
+                                </button>
+                            </form>
+                        </div>
+
+                        <!-- Price and Quantity -->
+                        <div class="flex flex-wrap items-center justify-between mt-2">
+                            <p class="text-indigo-600 font-medium text-lg md:text-xl">
+                                Ksh{{ item.product.price }}
+                            </p>
+                            <div class="flex items-center space-x-4">
+                                <!-- INCREMENT/DECREMENT CONTROLS -->
+                                <div class="flex items-center border rounded-md">
+                                    <!-- Decrement Button -->
+                                    <form action="{% url 'cart:cart_decrement' product_id=item.product.id %}" method="post" class="flex">
+                                        {% csrf_token %}
+                                        <button type="submit" class="px-3 py-1 bg-red-500 text-white hover:bg-red-600 rounded-md transition-colors duration-200">
+                                            -
+                                        </button>
+                                    </form>
+                                    
+                                    <!-- Quantity Display -->
+                                    <span class="px-3 py-1 text-gray-800 border-x">
+                                        {{ item.quantity }}
+                                    </span>
+                                    
+                                    <!-- Increment Button -->
+                                    <form action="{% url 'cart:cart_increment' product_id=item.product.id %}" method="post" class="flex">
+                                        {% csrf_token %}
+                                        <button type="submit" class="px-3 py-1 bg-green-500 text-white hover:bg-green-600 rounded-md transition-colors duration-200">
+                                            +
+                                        </button>
+                                    </form>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
+                {% endfor %}
             </div>
-            {% endfor %}
+
+            <!-- Total Price -->
+            <div class="mt-8 p-4 bg-gray-50 rounded-lg">
+                <div class="flex justify-between items-center">
+                    <p class="text-lg font-medium text-gray-700">
+                        Cart Total: Ksh{{ cart.get_total_price }}
+                    </p>
+                    <p id="selected-total" class="text-xl md:text-2xl font-semibold text-emerald-700">
+                        Selected: Ksh0
+                    </p>
+                </div>
+            </div>
+
+            <!-- Checkout Button -->
+            <div class="mt-8 text-right">
+                <button type="button"
+                        id="checkout-btn"
+                        disabled
+                        onclick="proceedToCheckout()"
+                        class="w-full md:w-auto bg-gray-400 text-white px-8 py-3 rounded-lg text-sm md:text-base cursor-not-allowed transition-colors duration-300">
+                    Proceed to Checkout (0 items)
+                </button>
+            </div>
         </div>
 
-        <!-- Total Price -->
-        <div class="mt-8 p-4 bg-gray-50 rounded-lg">
-            <p class="text-xl md:text-2xl font-semibold text-emerald-700 text-right">
-                Total: Ksh{{ cart.get_total_price }}
-            </p>
-        </div>
+        <!-- Hidden form to pass selected items to order creation -->
+        <form id="hidden-checkout-form" action="{% url 'orders:order_create' %}" method="post" style="display: none;">
+            {% csrf_token %}
+            <input type="hidden" name="from_cart" value="true">
+            <div id="selected-items-container"></div>
+        </form>
 
     {% else %}
         <!-- Empty Cart -->
@@ -103,19 +145,104 @@
             </a>
         </div>
     {% endif %}
-
-    <!-- Checkout Button -->
-    {% if cart %}
-    <div class="mt-8 text-right">
-        <form action="{% url 'orders:order_create' %}" method="post">
-            {% csrf_token %}
-            <button type="submit"
-                    onclick="showCartAddedAnimation()"
-                    class="w-full md:w-auto bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-3 rounded-lg transition-colors duration-300 text-sm md:text-base">
-                Proceed to Checkout
-            </button>
-        </form>
-    </div>
-    {% endif %}
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const selectAllCheckbox = document.getElementById('select-all');
+    const productCheckboxes = document.querySelectorAll('.product-checkbox');
+    const selectedCountSpan = document.getElementById('selected-count');
+    const selectedTotalSpan = document.getElementById('selected-total');
+    const checkoutBtn = document.getElementById('checkout-btn');
+
+    function updateUI() {
+        const checkedBoxes = document.querySelectorAll('.product-checkbox:checked');
+        const count = checkedBoxes.length;
+        let total = 0;
+
+        checkedBoxes.forEach(checkbox => {
+            const price = parseFloat(checkbox.dataset.price);
+            const quantity = parseInt(checkbox.dataset.quantity);
+            total += price * quantity;
+        });
+
+        // Update selected count
+        selectedCountSpan.textContent = `${count} item${count !== 1 ? 's' : ''} selected`;
+        
+        // Update selected total
+        selectedTotalSpan.textContent = `Selected: Ksh${total.toFixed(2)}`;
+
+        // Update checkout button
+        if (count > 0) {
+            checkoutBtn.disabled = false;
+            checkoutBtn.classList.remove('bg-gray-400', 'cursor-not-allowed');
+            checkoutBtn.classList.add('bg-indigo-600', 'hover:bg-indigo-700');
+            checkoutBtn.textContent = `Proceed to Checkout (${count} item${count !== 1 ? 's' : ''})`;
+        } else {
+            checkoutBtn.disabled = true;
+            checkoutBtn.classList.add('bg-gray-400', 'cursor-not-allowed');
+            checkoutBtn.classList.remove('bg-indigo-600', 'hover:bg-indigo-700');
+            checkoutBtn.textContent = 'Proceed to Checkout (0 items)';
+        }
+
+        // Update select all checkbox state
+        if (count === 0) {
+            selectAllCheckbox.indeterminate = false;
+            selectAllCheckbox.checked = false;
+        } else if (count === productCheckboxes.length) {
+            selectAllCheckbox.indeterminate = false;
+            selectAllCheckbox.checked = true;
+        } else {
+            selectAllCheckbox.indeterminate = true;
+        }
+    }
+
+    // Select all functionality
+    selectAllCheckbox.addEventListener('change', function() {
+        productCheckboxes.forEach(checkbox => {
+            checkbox.checked = this.checked;
+        });
+        updateUI();
+    });
+
+    // Individual checkbox functionality
+    productCheckboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', updateUI);
+    });
+
+    // Proceed to checkout function
+    window.proceedToCheckout = function() {
+        const checkedBoxes = document.querySelectorAll('.product-checkbox:checked');
+        if (checkedBoxes.length === 0) {
+            alert('Please select at least one item to checkout.');
+            return;
+        }
+
+        // Get selected item IDs
+        const selectedIds = Array.from(checkedBoxes).map(cb => cb.value);
+        
+        // Store selected items in session storage for the order form
+        sessionStorage.setItem('selectedItems', JSON.stringify(selectedIds));
+        
+        // Add selected items to hidden form
+        const container = document.getElementById('selected-items-container');
+        container.innerHTML = '';
+        
+        selectedIds.forEach(id => {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'selected_items';
+            input.value = id;
+            container.appendChild(input);
+        });
+        
+        // Submit the hidden form to pass selected items to order creation
+        document.getElementById('hidden-checkout-form').submit();
+    };
+
+    // Initial UI update
+    updateUI();
+});
+</script>
+
 {% endblock %}
