@@ -12,8 +12,6 @@
             Check Out
         </h2>
 
-      
-
         <!-- Form -->
         <form action="{% url 'orders:order_create' %}" method="post" id="checkout-form" class="flex flex-col md:flex-row">
             {% csrf_token %}
@@ -59,7 +57,6 @@
                     Payment Method
                 </h3>
 
-                <!-- Payment Options -->
                 <div class="space-y-2 mb-4">
                     {% render_field form.payment_method class="sr-only" %}
                     {% for choice in form.payment_method %}
@@ -77,7 +74,13 @@
                 <!-- Order Total -->
                 <div class="mt-6 border-t border-gray-200 pt-4">
                     <h4 class="text-sm font-medium text-gray-700 mb-2">Order Total</h4>
-                    <div class="text-xl font-semibold text-indigo-600">KES {{ cart.get_total_price|floatformat:2 }}</div>
+                    {% if selected_total %}
+                        <div class="text-xl font-semibold text-indigo-600">KES {{ selected_total|floatformat:2 }}</div>
+                    {% elif cart %}
+                        <div class="text-xl font-semibold text-indigo-600">KES {{ cart.get_total_price|floatformat:2 }}</div>
+                    {% else %}
+                        <div class="text-xl font-semibold text-gray-500">Cart is empty</div>
+                    {% endif %}
                 </div>
 
                 <button type="submit" class="w-full mt-6 bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-6 py-3 rounded-lg transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
