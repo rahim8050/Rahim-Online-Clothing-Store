@@ -59,6 +59,7 @@ def cart_count(request):
     except Cart.DoesNotExist:
         return JsonResponse({'count': 0})
 
+
 def cart_detail(request):
     try:
         cart_id = request.session.get('cart_id')
@@ -67,26 +68,17 @@ def cart_detail(request):
         if not cart.items.exists():
             return redirect('products:list')
 
-        # Serialize cart items to JSON
-        cart_items = []
-        for item in cart.items.select_related('product'):
-            cart_items.append({
-                'id': item.id,
-                'product': {
-                    'id': item.product.id,
-                    'name': item.product.name,
-                    'description': item.product.description,
-                    'price': float(item.product.price),
-                    'image_url': item.product.image.url if item.product.image else '',
-                },
-                'quantity': item.quantity,
-            })
-
-        cart_items_json = mark_safe(json.dumps(cart_items))
+        cart_items = cart.items.select_related('product')
+        
+        total_price = sum(
+            item.product.price * item.quantity
+            for item in cart_items
+        )
 
         return render(request, 'cart/cart_detail.html', {
             'cart': cart,
-            'cart_items_json': cart_items_json
+            'cart_items': cart_items,
+            'total_price': total_price
         })
 
     except (Cart.DoesNotExist, KeyError):
@@ -94,7 +86,8 @@ def cart_detail(request):
             del request.session['cart_id']
         return render(request, 'cart/cart_detail.html', {
             'cart': None,
-            'cart_items_json': mark_safe('[]')
+            'cart_items': [],
+            'total_price': 0
         })
 
 
@@ -126,31 +119,7 @@ def get_cart_data(request):
 
 
 
-# def cart_remove(request, product_id):
-#     cart_id = request.session.get('cart_id')
 
-#     if not cart_id:  # No cart exists
-#         return redirect("cart:cart_detail")
-
-#     try:
-#         cart = Cart.objects.get(id=cart_id)
-#         # Correct lookup: Get CartItem by PRODUCT ID, not CartItem ID
-#         item = CartItem.objects.get(cart=cart, product__id=product_id)
-#         item.delete()
-
-#         # Delete cart if empty and clean session
-#         if not cart.items.exists():
-#             cart.delete()
-#             del request.session['cart_id']
-#             request.session.modified = True
-
-#     except (Cart.DoesNotExist, CartItem.DoesNotExist):
-#         # Handle missing cart or item gracefully
-#         if 'cart_id' in request.session:
-#             del request.session['cart_id']
-#         return redirect("cart:cart_detail")
-
-#     return redirect("cart:cart_detail")
 def cart_remove(request, product_id):
     cart_id = request.session.get('cart_id')
 

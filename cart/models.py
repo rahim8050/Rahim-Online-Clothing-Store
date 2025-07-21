@@ -11,8 +11,12 @@ class Cart(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     def get_total_price(self):
-        # sum the price for each CartItem
+        # Sum the price for each CartItem
         return sum(item.get_total_price() for item in self.items.all())
+    
+    def get_selected_total_price(self):
+        # Sum the price for only selected CartItems
+        return sum(item.get_total_price() for item in self.items.filter(is_selected=True))
 
     def total_items(self):
         return self.items.aggregate(
@@ -36,9 +40,11 @@ class CartItem(models.Model):
         on_delete=models.CASCADE
     )
     quantity = models.PositiveIntegerField(default=1)
+    is_selected = models.BooleanField(default=False)
 
-    def get_total_price(self):
-        return int(self.product.price * self.quantity)
+    def get_selected_total(self, selected_ids):
+     return sum(item.product.price * item.quantity for item in self.items.filter(product_id__in=selected_ids))
+
 
     def __str__(self):
         return f"{self.quantity} x {self.product.name}"
