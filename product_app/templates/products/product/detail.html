@@ -52,7 +52,7 @@
     </div>
 </div>
 
-<!-- Inject product JSON -->
+<!-- Product JSON injection -->
 <script id="product-data" type="application/json">
     {{ product_json|safe }}
 </script>
@@ -63,14 +63,29 @@
 <script>
 const { createApp } = Vue;
 
+function capitalizeWords(text) {
+    return text ? text.toLowerCase().split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') : '';
+}
+
+function capitalizeSlug(slug) {
+    return slug ? slug.replace(/[-_]/g, ' ').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') : '';
+}
+
 createApp({
     delimiters: ['[[', ']]'],
     data() {
-        const productData = JSON.parse(document.getElementById('product-data').textContent);
+        let productData = {};
+        try {
+            productData = JSON.parse(document.getElementById('product-data').textContent);
+        } catch (e) {
+            console.error('Invalid product JSON:', e);
+        }
+
         return {
-            productName: productData.name,
-            productPrice: productData.price,
-            productDescription: productData.description,
+            productName: capitalizeWords(productData.name || 'Unknown Product'),
+            productSlug: capitalizeSlug(productData.slug || ''),
+            productPrice: productData.price || 0,
+            productDescription: productData.description || '',
 
             csrfToken: "{{ csrf_token }}",
             addToCartUrl: "{% url 'cart:cart_add' product.id %}",
@@ -89,8 +104,8 @@ createApp({
         },
         shortDescription() {
             if (!this.productDescription) return '';
-            const firstSentence = this.productDescription.split('. ')[0] + '.';
-            return firstSentence;
+            const parts = this.productDescription.split('. ');
+            return parts.length ? parts[0] + '.' : this.productDescription;
         },
         hasMoreDescription() {
             return this.productDescription && this.productDescription.split('. ').length > 1;
@@ -108,8 +123,6 @@ createApp({
                     body: formData
                 });
 
-                if (!response.ok) throw new Error(`Server responded with ${response.status}`);
-
                 const data = await response.json();
                 this.message = data.success ? data.message : 'Failed to add to cart';
                 if (data.success) {
@@ -117,8 +130,8 @@ createApp({
                     this.updateCartCounterDisplay();
                 }
             } catch (error) {
-                console.error('Error adding to cart:', error);
-                this.message = 'Something went wrong. Please try again.';
+                console.error('Add to cart error:', error);
+                this.message = 'Something went wrong.';
                 this.showToast('Failed to add to cart');
             }
         },
@@ -129,7 +142,6 @@ createApp({
         async updateCartCounterDisplay() {
             try {
                 const response = await fetch("/cart/count/");
-                if (!response.ok) return;
                 const data = await response.json();
                 const counter = document.getElementById("cart-counter");
                 if (counter) counter.textContent = data.count;
