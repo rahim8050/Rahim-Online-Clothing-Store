@@ -29,7 +29,11 @@ User = get_user_model()
 def home(request):
     pass
 
-class Login(LoginView):
+from django.contrib.auth.views import LoginView
+from .forms import CustomLoginForm  # make sure this is the correct one
+
+class CustomLoginView(LoginView):
+    form_class = CustomLoginForm
     template_name = "users/accounts/login.html"
 
 class Logout(LogoutView):

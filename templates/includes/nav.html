@@ -1,169 +1,211 @@
 {% load static %}
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<link
+  rel="stylesheet"
+  href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
 <nav class="bg-white shadow-lg">
-    <div class="container mx-auto px-4">
-        <div class="flex justify-between items-center py-3 md:py-4">
-            <a href='/' class="flex items-center text-xl md:text-2xl font-bold text-indigo-600 hover:text-indigo-800 transition-colors duration-300">
-                <img src="{% static 'images/logo.jpg' %}" alt="Rahim Store Logo" class="h-10 md:h-10 ml-2">
-                Rahim Clothes Store
-            </a>
+  <div class="container mx-auto px-4">
+    <div class="flex justify-between items-center py-3 md:py-4">
+      <a
+        href="/"
+        class="flex items-center text-xl md:text-2xl font-bold text-indigo-600 hover:text-indigo-800 transition-colors duration-300">
+        <img
+          src="{% static 'images/logo.jpg' %}"
+          alt="Rahim Store Logo"
+          class="h-10 md:h-10 ml-2" />
+        Rahim Clothes Store
+      </a>
 
-            <div class="hidden md:flex items-center space-x-6">
+      <div class="hidden md:flex items-center space-x-6">
+        {% comment %}
+        <form
+          method="get"
+          action="{% url 'product_search' %}"
+          class="flex items-center">
+          <input
+            type="text"
+            name="search"
+            placeholder="Search products..."
+            value="{{ request.GET.search }}"
+            class="border p-2 w-48 lg:w-64 rounded-l focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+          <button
+            type="submit"
+            class="bg-blue-500 text-white px-4 py-2 rounded-r hover:bg-blue-600 transition-colors">
+            Search
+          </button>
+        </form>
+        {% endcomment %} {% if user.is_authenticated %}
+        <a
+          href="{% url 'users:profile' %}"
+          class="text-indigo-600 hover:text-indigo-800 transition-colors duration-300">
+          <i class="fas fa-user-circle text-xl mr-1"></i> Profile
+        </a>
+        {% endif %}
 
-                {% comment %} <form method="get" action="{% url 'product_search' %}" class="flex items-center">
-                    <input type="text" name="search" placeholder="Search products..."
-                           value="{{ request.GET.search }}"
-                           class="border p-2 w-48 lg:w-64 rounded-l focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                    <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded-r hover:bg-blue-600 transition-colors">
-                        Search
-                    </button>
-                </form>  {% endcomment %}
+        <div class="flex items-center space-x-6">
+          {% if not user.is_authenticated %}
+          <a
+            href="{% url 'users:register'%}"
+            class="text-indigo-600 hover:text-indigo-800 transition-colors duration-300">
+            <i class="fas fa-user-plus mr-1"></i> Create account
+          </a>
+          {% endif %}
 
-                {% if user.is_authenticated %}
-                <a href="{% url 'users:profile' %}" class="text-indigo-600 hover:text-indigo-800 transition-colors duration-300">
-                    <i class="fas fa-user-circle text-xl mr-1"></i> Profile
-                </a>
-                {% endif %}
-
-                <div class="flex items-center space-x-6">
-                    {% if not user.is_authenticated %}
-                    <a href="{% url 'users:register'%}" class="text-indigo-600 hover:text-indigo-800 transition-colors duration-300">
-                        <i class="fas fa-user-plus mr-1"></i> Create account
-                    </a>
-                    {% endif %}
-
-                    <div class="flex items-center">
-                        {% if user.is_authenticated %}
-                        <form method="post" action="{% url 'users:logout' %}">
-                            {% csrf_token %}
-                            <button type="submit" class="text-indigo-600 hover:text-indigo-800 transition-colors duration-300">
-                                <i class="fas fa-sign-out-alt mr-1"></i> Logout
-                            </button>
-                        </form>
-                        {% else %}
-                        <a href="{% url 'users:login' %}" class="text-indigo-600 hover:text-indigo-800 transition-colors duration-300">
-                            <i class="fas fa-sign-in-alt mr-1"></i> Login
-                        </a>
-                        {% endif %}
-                    </div>
-                </div>
-            </div>
-
-            <div class="flex items-center space-x-4">
-                <div  id="cart-icon" class="relative">
-                    <a href="{% url 'cart:cart_detail'%}" class="text-indigo-600 hover:text-indigo-800">
-                        <i class="fas fa-shopping-cart text-2xl"></i>
-                        <span id="cart-counter"
-                              class="absolute -top-3 -right-3 text-white bg-red-500 rounded-full text-xs px-2 py-1 font-semibold shadow-md "> 
-
-                              {{ cart_total_items|default:0 }}
-                        </span>
-                    </a>
-                </div>
-
-                <button id="mobile-menu-button" class="md:hidden text-indigo-600 hover:text-indigo-800">
-                    <i class="fas fa-bars text-xl"></i>
-                </button>
-            </div>
-        </div>
-        <!-- Mobile Menu -->
-
-        <div id="mobile-menu" class="hidden md:hidden pb-4 space-y-4">
-            <form method="get" action="{% url 'product_search' %}" class="flex flex-col space-y-2 px-2">
-                <input type="text" name="search" placeholder="Search products..."
-                       value="{{ request.GET.search }}"
-                       class="border p-2 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition-colors">
-                    Search
-                </button>
+          <div class="flex items-center">
+            {% if user.is_authenticated %}
+            <form method="post" action="{% url 'users:logout' %}">
+              {% csrf_token %}
+              <button
+                type="submit"
+                class="text-indigo-600 hover:text-indigo-800 transition-colors duration-300">
+                <i class="fas fa-sign-out-alt mr-1"></i> Logout
+              </button>
             </form>
-                <!-- Mobile Navigation Links -->
-            <div class="flex flex-col space-y-2 border-t pt-4">
-                {% if user.is_authenticated %}
-                <a href="{% url 'users:profile' %}" class="px-4 py-2 text-indigo-600 hover:text-indigo-800">
-                    <i class="fas fa-user-circle mr-2"></i> Profile
-                </a>
-                <form method="post" action="{% url 'users:logout' %}" class="px-4 py-2">
-                    {% csrf_token %}
-                    <button type="submit" class="text-indigo-600 hover:text-indigo-800 w-full text-left">
-                        <i class="fas fa-sign-out-alt mr-2"></i> Logout
-                    </button>
-                </form>
-                {% else %}
-                <a href="{% url 'users:register'%}" class="px-4 py-2 text-indigo-600 hover:text-indigo-800">
-                    <i class="fas fa-user-plus mr-2"></i> Create account
-                </a>
-                <a href="{% url 'users:login'%}" class="px-4 py-2 text-indigo-600 hover:text-indigo-800">
-                    <i class="fas fa-sign-in-alt mr-2"></i> Login
-                </a>
-                {% endif %}
-            </div>
+            {% else %}
+            <a
+              href="{% url 'users:login' %}"
+              class="text-indigo-600 hover:text-indigo-800 transition-colors duration-300">
+              <i class="fas fa-sign-in-alt mr-1"></i> Login
+            </a>
+            {% endif %}
+          </div>
         </div>
+      </div>
+
+      <div class="flex items-center space-x-4">
+        <div id="cart-icon" class="relative">
+          <a
+            href="{% url 'cart:cart_detail'%}"
+            class="text-indigo-600 hover:text-indigo-800">
+            <i class="fas fa-shopping-cart text-2xl"></i>
+            <span
+              id="cart-counter"
+              class="absolute -top-3 -right-3 min-w-[1.5rem] h-[1.5rem] flex items-center justify-center text-white bg-red-500 rounded-full text-xs px-2 font-semibold shadow-md leading-none">
+              {{ cart_total_items|default:0 }}
+            </span>
+          </a>
+        </div>
+
+        <button
+          id="mobile-menu-button"
+          class="md:hidden text-indigo-600 hover:text-indigo-800">
+          <i class="fas fa-bars text-xl"></i>
+        </button>
+      </div>
     </div>
+    <!-- Mobile Menu -->
+
+    <div id="mobile-menu" class="hidden md:hidden pb-4 space-y-4">
+      <form
+        method="get"
+        action="{% url 'product_search' %}"
+        class="flex flex-col space-y-2 px-2">
+        <input
+          type="text"
+          name="search"
+          placeholder="Search products..."
+          value="{{ request.GET.search }}"
+          class="border p-2 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+        <button
+          type="submit"
+          class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition-colors">
+          Search
+        </button>
+      </form>
+      <!-- Mobile Navigation Links -->
+      <div class="flex flex-col space-y-2 border-t pt-4">
+        {% if user.is_authenticated %}
+        <a
+          href="{% url 'users:profile' %}"
+          class="px-4 py-2 text-indigo-600 hover:text-indigo-800">
+          <i class="fas fa-user-circle mr-2"></i> Profile
+        </a>
+        <form method="post" action="{% url 'users:logout' %}" class="px-4 py-2">
+          {% csrf_token %}
+          <button
+            type="submit"
+            class="text-indigo-600 hover:text-indigo-800 w-full text-left">
+            <i class="fas fa-sign-out-alt mr-2"></i> Logout
+          </button>
+        </form>
+        {% else %}
+        <a
+          href="{% url 'users:register'%}"
+          class="px-4 py-2 text-indigo-600 hover:text-indigo-800">
+          <i class="fas fa-user-plus mr-2"></i> Create account
+        </a>
+        <a
+          href="{% url 'users:login'%}"
+          class="px-4 py-2 text-indigo-600 hover:text-indigo-800">
+          <i class="fas fa-sign-in-alt mr-2"></i> Login
+        </a>
+        {% endif %}
+      </div>
+    </div>
+  </div>
 </nav>
 
-
-
-
-
-
 <script>
-    const mobileMenuButton = document.getElementById('mobile-menu-button');
-    const mobileMenu = document.getElementById('mobile-menu');
-    mobileMenuButton.addEventListener('click', () => {
-        mobileMenu.classList.toggle('hidden');
-    });
+  const mobileMenuButton = document.getElementById("mobile-menu-button");
+  const mobileMenu = document.getElementById("mobile-menu");
+  mobileMenuButton.addEventListener("click", () => {
+    mobileMenu.classList.toggle("hidden");
+  });
 
-    function showCartAddedAnimation() {
-        const counter = document.getElementById('cart-counter');
+  function showCartAddedAnimation() {
+    const counter = document.getElementById("cart-counter");
+    counter.classList.remove("opacity-0", "scale-50");
+    void counter.offsetWidth;
+    counter.classList.add("opacity-100", "scale-100");
+    setTimeout(() => {
+      counter.classList.remove("opacity-100", "scale-100");
+      counter.classList.add("opacity-0", "scale-50");
+    }, 2000);
+  }
+
+function updateCartCounter(count) {
+    const counter = document.getElementById('cart-counter');
+    const current = parseInt(counter.textContent.trim()) || 0;
+
+    const displayCount = count > 99 ? '99+' : count;
+    counter.textContent = displayCount;
+
+    if (count > current) {
+        showCartAddedAnimation();
+    }
+
+    if (count > 0) {
         counter.classList.remove('opacity-0', 'scale-50');
-        void counter.offsetWidth;
-        counter.classList.add('opacity-100', 'scale-100');
-        setTimeout(() => {
-            counter.classList.remove('opacity-100', 'scale-100');
-            counter.classList.add('opacity-0', 'scale-50');
-        }, 2000);
     }
+}
 
-    function updateCartCounter(count) {
-        const counter = document.getElementById('cart-counter');
-        const current = parseInt(counter.textContent) || 0;
-        counter.textContent = count;
-        if (count > current) {
-            showCartAddedAnimation();
-        }
-        if (count > 0) {
-            counter.classList.remove('opacity-0', 'scale-50');
-        }
-    }
 
-    document.addEventListener('DOMContentLoaded', function () {
-        fetch('/cart/count/')
-            .then(response => response.json())
-            .then(data => {
-                updateCartCounter(data.count);
-            });
+  document.addEventListener("DOMContentLoaded", function () {
+    fetch("/cart/count/")
+      .then((response) => response.json())
+      .then((data) => {
+        updateCartCounter(data.count);
+      });
+  });
+
+  document.querySelectorAll(".add-to-cart").forEach((button) => {
+    button.addEventListener("click", function (e) {
+      e.preventDefault();
+      const productId = this.dataset.productId;
+
+      fetch(`/cart/add/${productId}/`, {
+        method: "POST",
+        headers: {
+          "X-CSRFToken": "{{ csrf_token }}",
+          "Content-Type": "application/json",
+        },
+      })
+        .then((response) => response.json())
+        .then((data) => {
+          if (data.success) {
+            updateCartCounter(data.cart_total_items);
+          }
+        })
+        .catch((error) => console.error("Error:", error));
     });
-
-    document.querySelectorAll('.add-to-cart').forEach(button => {
-        button.addEventListener('click', function (e) {
-            e.preventDefault();
-            const productId = this.dataset.productId;
-
-            fetch(`/cart/add/${productId}/`, {
-                method: 'POST',
-                headers: {
-                    'X-CSRFToken': '{{ csrf_token }}',
-                    'Content-Type': 'application/json'
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    updateCartCounter(data.cart_total_items);
-                }
-            })
-            .catch(error => console.error('Error:', error));
-        });
-    });
+  });
 </script>

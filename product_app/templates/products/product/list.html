@@ -68,6 +68,14 @@ window.initialData = {
 <script src="https://cdn.jsdelivr.net/npm/vue@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/vue@2"></script>
 <script>
+function capitalizeWords(text) {
+    return text ? text.toLowerCase().split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') : '';
+}
+
+function capitalizeSlug(slug) {
+    return slug ? slug.replace(/[-_]/g, ' ').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') : '';
+}
+
 new Vue({
     el: '#productApp',
     delimiters: ['[[', ']]'],
@@ -141,8 +149,21 @@ new Vue({
         }
     },
     mounted() {
+        // Capitalize all product and category data
+        this.products = this.products.map(p => ({
+            ...p,
+            name: capitalizeWords(p.name),
+            slug: capitalizeSlug(p.slug)
+        }));
+
+        this.categories = this.categories.map(c => ({
+            ...c,
+            name: capitalizeWords(c.name),
+            slug: capitalizeSlug(c.slug)
+        }));
+
         const params = new URLSearchParams(window.location.search);
-        
+
         const initialSort = params.get('sort');
         if (initialSort) {
             this.sortOption = initialSort;
@@ -162,5 +183,6 @@ new Vue({
     }
 });
 </script>
+
 
 {% endblock %}

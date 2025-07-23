@@ -9,6 +9,7 @@ from .models import Cart,CartItem
 from django.contrib.auth.decorators import login_required, permission_required
 from django.contrib import messages
 import traceback
+from orders.forms import OrderForm
 
 
 
@@ -69,17 +70,27 @@ def cart_detail(request):
             return redirect('products:list')
 
         cart_items = cart.items.select_related('product')
-        
-        total_price = sum(
-            item.product.price * item.quantity
-            for item in cart_items
-        )
+        total_price = sum(item.product.price * item.quantity for item in cart_items)
+
+        # ← NEW: instantiate an empty OrderForm
+        order_form = OrderForm()
 
         return render(request, 'cart/cart_detail.html', {
             'cart': cart,
             'cart_items': cart_items,
-            'total_price': total_price
+            'total_price': total_price,
+            'order_form': order_form,      # ← pass it in
         })
+
+    except (Cart.DoesNotExist, KeyError):
+        request.session.pop('cart_id', None)
+        return render(request, 'cart/cart_detail.html', {
+            'cart': None,
+            'cart_items': [],
+            'total_price': 0,
+            'order_form': OrderForm(),     # ← still pass an empty form
+        })
+
 
     except (Cart.DoesNotExist, KeyError):
         if 'cart_id' in request.session:

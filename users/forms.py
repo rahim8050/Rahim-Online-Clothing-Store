@@ -1,57 +1,57 @@
-from django.contrib.auth import login
-from django.contrib.auth.forms import UserCreationForm
-from django.views.generic import FormView
-from django.contrib.auth.forms import AuthenticationForm
 from django import forms
-from .models import  CustomUser
-from django import forms
-from django.contrib.auth.forms import UserCreationForm
-from .models import CustomUser
 from django.contrib.auth import get_user_model
-from django.core.exceptions import ValidationError
-
-from django.contrib.auth.forms import PasswordChangeForm
-from django.contrib.auth.password_validation import validate_password
+from django.contrib.auth.forms import (
+    UserCreationForm, AuthenticationForm, PasswordChangeForm
+)
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
-from django.contrib.auth.forms import PasswordChangeForm
 
-CustomUser = get_user_model()
+User = get_user_model()  # Use consistently everywhere
 
 
+# =======================
+# Register Form
+# =======================
 class RegisterUserForm(UserCreationForm):
     class Meta:
-        model = CustomUser
-        fields = ('username', 'email', 'password1', 'password2')
+        model = User
+        fields = ['username', 'email', 'password1', 'password2']
         widgets = {
-            'username': forms.TextInput(attrs={
-                'class': 'w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent'
-            }),
-            'email': forms.EmailInput(attrs={
-                'class': 'w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent'
-            }),
+            'username': forms.TextInput(attrs={'class': 'your-class'}),
+            'email': forms.EmailInput(attrs={'class': 'your-class'}),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields['password1'].widget = forms.PasswordInput(attrs={
-            'class': 'w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent'
+        for field_name in ['password1', 'password2']:
+            self.fields[field_name].widget.attrs.update({
+                'class': 'your-class'
+            })
+
+
+# =======================
+# Login Form
+# =======================
+class CustomLoginForm(AuthenticationForm):
+    username = forms.CharField(
+        label="Username or Email",
+        widget=forms.TextInput(attrs={
+            'autofocus': True,
+            'class': 'w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500'
         })
-        self.fields['password2'].widget = forms.PasswordInput(attrs={
-            'class': 'w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent'
-        })
-class EmailOrUsernameAuthenticationForm(AuthenticationForm):
-    username = forms.CharField(label='Username or Email')
-    
-    
+    )
+    password = forms.CharField(
+        label="Password",
+        strip=False,
+        widget=forms.PasswordInput(attrs={
+            'class': 'w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500'
+        }),
+    )
 
 
-User = get_user_model()
-
-
-
-
-
+# =======================
+# Resend Activation
+# =======================
 class ResendActivationEmailForm(forms.Form):
     email = forms.EmailField(
         label="Email",
@@ -60,16 +60,14 @@ class ResendActivationEmailForm(forms.Form):
             "class": "w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"
         })
     )
-    
-    
-    
 
 
-
-
+# =======================
+# User Profile Update
+# =======================
 class UserUpdateForm(forms.ModelForm):
     class Meta:
-        model = CustomUser
+        model = User
         fields = ['first_name', 'last_name', 'email', 'phone_number', 'avatar']
         widgets = {
             'avatar': forms.FileInput(attrs={
@@ -81,11 +79,15 @@ class UserUpdateForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Add common classes to all fields
         for field in self.fields:
             self.fields[field].widget.attrs.update({
                 'class': 'w-full px-4 py-2 border rounded-lg focus:ring-blue-500 focus:border-blue-500'
             })
+
+
+# =======================
+# Password Reset Form
+# =======================
 class CustomPasswordResetForm(forms.Form):
     email = forms.EmailField(
         label="Email address",
@@ -94,53 +96,52 @@ class CustomPasswordResetForm(forms.Form):
             'placeholder': 'you@example.com'
         })
     )
+
+
+# =======================
+# Password Change Form
+# =======================
 class CustomPasswordChangeForm(PasswordChangeForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Style all password fields consistently
         for field in self.fields:
             self.fields[field].widget.attrs.update({
                 'class': 'w-full px-4 py-2 border rounded-lg focus:ring-blue-500 focus:border-blue-500',
                 'autocomplete': 'new-password'
             })
 
-    def clean_email(self):
-        email = self.cleaned_data.get('email')
-        try:
-            user = User.objects.get(email=email)
-            if not user.is_active:
-                # optionally resend activation email here
-                raise ValidationError("You already have an account that needs activation. Check your email.")
-        except User.DoesNotExist:
-            pass
-        return email
+
+# =======================
+# Mixins
+# =======================
 class RemoveHelpTextMixin:
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         for field in self.fields.values():
             field.help_text = ''
+
+
 class OptionalFieldsMixin:
-    """
-    Mixin to make all fields optional automatically.
-    """
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         for field in self.fields.values():
             field.required = False
+
+
+# =======================
+# Profile Form
+# =======================
 class ProfileUpdateForm(forms.ModelForm):
     class Meta:
-        model = CustomUser
+        model = User
         fields = ['username', 'email']
         widgets = {
             'username': forms.TextInput(attrs={
-                'class': 'w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent',
+                'class': 'w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500',
                 'placeholder': 'Enter your username'
             }),
             'email': forms.EmailInput(attrs={
-                'class': 'w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent',
+                'class': 'w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500',
                 'placeholder': 'Enter your email'
             }),
         }
-
-
-
