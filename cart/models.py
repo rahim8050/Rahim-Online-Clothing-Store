@@ -44,6 +44,9 @@ class CartItem(models.Model):
 
     def get_selected_total(self, selected_ids):
      return sum(item.product.price * item.quantity for item in self.items.filter(product_id__in=selected_ids))
+    def get_total_price(self):
+        # multiply your product’s price by the quantity
+        return self.product.price * self.quantity
 
 
     def __str__(self):
