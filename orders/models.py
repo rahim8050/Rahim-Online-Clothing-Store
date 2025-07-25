@@ -21,6 +21,8 @@ class Order(models.Model):
     payment_method = models.CharField(max_length=20, default="MPESA")
     stock_updated = models.BooleanField(default=False)
 
+
+
     def get_total_cost(self):
         return int(sum(item.get_cost() for item in self.items.all()))
 
