@@ -19,7 +19,7 @@ class Order(models.Model):
     mpesa_phone_number = models.CharField(max_length=15, blank=True, null=True)
     mpesa_transaction_code = models.CharField(max_length=50, blank=True, null=True)
     payment_method = models.CharField(max_length=20, default="MPESA")
-
+    stock_updated = models.BooleanField(default=False)
     def get_total_cost(self):
         return int(sum(item.get_cost() for item in self.items.all()))
 
