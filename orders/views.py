@@ -3,14 +3,27 @@ from  cart.models import Cart
 from orders.forms import OrderForm
 from orders.models import Order, OrderItem
 from django.contrib import messages
-from django.urls import reverse_lazy
+from django.urls import reverse_lazy, reverse
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_http_methods
 from orders.models import Order
 from django.db import transaction
 from django.conf import settings
+
 from django.http import JsonResponse
 from orders.utils import reverse_geocode
+
+import stripe
+import paypalrestsdk
+
+# Configure Stripe and PayPal with keys from settings
+stripe.api_key = settings.STRIPE_SECRET_KEY
+paypalrestsdk.configure({
+    "mode": settings.PAYPAL_MODE,
+    "client_id": settings.PAYPAL_CLIENT_ID,
+    "client_secret": settings.PAYPAL_CLIENT_SECRET,
+})
+
 # Create your views here.
 
 
@@ -111,9 +124,100 @@ def order_confirmation(request, order_id):
 
 
 
+
 def get_location_info(request):
     lat = request.GET.get("lat", "51.21709661403662")
     lon = request.GET.get("lon", "6.7782883744862374")
 
     data = reverse_geocode(lat, lon)
     return JsonResponse(data)
+
+def stripe_checkout(request, order_id):
+    order = get_object_or_404(Order, id=order_id)
+    session = stripe.checkout.Session.create(
+        payment_method_types=["card"],
+        line_items=[{
+            "price_data": {
+                "currency": "kes",
+                "product_data": {"name": f"Order {order.id}"},
+                "unit_amount": int(order.get_total_cost()) * 100,
+            },
+            "quantity": 1,
+        }],
+        mode="payment",
+        success_url=request.build_absolute_uri(
+            reverse("orders:payment_success", args=[order.id])
+        ),
+        cancel_url=request.build_absolute_uri(
+            reverse("orders:payment_cancel", args=[order.id])
+        ),
+    )
+    return redirect(session.url)
+
+
+def paypal_payment(request, order_id):
+    order = get_object_or_404(Order, id=order_id)
+    payment = paypalrestsdk.Payment({
+        "intent": "sale",
+        "payer": {"payment_method": "paypal"},
+        "redirect_urls": {
+            "return_url": request.build_absolute_uri(
+                reverse("orders:paypal_execute", args=[order.id])
+            ),
+            "cancel_url": request.build_absolute_uri(
+                reverse("orders:payment_cancel", args=[order.id])
+            ),
+        },
+        "transactions": [{
+            "item_list": {
+                "items": [{
+                    "name": f"Order {order.id}",
+                    "sku": f"{order.id}",
+                    "price": str(order.get_total_cost()),
+                    "currency": "KES",
+                    "quantity": 1,
+                }]
+            },
+            "amount": {
+                "total": str(order.get_total_cost()),
+                "currency": "KES",
+            },
+            "description": f"Payment for Order {order.id}",
+        }],
+    })
+    if payment.create():
+        for link in payment.links:
+            if link.rel == "approval_url":
+                request.session["paypal_payment_id"] = payment.id
+                return redirect(link.href)
+    messages.error(request, "Unable to create PayPal payment")
+    return redirect("orders:order_confirmation", order.id)
+
+
+def paypal_execute(request, order_id):
+    payment_id = request.session.get("paypal_payment_id")
+    payer_id = request.GET.get("PayerID")
+    if not payment_id or not payer_id:
+        messages.error(request, "Invalid PayPal response")
+        return redirect("orders:order_confirmation", order_id)
+    payment = paypalrestsdk.Payment.find(payment_id)
+    if payment.execute({"payer_id": payer_id}):
+        order = get_object_or_404(Order, id=order_id)
+        order.paid = True
+        order.save()
+        return redirect("orders:payment_success", order.id)
+    else:
+        messages.error(request, "PayPal payment execution failed")
+        return redirect("orders:order_confirmation", order_id)
+
+
+def payment_success(request, order_id):
+    order = get_object_or_404(Order, id=order_id)
+    order.paid = True
+    order.save()
+    return render(request, "payment_result.html", {"message": "Payment successful"})
+
+
+def payment_cancel(request, order_id):
+    return render(request, "payment_result.html", {"error": "Payment cancelled"})
+

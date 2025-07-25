@@ -40,11 +40,9 @@ class CartItem(models.Model):
         on_delete=models.CASCADE
     )
     quantity = models.PositiveIntegerField(default=1)
-    is_selected = models.BooleanField(default=False)
 
-    def get_selected_total(self, selected_ids):
-     return sum(item.product.price * item.quantity for item in self.items.filter(product_id__in=selected_ids))
-
+    def get_total_price(self):
+        return int(self.product.price * self.quantity)
 
     def __str__(self):
         return f"{self.quantity} x {self.product.name}"
