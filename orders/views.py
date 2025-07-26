@@ -98,6 +98,7 @@ def order_create(request):
         "cart_items":     cart_items,
         "selected_total": selected_total,
         "error_msg":      error_msg,
+        "geoapify_api_key": settings.GEOAPIFY_API_KEY,
     })
 
     
