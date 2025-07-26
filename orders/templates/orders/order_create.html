@@ -121,3 +121,16 @@
   </div>
 </div>
 {% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  var addressInput = document.getElementById('id_address');
+  if (addressInput && window.autocomplete) {
+    new autocomplete.GeocoderAutocomplete(addressInput, '{{ geoapify_api_key }}', {
+      filter: { circle: { lat: -1.286389, lon: 36.817223, radius: 30000 } }
+    });
+  }
+});
+</script>
+{% endblock %}
