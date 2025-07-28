@@ -9,6 +9,7 @@ from django.views.decorators.http import require_http_methods
 from orders.models import Order
 from django.db import transaction
 from django.conf import settings
+import logging
 
 from django.http import JsonResponse
 from orders.utils import reverse_geocode
@@ -30,18 +31,31 @@ paypalrestsdk.configure({
 
 
 
+logger = logging.getLogger(__name__)
+
 @require_http_methods(["GET", "POST"])
 def order_create(request):
-    # 1) auth & non-empty cart
+    # 1) Require login
     if not request.user.is_authenticated:
         messages.warning(request, "Please log in to place an order")
         return redirect('users:login')
 
     cart = None
     cart_id = request.session.get('cart_id')
-    if cart_id:
-        cart = get_object_or_404(Cart, id=cart_id)
+    logger.info(f"Session cart_id: {cart_id}")
 
+    # 2) Try fetching the cart if cart_id exists
+    if cart_id:
+        try:
+            cart = get_object_or_404(Cart, id=cart_id)
+            logger.info(f"Cart found: {cart}")
+        except Exception as e:
+            logger.error(f"Cart retrieval failed: {e}")
+            cart = None
+    else:
+        logger.info("No cart found in session")
+
+    # 3) Redirect if cart is missing or empty
     if not cart or not cart.items.exists():
         messages.warning(request, "Your cart is empty")
         return redirect("cart:cart_detail")
@@ -49,23 +63,25 @@ def order_create(request):
     error_msg = None
     form = None
 
+    # 4) POST request handling
     if request.method == "POST":
-        # — mark selected in the cart —
         selected_items = request.POST.getlist('selected_items')
         if selected_items:
+            # Mark all items not selected
             cart.items.update(is_selected=False)
+            # Mark only selected items
             cart.items.filter(product_id__in=selected_items).update(is_selected=True)
 
-        # Detect whether this POST has *any* OrderForm fields:
+        # Check if order form fields are present in POST data
         has_form_data = any(name in request.POST for name in (
-            'full_name','email','address','payment_method'
+            'full_name', 'email', 'address', 'payment_method'
         ))
 
         if not has_form_data:
-            # === Initial POST from cart: just show checkout form, no errors ===
+            # Initial POST from cart (show form, no errors)
             form = OrderForm()
         else:
-            # === Real checkout submission: bind & validate ===
+            # Real checkout submission
             form = OrderForm(request.POST)
             if form.is_valid():
                 try:
@@ -74,6 +90,7 @@ def order_create(request):
                         order.user = request.user
                         order.save()
 
+                        # Create order items for selected cart items
                         for item in cart.items.filter(is_selected=True):
                             OrderItem.objects.create(
                                 order=order,
@@ -82,38 +99,49 @@ def order_create(request):
                                 quantity=item.quantity
                             )
 
-                        # remove checked‑out items
+                        # Remove checked-out items from cart
                         cart.items.filter(is_selected=True).delete()
+
+                        # Delete cart and clear session if no items remain
                         if not cart.items.exists():
                             cart.delete()
                             request.session.pop('cart_id', None)
+
+                        # Always clear cart count in session after order
                         request.session.pop('cart_count', None)
 
                     messages.success(request, "Order placed successfully!")
                     return redirect("orders:order_confirmation", order.id)
 
                 except Exception as e:
+                    logger.error(f"Order save failed: {e}")
                     messages.error(request, f"Order failed: {e}")
             else:
                 error_msg = "Please correct the errors in your order form"
 
     else:
-        # GET: user typed URL or refreshed
+        # 5) GET request (show empty form)
         form = OrderForm()
 
-    # figure out what to show
-    cart_items     = cart.items.filter(is_selected=True) or cart.items.all()
-    selected_total = sum(i.product.price * i.quantity for i in cart_items)
+    # 6) Safe handling of cart items and totals for rendering
+    if cart:
+        cart_items = cart.items.filter(is_selected=True)
+        if not cart_items.exists():
+            cart_items = cart.items.all()
+        selected_total = sum(i.product.price * i.quantity for i in cart_items)
+    else:
+        cart_items = []
+        selected_total = 0
 
+    # 7) Render the template with all context
     return render(request, "orders/order_create.html", {
-        "form":           form,
-        "cart":           cart,
-        "cart_items":     cart_items,
+        "form": form,
+        "cart": cart,
+        "cart_items": cart_items,
         "selected_total": selected_total,
-        "error_msg":      error_msg,
+        "error_msg": error_msg,
         "geoapify_api_key": settings.GEOAPIFY_API_KEY,
     })
-
     
 
 
