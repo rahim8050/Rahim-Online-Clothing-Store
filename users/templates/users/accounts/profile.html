@@ -246,49 +246,54 @@
 </div>
 
 <script>
-  // Avatar upload preview
-  document.getElementById('avatar-upload').addEventListener('change', function(e) {
-    const file = e.target.files[0];
-    if (file) {
-      if (file.size > 2 * 1024 * 1024) {
-        alert('File too large! Maximum 2MB.');
-        e.target.value = '';
-        return;
-      }
-      const reader = new FileReader();
-      reader.onload = function(e) {
-        const preview = document.getElementById('avatar-preview');
-        if (preview.tagName === 'IMG') {
-          preview.src = e.target.result;
-        } else {
-          const img = document.createElement('img');
-          img.id = 'avatar-preview';
-          img.className = 'w-20 h-20 rounded-full object-cover border-2 border-white shadow';
-          img.src = e.target.result;
-          img.alt = 'New avatar';
-          preview.replaceWith(img);
+  document.addEventListener('DOMContentLoaded', function() {
+    const avatarUpload = document.getElementById('avatar-upload');
+    if (avatarUpload) {
+      avatarUpload.addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (file) {
+          if (file.size > 2 * 1024 * 1024) {
+            alert('File too large! Maximum 2MB.');
+            e.target.value = '';
+            return;
+          }
+          const reader = new FileReader();
+          reader.onload = function(e) {
+            const preview = document.getElementById('avatar-preview');
+            if (preview.tagName === 'IMG') {
+              preview.src = e.target.result;
+            } else {
+              const img = document.createElement('img');
+              img.id = 'avatar-preview';
+              img.className = 'w-20 h-20 rounded-full object-cover border-2 border-white shadow';
+              img.src = e.target.result;
+              img.alt = 'New avatar';
+              preview.replaceWith(img);
+            }
+          }
+          reader.readAsDataURL(file);
         }
-      }
-      reader.readAsDataURL(file);
+      });
     }
-  });
 
-  // Password visibility toggle
-  document.querySelectorAll('.password-toggle').forEach(button => {
-    button.addEventListener('click', function() {
-      const targetId = this.getAttribute('data-target');
-      const input = document.getElementById(`id_${targetId}`);
-      if (input) {
-        if (input.type === 'password') {
-          input.type = 'text';
-          this.innerHTML = '<i class="fas fa-eye-slash"></i>';
-        } else {
-          input.type = 'password';
-          this.innerHTML = '<i class="fas fa-eye"></i>';
+    // Password visibility toggles
+    document.querySelectorAll('.password-toggle').forEach(button => {
+      button.addEventListener('click', function() {
+        const targetId = this.getAttribute('data-target');
+        const input = document.getElementById(`id_${targetId}`);
+        if (input) {
+          if (input.type === 'password') {
+            input.type = 'text';
+            this.innerHTML = '<i class="fas fa-eye-slash"></i>';
+          } else {
+            input.type = 'password';
+            this.innerHTML = '<i class="fas fa-eye"></i>';
+          }
         }
-      }
+      });
     });
   });
 </script>
+
 
 {% endblock %}

@@ -37,7 +37,7 @@ logger = logging.getLogger(__name__)
 def order_create(request):
     # 1) Require login
     if not request.user.is_authenticated:
-        messages.warning(request, "Please log in to place an order")
+        # messages.warning(request, "Please log in to place an order")
         return redirect('users:login')
 
     cart = None
