@@ -12,6 +12,7 @@ from django.views.generic import FormView, View
 from django.views.decorators.csrf import csrf_protect
 from django.utils.decorators import method_decorator
 from django.urls import reverse_lazy
+import logging
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse
 from orders.models import Order
@@ -25,7 +26,7 @@ from .forms import (
 )
 
 User = get_user_model()
-
+logger = logging.getLogger(__name__)
 def home(request):
     pass
 
@@ -35,6 +36,15 @@ from .forms import CustomLoginForm  # make sure this is the correct one
 class CustomLoginView(LoginView):
     form_class = CustomLoginForm
     template_name = "users/accounts/login.html"
+
+    def form_valid(self, form):
+        # Backup cart_id before login clears session
+        cart_id = self.request.session.get('cart_id')
+        if cart_id:
+            self.request.session['cart_id_backup'] = cart_id
+
+        return super().form_valid(form)
+
 
 class Logout(LogoutView):
     next_page = "/"
