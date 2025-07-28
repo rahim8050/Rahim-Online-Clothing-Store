@@ -12,6 +12,7 @@ from django.views.generic import FormView, View
 from django.views.decorators.csrf import csrf_protect
 from django.utils.decorators import method_decorator
 from django.urls import reverse_lazy
+from django.urls import reverse
 import logging
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse
@@ -44,6 +45,9 @@ class CustomLoginView(LoginView):
             self.request.session['cart_id_backup'] = cart_id
 
         return super().form_valid(form)
+
+    def get_success_url(self):
+        return reverse('index')
 
 
 class Logout(LogoutView):
