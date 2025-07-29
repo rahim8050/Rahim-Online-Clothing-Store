@@ -6,10 +6,11 @@ from django.contrib import messages
 from django.urls import reverse_lazy, reverse
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_http_methods
-from orders.models import Order
 from django.db import transaction
 from django.conf import settings
 import logging
+from django.http import HttpResponse
+from django.views.decorators.csrf import csrf_exempt
 
 from django.http import JsonResponse
 from orders.utils import reverse_geocode
@@ -34,11 +35,12 @@ paypalrestsdk.configure({
 logger = logging.getLogger(__name__)
 
 @require_http_methods(["GET", "POST"])
+@login_required
 def order_create(request):
     # 1) Require login
     if not request.user.is_authenticated:
-        # messages.warning(request, "Please log in to place an order")
-        return redirect('users:login')
+         messages.warning(request, "Please log in to place an order")
+         return redirect('users:login')
 
     cart = None
     cart_id = request.session.get('cart_id')
@@ -163,6 +165,7 @@ def get_location_info(request):
 
 def stripe_checkout(request, order_id):
     order = get_object_or_404(Order, id=order_id)
+
     session = stripe.checkout.Session.create(
         payment_method_types=["card"],
         line_items=[{
@@ -174,15 +177,90 @@ def stripe_checkout(request, order_id):
             "quantity": 1,
         }],
         mode="payment",
+        metadata={
+            "order_id": str(order.id),  
+        },
         success_url=request.build_absolute_uri(
             reverse("orders:payment_success", args=[order.id])
-        ),
+        ) + "?session_id={CHECKOUT_SESSION_ID}",
         cancel_url=request.build_absolute_uri(
             reverse("orders:payment_cancel", args=[order.id])
         ),
     )
-    return redirect(session.url)
 
+    return redirect(session.url)
+# stripe payment callback
+@login_required
+def Stripe_payment_success(request, order_id):
+    session_id = request.GET.get("session_id")
+
+    if not session_id:
+        return render(request, "orders/payment_failed.html", {
+            "message": "No session ID provided."
+        })
+
+    try:
+        session = stripe.checkout.Session.retrieve(session_id)
+        payment_intent = stripe.PaymentIntent.retrieve(session.payment_intent)
+    except Exception as e:
+        return render(request, "orders/payment_failed.html", {
+            "message": f"Stripe error: {str(e)}"
+        })
+
+    # Get order
+    order = get_object_or_404(Order, id=order_id)
+
+    # Save payment details to order model
+    order.payment_status = "paid"
+    order.payment_intent_id = payment_intent.id
+    order.stripe_receipt_url = payment_intent.charges.data[0].receipt_url
+    order.save()
+
+    return render(request, "orders/payment_success.html", {
+        "order": order,
+        "receipt_url": order.stripe_receipt_url
+    })
+    
+@csrf_exempt
+def stripe_webhook(request):
+    payload = request.body
+    sig_header = request.META.get("HTTP_STRIPE_SIGNATURE")
+    endpoint_secret = settings.STRIPE_WEBHOOK_SECRET
+
+    try:
+        event = stripe.Webhook.construct_event(
+            payload=payload,
+            sig_header=sig_header,
+            secret=endpoint_secret
+        )
+    except ValueError as e:
+        # Invalid payload
+        return HttpResponse(status=400)
+    except stripe.error.SignatureVerificationError as e:
+        # Invalid signature
+        return HttpResponse(status=400)
+
+    # Handles  events here
+    if event['type'] == 'checkout.session.completed':
+        session = event['data']['object']
+        order_id = session.get("metadata", {}).get("order_id")
+
+        if order_id:
+            try:
+                order = Order.objects.get(id=order_id)
+                order.payment_status = "paid"
+                order.payment_intent_id = session.get("payment_intent")
+                order.save()
+            except Order.DoesNotExist:
+                pass
+
+    elif event['type'] == 'payment_intent.payment_failed':
+        print(" Payment failed.")
+
+    elif event['type'] == 'charge.refunded':
+        print("🤦‍♀️ Refund processed.") 
+
+    return HttpResponse(status=200)    
 
 def paypal_payment(request, order_id):
     order = get_object_or_404(Order, id=order_id)

@@ -20,6 +20,9 @@ class Order(models.Model):
     mpesa_transaction_code = models.CharField(max_length=50, blank=True, null=True)
     payment_method = models.CharField(max_length=20, default="MPESA")
     stock_updated = models.BooleanField(default=False)
+    payment_status = models.CharField(max_length=20, default='pending')
+    payment_intent_id = models.CharField(max_length=100, blank=True, null=True)
+    stripe_receipt_url = models.URLField(blank=True, null=True)
 
 
 

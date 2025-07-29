@@ -159,6 +159,8 @@ MPESA_PASSKEY = os.environ.get('MPESA_PASS_KEY')
 # Stripe configuration
 STRIPE_SECRET_KEY = os.environ.get('STRIPE_SECRET_KEY')
 STRIPE_PUBLISHABLE_KEY = os.environ.get('STRIPE_PUBLISHABLE_KEY')
+STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET")
+
 
 # PayPal configuration
 PAYPAL_CLIENT_ID = os.environ.get('PAYPAL_CLIENT_ID')
