@@ -34,7 +34,7 @@ def trigger_stk_push(request):
             amount = order.get_total_cost()
             account_reference = f'ORDER-{order.id}'
             transaction_desc = f'Payment for Order #{order.id}'
-            callback_url = 'https://intent-in-katydid.ngrok-free.app/mpesa/callback/'  # ✅ Removed leading space
+            callback_url = 'https://intent-in-katydid.ngrok-free.app/mpesa/callback/'  
 
             # Initiate STK Push
             response = cl.stk_push(

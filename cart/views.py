@@ -71,15 +71,14 @@ def cart_detail(request):
 
         cart_items = cart.items.select_related('product')
         total_price = sum(item.product.price * item.quantity for item in cart_items)
-
-        # ← NEW: instantiate an empty OrderForm
+ 
         order_form = OrderForm()
 
         return render(request, 'cart/cart_detail.html', {
             'cart': cart,
             'cart_items': cart_items,
             'total_price': total_price,
-            'order_form': order_form,      # ← pass it in
+            'order_form': order_form,      
         })
 
     except (Cart.DoesNotExist, KeyError):
@@ -88,7 +87,7 @@ def cart_detail(request):
             'cart': None,
             'cart_items': [],
             'total_price': 0,
-            'order_form': OrderForm(),     # ← still pass an empty form
+            'order_form': OrderForm(),     
         })
 
 
@@ -118,7 +117,7 @@ def get_cart_data(request):
                     'description': item.product.description,
                     'price': float(item.product.price),
                     'image_url': item.product.image.url if item.product.image else '',
-                    'detail_url': item.product.get_absolute_url(),  # Optional: Add get_absolute_url to Product model
+                    'detail_url': item.product.get_absolute_url(),  
                 },
                 'quantity': item.quantity,
             })
@@ -134,17 +133,17 @@ def get_cart_data(request):
 def cart_remove(request, product_id):
     cart_id = request.session.get('cart_id')
 
-    if not cart_id:  # No cart exists
+    if not cart_id:  
         return redirect("cart:cart_detail")
 
     try:
         cart = Cart.objects.get(id=cart_id)
-        # Get the specific cart item for this product
+        
         try:
             item = CartItem.objects.get(cart=cart, product__id=product_id)
             item.delete()
             
-            # Update cart count in session
+            
             if 'cart_count' in request.session:
                 request.session['cart_count'] = max(0, request.session['cart_count'] - item.quantity)
             

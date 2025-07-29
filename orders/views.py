@@ -35,9 +35,8 @@ paypalrestsdk.configure({
 logger = logging.getLogger(__name__)
 
 @require_http_methods(["GET", "POST"])
-@login_required
 def order_create(request):
-    # 1) Require login
+    
     if not request.user.is_authenticated:
          messages.warning(request, "Please log in to place an order")
          return redirect('users:login')
@@ -46,7 +45,7 @@ def order_create(request):
     cart_id = request.session.get('cart_id')
     logger.info(f"Session cart_id: {cart_id}")
 
-    # 2) Try fetching the cart if cart_id exists
+   
     if cart_id:
         try:
             cart = get_object_or_404(Cart, id=cart_id)
@@ -57,7 +56,7 @@ def order_create(request):
     else:
         logger.info("No cart found in session")
 
-    # 3) Redirect if cart is missing or empty
+    
     if not cart or not cart.items.exists():
         messages.warning(request, "Your cart is empty")
         return redirect("cart:cart_detail")
@@ -65,7 +64,7 @@ def order_create(request):
     error_msg = None
     form = None
 
-    # 4) POST request handling
+    
     if request.method == "POST":
         selected_items = request.POST.getlist('selected_items')
         if selected_items:
@@ -80,7 +79,7 @@ def order_create(request):
         ))
 
         if not has_form_data:
-            # Initial POST from cart (show form, no errors)
+            
             form = OrderForm()
         else:
             # Real checkout submission
@@ -122,10 +121,10 @@ def order_create(request):
                 error_msg = "Please correct the errors in your order form"
 
     else:
-        # 5) GET request (show empty form)
+       
         form = OrderForm()
 
-    # 6) Safe handling of cart items and totals for rendering
+    
     if cart:
         cart_items = cart.items.filter(is_selected=True)
         if not cart_items.exists():
@@ -135,7 +134,7 @@ def order_create(request):
         cart_items = []
         selected_total = 0
 
-    # 7) Render the template with all context
+   
     return render(request, "orders/order_create.html", {
         "form": form,
         "cart": cart,

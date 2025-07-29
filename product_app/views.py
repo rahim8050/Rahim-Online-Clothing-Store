@@ -8,21 +8,7 @@ from django.utils.safestring import mark_safe
 import json
 app_name = 'product_app'
 from .models import Category,Product
-# Create your views here.
-# def product_list(request,category_slug=None):
-    
-#     category = None
-#     products = Product.objects.filter(available=True)
-#     categories = Category.objects.all()
-#     if category_slug:
-#         category = get_object_or_404(Category,slug=category_slug)
-#         products = products.filter(category=category)
 
-#     return render(request, 'products/product/list.html',{
-#         'category': category,
-#         'products': products,
-#         'categories': categories,
-#     })
 
 
 def product_list(request, category_slug=None):
@@ -69,21 +55,7 @@ def product_list(request, category_slug=None):
         'pagination_data': json.dumps(pagination_data),
     })
 
-# def product_list(request, category_slug=None):
-#     categories = Category.objects.all()
-#     category = None
 
-#     if category_slug:
-#         category = get_object_or_404(Category, slug=category_slug)
-#         products = Product.objects.filter(category=category)
-#     else:
-#         products = Product.objects.all()
-
-#     return render(request, 'products/product/list.html', {
-#         'categories': categories,
-#         'products': products,
-#         'category': category,
-#     })
 
 
     
@@ -99,26 +71,12 @@ def product_detail(request, id, slug):
 
     return render(request, 'products/product/detail.html', {
         'product': product,
-        'product_json': mark_safe(json.dumps(product_data))  # ensures Vue receives valid JSON
+        'product_json': mark_safe(json.dumps(product_data))  
     })
-    product = get_object_or_404(Product, id=id, slug=slug, available=True)
+   
+    
+    
 
-    # Create JSON-safe product data
-    product_data = json.dumps({
-        'name': product.name,
-        'price': str(product.price),  # Ensure price is string
-        'description': product.description,
-    })
-
-    return render(request, 'products/product/detail.html', {
-        'product': product,
-        'product_json': mark_safe(product_data),
-    })
-# def product_detail(request,id,slug):
-#     product = get_object_or_404(Product,id=id,slug=slug,available=True)
-#     return render(request,'products/product/detail.html',{
-#         'product': product,
-#     })
 
 
 
