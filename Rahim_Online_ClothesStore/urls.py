@@ -29,6 +29,7 @@ urlpatterns = [
                   path('orders/', include("orders.urls")),
                   path('mpesa/', include('Mpesa.urls')),
                   path('', views.product_list, name='index'),
+                  
                   path('<slug:category_slug>/', views.product_list, name='product_list_by_category'),
                 #   path('category/<slug:slug>/', views.product_list, name='product_list_by_category'),
                   path('products/search/', views.SearchProduct, name='product_search'),
