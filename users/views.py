@@ -17,7 +17,8 @@ import logging
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse
 from orders.models import Order
-
+from django.contrib.auth.views import LoginView
+from .forms import CustomLoginForm  
 from .tokens import account_activation_token
 from .forms import (
     RegisterUserForm,
@@ -31,8 +32,7 @@ logger = logging.getLogger(__name__)
 def home(request):
     pass
 
-from django.contrib.auth.views import LoginView
-from .forms import CustomLoginForm  # make sure this is the correct one
+
 
 class CustomLoginView(LoginView):
     form_class = CustomLoginForm
