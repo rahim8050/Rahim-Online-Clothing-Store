@@ -143,8 +143,13 @@
     </div>
   </div>
 </nav>
-
+<!-- CSRF Token & External JS -->
 <script>
+  window.CSRF_TOKEN = "{{ csrf_token }}";
+</script>
+<script src="{% static 'js/vue/navbar.js' %}" defer></script>
+
+{% comment %} <script>
   const mobileMenuButton = document.getElementById("mobile-menu-button");
   const mobileMenu = document.getElementById("mobile-menu");
   mobileMenuButton.addEventListener("click", () => {
@@ -208,4 +213,4 @@ function updateCartCounter(count) {
         .catch((error) => console.error("Error:", error));
     });
   });
-</script>
+</script> {% endcomment %}
