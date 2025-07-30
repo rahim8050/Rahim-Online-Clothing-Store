@@ -15,11 +15,13 @@ class Order(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     paid = models.BooleanField(default=False)
+    # MPESA specific fields
     mpesa_checkout_request_id = models.CharField(max_length=100, blank=True, null=True)
     mpesa_phone_number = models.CharField(max_length=15, blank=True, null=True)
     mpesa_transaction_code = models.CharField(max_length=50, blank=True, null=True)
     payment_method = models.CharField(max_length=20, default="MPESA")
     stock_updated = models.BooleanField(default=False)
+    # stripe specific fields
     payment_status = models.CharField(max_length=20, default='pending')
     payment_intent_id = models.CharField(max_length=100, blank=True, null=True)
     stripe_receipt_url = models.URLField(blank=True, null=True)
