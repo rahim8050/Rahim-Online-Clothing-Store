@@ -14,9 +14,14 @@ from django.views.decorators.csrf import csrf_exempt
 
 from django.http import JsonResponse
 from orders.utils import reverse_geocode
+from .models import Transaction
 
 import stripe
 import paypalrestsdk
+import requests
+import json
+import hmac
+import hashlib
 
 # Configure Stripe and PayPal with keys from settings
 stripe.api_key = settings.STRIPE_SECRET_KEY
@@ -162,6 +167,41 @@ def get_location_info(request):
     data = reverse_geocode(lat, lon)
     return JsonResponse(data)
 
+
+def paystack_checkout(request, order_id):
+    order = get_object_or_404(Order, id=order_id)
+    headers = {"Authorization": f"Bearer {settings.PAYSTACK_SECRET_KEY}"}
+    data = {
+        "email": order.email,
+        "amount": int(order.get_total_cost()) * 100,
+        "callback_url": request.build_absolute_uri(
+            reverse("orders:payment_success", args=[order.id])
+        ),
+        "metadata": {"order_id": order.id},
+    }
+    try:
+        response = requests.post(
+            "https://api.paystack.co/transaction/initialize",
+            json=data,
+            headers=headers,
+            timeout=30,
+        )
+        res_data = response.json()
+        auth_url = res_data["data"]["authorization_url"]
+        reference = res_data["data"]["reference"]
+        Transaction.objects.create(
+            user=order.user,
+            amount=order.get_total_cost(),
+            method="card",
+            gateway="paystack",
+            status="pending",
+            reference=reference,
+        )
+        return redirect(auth_url)
+    except Exception:
+        messages.error(request, "Unable to initialize Paystack payment")
+    return redirect("orders:order_confirmation", order.id)
+
 def stripe_checkout(request, order_id):
     order = get_object_or_404(Order, id=order_id)
 
@@ -257,11 +297,57 @@ def stripe_webhook(request):
         print(" Payment failed.")
 
     elif event['type'] == 'charge.refunded':
-        print("🤦‍♀️ Refund processed.") 
+        print("🤦‍♀️ Refund processed.")
 
-    return HttpResponse(status=200)    
+    return HttpResponse(status=200)
 
-def paypal_payment(request, order_id):
+
+@csrf_exempt
+def paystack_webhook(request):
+    signature = request.META.get("HTTP_X_PAYSTACK_SIGNATURE", "")
+    computed = hmac.new(
+        settings.PAYSTACK_SECRET_KEY.encode(), request.body, hashlib.sha512
+    ).hexdigest()
+    if signature != computed:
+        return HttpResponse(status=400)
+    event = json.loads(request.body)
+    if event.get("event") == "charge.success":
+        data = event.get("data", {})
+        reference = data.get("reference")
+        amount = data.get("amount", 0) / 100
+        order_id = data.get("metadata", {}).get("order_id")
+        Transaction.objects.filter(reference=reference).update(status="success")
+        if order_id:
+            try:
+                order = Order.objects.get(id=order_id)
+                order.paid = True
+                order.save()
+            except Order.DoesNotExist:
+                pass
+    return HttpResponse(status=200)
+
+
+@csrf_exempt
+def paypal_webhook(request):
+    try:
+        event = json.loads(request.body)
+    except json.JSONDecodeError:
+        return HttpResponse(status=400)
+    if event.get("event_type") == "PAYMENT.CAPTURE.COMPLETED":
+        resource = event.get("resource", {})
+        reference = resource.get("id")
+        invoice = resource.get("invoice_id")
+        Transaction.objects.filter(reference=reference).update(status="success")
+        if invoice:
+            try:
+                order = Order.objects.get(id=invoice)
+                order.paid = True
+                order.save()
+            except Order.DoesNotExist:
+                pass
+    return HttpResponse(status=200)
+
+def paypal_checkout(request, order_id):
     order = get_object_or_404(Order, id=order_id)
     payment = paypalrestsdk.Payment({
         "intent": "sale",
@@ -292,6 +378,14 @@ def paypal_payment(request, order_id):
         }],
     })
     if payment.create():
+        Transaction.objects.create(
+            user=order.user,
+            amount=order.get_total_cost(),
+            method="paypal",
+            gateway="paypal",
+            status="pending",
+            reference=payment.id,
+        )
         for link in payment.links:
             if link.rel == "approval_url":
                 request.session["paypal_payment_id"] = payment.id
@@ -311,6 +405,7 @@ def paypal_execute(request, order_id):
         order = get_object_or_404(Order, id=order_id)
         order.paid = True
         order.save()
+        Transaction.objects.filter(reference=payment_id).update(status="success")
         return redirect("orders:payment_success", order.id)
     else:
         messages.error(request, "PayPal payment execution failed")
