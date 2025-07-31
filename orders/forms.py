@@ -4,7 +4,7 @@ from .models import Order
 class OrderForm(forms.ModelForm):
     PAYMENT_CHOICES = [
         ('mpesa', 'M-Pesa'),
-        ('card',  'debit/credit card'),
+        ('card',  'Card (Visa/MasterCard)'),
         ('paypal','PayPal'),
     ]
 

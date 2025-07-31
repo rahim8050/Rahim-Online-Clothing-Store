@@ -7,14 +7,15 @@ from django.core.mail import EmailMessage
 from django.template.loader import render_to_string
 from django.core.mail import send_mail
 from django.conf import settings
-from .models import Order, Payment
+from orders.models import Order, Transaction
+from .models import Payment
 import traceback
 
 # Initialize MpesaClient once
 cl = MpesaClient()
 
 @csrf_exempt
-def trigger_stk_push(request):
+def daraja_stk_push(request):
     if request.method == 'POST':
         try:
             phone_number = request.POST.get('phone_number')
@@ -50,12 +51,20 @@ def trigger_stk_push(request):
             print("MPESA STK Response:", resp_json)
 
             if resp_json.get('ResponseCode') == '0':
-                Payment.objects.create(
+                payment = Payment.objects.create(
                     order=order,
                     merchant_request_id=resp_json.get('MerchantRequestID'),
                     checkout_request_id=resp_json.get('CheckoutRequestID'),
                     amount=amount,
                     status='PENDING'
+                )
+                Transaction.objects.create(
+                    user=order.user,
+                    amount=amount,
+                    method="mpesa",
+                    gateway="daraja",
+                    status="pending",
+                    reference=payment.checkout_request_id,
                 )
                 return render(request, "orders/order_confirmation.html", {
                     "message": "STK Push sent. Check your phone to complete the payment.",
@@ -105,6 +114,7 @@ def stk_callback(request):
                 payment.code = mpesa_receipt
                 payment.status = "COMPLETED"
                 payment.save()
+                Transaction.objects.filter(reference=checkout_request_id).update(status="success")
 
                 #  Mark order as paid
                 order = payment.order
