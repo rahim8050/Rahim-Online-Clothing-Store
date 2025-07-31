@@ -164,7 +164,9 @@ STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET")
 
 # PayPal configuration
 PAYPAL_CLIENT_ID = os.environ.get('PAYPAL_CLIENT_ID')
+print(PAYPAL_CLIENT_ID)
 PAYPAL_CLIENT_SECRET = os.environ.get('PAYPAL_CLIENT_SECRET')
+print(PAYPAL_CLIENT_SECRET)
 PAYPAL_MODE = os.environ.get('PAYPAL_MODE', 'sandbox')
 
 # Paystack configuration
