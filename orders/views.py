@@ -169,7 +169,15 @@ def get_location_info(request):
 
 
 def paystack_checkout(request, order_id):
+    """Initialize a Paystack transaction for card or M-Pesa."""
     order = get_object_or_404(Order, id=order_id)
+
+    payment_method = request.GET.get("payment_method")
+    if payment_method not in {"card", "mpesa"}:
+        messages.error(request, "Invalid payment method")
+        return redirect("orders:order_confirmation", order.id)
+
+    channel = "card" if payment_method == "card" else "mobile_money"
     headers = {"Authorization": f"Bearer {settings.PAYSTACK_SECRET_KEY}"}
     data = {
         "email": order.email,
@@ -178,6 +186,7 @@ def paystack_checkout(request, order_id):
             reverse("orders:payment_success", args=[order.id])
         ),
         "metadata": {"order_id": order.id},
+        "channels": [channel],
     }
     try:
         response = requests.post(
@@ -192,7 +201,7 @@ def paystack_checkout(request, order_id):
         Transaction.objects.create(
             user=order.user,
             amount=order.get_total_cost(),
-            method="card",
+            method=payment_method,
             gateway="paystack",
             status="pending",
             reference=reference,
