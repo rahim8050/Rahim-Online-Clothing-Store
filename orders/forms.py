@@ -3,9 +3,9 @@ from .models import Order
 
 class OrderForm(forms.ModelForm):
     PAYMENT_CHOICES = [
-        ('mpesa', 'M-Pesa'),
-        ('card',  'Card (Visa/MasterCard)'),
-        ('paypal','PayPal'),
+        ('card', 'Paystack (Card)'),
+        ('mpesa', 'Paystack (M-Pesa)'),
+        ('paypal', 'PayPal'),
     ]
 
     payment_method = forms.ChoiceField(
