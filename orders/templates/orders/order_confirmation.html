@@ -102,7 +102,7 @@
         {% if order.payment.status != "PAID" %}
             {% if order.payment_method == "mpesa" or order.payment_method == "MPESA" %}
             <!-- M-Pesa Payment Form -->
-            <form action="{% url 'Mpesa:mpesa_trigger' %}"
+            <form action="{% url 'Mpesa:daraja_stk_push' %}"
                   method="post"
                   class="max-w-md mx-auto bg-white p-6 rounded-xl shadow-md space-y-6">
                 {% csrf_token %}
@@ -155,9 +155,9 @@
                 </div>
             </form>
             {% elif order.payment_method == "card" %}
-            <!-- Stripe Payment Button -->
+            <!-- Paystack Payment Button -->
             <div class="flex justify-center">
-                <a href="{% url 'orders:stripe_checkout' order.id %}"
+                <a href="{% url 'orders:paystack_checkout' order.id %}"
                    class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-6 py-3 rounded-lg shadow-md">
                     Pay with Card
                 </a>
@@ -165,7 +165,7 @@
             {% elif order.payment_method == "paypal" %}
             <!-- PayPal Payment Button -->
             <div class="flex justify-center">
-                <a href="{% url 'orders:paypal_payment' order.id %}"
+                <a href="{% url 'orders:paypal_checkout' order.id %}"
                    class="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-3 rounded-lg shadow-md">
                     Pay with PayPal
                 </a>

@@ -46,3 +46,26 @@ class OrderItem(models.Model):
 
     def __str__(self):
         return f"{self.quantity} x {self.product.name}"
+
+
+class Transaction(models.Model):
+    METHOD_CHOICES = (
+        ("card", "Card"),
+        ("mpesa", "M-Pesa"),
+        ("paypal", "PayPal"),
+    )
+    GATEWAY_CHOICES = (
+        ("paystack", "Paystack"),
+        ("daraja", "Daraja"),
+        ("paypal", "PayPal"),
+    )
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    method = models.CharField(max_length=10, choices=METHOD_CHOICES)
+    gateway = models.CharField(max_length=10, choices=GATEWAY_CHOICES)
+    status = models.CharField(max_length=20, default="pending")
+    reference = models.CharField(max_length=100)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.user} - {self.method} - {self.reference}"
