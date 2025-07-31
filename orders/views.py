@@ -393,13 +393,21 @@ def paypal_checkout(request, order_id):
     messages.error(request, "Unable to create PayPal payment")
     return redirect("orders:order_confirmation", order.id)
 
-
+# paypal payment execution
 def paypal_execute(request, order_id):
+    # Ensure configuration happens here
+    paypalrestsdk.configure({
+        "mode": settings.PAYPAL_MODE,
+        "client_id": settings.PAYPAL_CLIENT_ID,
+        "client_secret": settings.PAYPAL_SECRET,
+    })
+
     payment_id = request.session.get("paypal_payment_id")
     payer_id = request.GET.get("PayerID")
     if not payment_id or not payer_id:
         messages.error(request, "Invalid PayPal response")
         return redirect("orders:order_confirmation", order_id)
+
     payment = paypalrestsdk.Payment.find(payment_id)
     if payment.execute({"payer_id": payer_id}):
         order = get_object_or_404(Order, id=order_id)
@@ -410,6 +418,47 @@ def paypal_execute(request, order_id):
     else:
         messages.error(request, "PayPal payment execution failed")
         return redirect("orders:order_confirmation", order_id)
+
+def paypal_payment(request, order_id):
+    paypalrestsdk.configure({
+        "mode": settings.PAYPAL_MODE,
+        "client_id": settings.PAYPAL_CLIENT_ID,
+        "client_secret": settings.PAYPAL_CLIENT_SECRET,
+    })
+
+    order = get_object_or_404(Order, id=order_id)
+    total_amount = str(order.get_total_cost())  # must be a string
+
+    payment = paypalrestsdk.Payment({
+        "intent": "sale",
+        "payer": {
+            "payment_method": "paypal"
+        },
+        "redirect_urls": {
+            "return_url": request.build_absolute_uri(f"/orders/paypal/execute/{order.id}/"),
+            "cancel_url": request.build_absolute_uri(f"/orders/paypal/cancel/{order.id}/"),
+        },
+        "transactions": [{
+            "amount": {
+                "total": total_amount,
+                "currency": "USD"
+            },
+            "description": f"Payment for Order #{order.id} - Rahim Clothing"
+        }]
+    })
+
+    if payment.create():
+        request.session["paypal_payment_id"] = payment.id
+        for link in payment.links:
+            if link.method == "REDIRECT":
+                return redirect(link.href)
+    else:
+        import json
+        print("🚨 PayPal Payment Error:")
+        print(json.dumps(payment.error, indent=2))
+        messages.error(request, "Unable to create PayPal payment")
+        return redirect("orders:order_confirmation", order_id)
+
 
 
 def payment_success(request, order_id):

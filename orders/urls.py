@@ -9,6 +9,7 @@ from .views import (
     paystack_checkout,
     paypal_checkout,
     paypal_execute,
+    paypal_payment,
     payment_success,
     payment_cancel,
     Stripe_payment_success,
@@ -35,7 +36,11 @@ urlpatterns = [
     # PayPal payment urls
     path('paypal/<int:order_id>/', paypal_checkout, name='paypal_checkout'),
     path('paypal/execute/<int:order_id>/', paypal_execute, name='paypal_execute'),
+
     path('webhook/paypal/', paypal_webhook, name='paypal_webhook'),
+
+    path("orders/paypal/<int:order_id>/", paypal_payment, name="paypal-payment"),
+
     path('payment/success/<int:order_id>/', payment_success, name='payment_success'),
     path('payment/cancel/<int:order_id>/', payment_cancel, name='payment_cancel'),
 
