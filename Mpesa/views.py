@@ -14,6 +14,7 @@ import traceback
 # Initialize MpesaClient once
 cl = MpesaClient()
 
+# [Inactive] Preserved for future testing
 @csrf_exempt
 def daraja_stk_push(request):
     if request.method == 'POST':
@@ -87,6 +88,7 @@ def daraja_stk_push(request):
     return render(request, "orders/order_confirmation.html", {
         "error": "Invalid request method."
     })
+# [Inactive] Preserved for future testing
 @csrf_exempt
 def stk_callback(request):
     try:
