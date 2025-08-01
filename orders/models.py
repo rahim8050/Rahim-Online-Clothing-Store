@@ -59,11 +59,19 @@ class Transaction(models.Model):
         ("daraja", "Daraja"),
         ("paypal", "PayPal"),
     )
+    STATUS_CHOICES = (
+        ("pending", "Pending"),
+        ("success", "Success"),
+        ("failed", "Failed"),
+        ("cancelled", "Cancelled"),
+    )
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     method = models.CharField(max_length=10, choices=METHOD_CHOICES)
     gateway = models.CharField(max_length=10, choices=GATEWAY_CHOICES)
-    status = models.CharField(max_length=20, default="pending")
+    status = models.CharField(
+        max_length=20, choices=STATUS_CHOICES, default="pending"
+    )
     reference = models.CharField(max_length=100)
     created_at = models.DateTimeField(auto_now_add=True)
 
