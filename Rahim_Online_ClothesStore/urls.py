@@ -21,15 +21,19 @@ from django.urls import path,include
 from product_app import views
 from django.conf import settings
 from django.conf.urls.static import static
+from orders.views import paystack_webhook
 
 urlpatterns = [
                   path('admin/', admin.site.urls),
                   path('utilities/', include('utilities.urls')), 
                   path('cart/', include('cart.urls')),
-                  path('orders/', include("orders.urls")),
+                  path('orders/', include("orders.urls",namespace='orders')),
                   # path('mpesa/', include('Mpesa.urls')),  # [Inactive] Preserved for future testing
                   path('', views.product_list, name='index'),
-                  path("webhook/", include("orders.urls")),
+                  
+
+                  path('webhook/paystack/', paystack_webhook, name='paystack_webhook'),  # ✅ direct path, no include
+
                   path('<slug:category_slug>/', views.product_list, name='product_list_by_category'),
                 #   path('category/<slug:slug>/', views.product_list, name='product_list_by_category'),
                   path('products/search/', views.SearchProduct, name='product_search'),
