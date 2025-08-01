@@ -317,14 +317,16 @@ def paystack_webhook(request):
     computed = hmac.new(
         settings.PAYSTACK_SECRET_KEY.encode(), request.body, hashlib.sha512
     ).hexdigest()
-    if signature != computed:
+    if not hmac.compare_digest(signature, computed):
         return HttpResponse(status=400)
+
     event = json.loads(request.body)
-    if event.get("event") == "charge.success":
-        data = event.get("data", {})
-        reference = data.get("reference")
-        amount = data.get("amount", 0) / 100
-        order_id = data.get("metadata", {}).get("order_id")
+    event_type = event.get("event")
+    data = event.get("data", {})
+    reference = data.get("reference")
+    order_id = data.get("metadata", {}).get("order_id")
+
+    if event_type == "charge.success":
         Transaction.objects.filter(reference=reference).update(status="success")
         if order_id:
             try:
@@ -333,6 +335,11 @@ def paystack_webhook(request):
                 order.save()
             except Order.DoesNotExist:
                 pass
+    elif event_type == "charge.failed":
+        Transaction.objects.filter(reference=reference).update(status="failed")
+    elif event_type == "charge.cancelled":
+        Transaction.objects.filter(reference=reference).update(status="cancelled")
+
     return HttpResponse(status=200)
 def paystack_payment_confirm(request):
     return render(request, "orders/paystack_confirm.html")
