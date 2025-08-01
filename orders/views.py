@@ -334,6 +334,8 @@ def paystack_webhook(request):
             except Order.DoesNotExist:
                 pass
     return HttpResponse(status=200)
+def paystack_payment_confirm(request):
+    return render(request, "orders/paystack_confirm.html")
 
 
 @csrf_exempt
