@@ -37,12 +37,24 @@ class Order(models.Model):
 
 
 class OrderItem(models.Model):
+    DELIVERY_STATUS_CHOICES = [
+        ("pending", "Pending"),
+        ("dispatched", "Dispatched"),
+        ("in_transit", "In transit"),
+        ("delivered", "Delivered"),
+    ]
+
     order = models.ForeignKey(Order, related_name="items", on_delete=models.CASCADE)
     product = models.ForeignKey(Product, related_name="order_items", on_delete=models.CASCADE)
     price = models.DecimalField(max_digits=10, decimal_places=2)
     quantity = models.PositiveIntegerField(default=1)
     warehouse = models.ForeignKey(
         Warehouse, null=True, blank=True, on_delete=models.SET_NULL
+    )
+    delivery_status = models.CharField(
+        max_length=20,
+        choices=DELIVERY_STATUS_CHOICES,
+        default="pending",
     )
 
     def get_cost(self):
