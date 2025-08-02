@@ -6,7 +6,7 @@ from orders.models import Order, OrderItem, Transaction
 # Register your models here.
 class OrderItemInline(admin.TabularInline):
     model = OrderItem
-    raw_id_fields = ["product"]
+    raw_id_fields = ["product", "warehouse"]
 
 
 @admin.register(Order)

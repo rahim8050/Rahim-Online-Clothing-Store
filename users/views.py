@@ -17,6 +17,7 @@ import logging
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse
 from orders.models import Order
+from django.conf import settings
 from django.contrib.auth.views import LoginView
 from .forms import CustomLoginForm  
 from .tokens import account_activation_token
@@ -199,4 +200,8 @@ class ResendActivationEmailView(View):
 @login_required
 def my_orders(request):
     orders = Order.objects.filter(user=request.user).order_by('-created_at')
-    return render(request, 'users/accounts/my_orders.html', {'orders': orders})
+    return render(
+        request,
+        'users/accounts/my_orders.html',
+        {'orders': orders, 'geoapify_api_key': settings.GEOAPIFY_API_KEY},
+    )
