@@ -108,15 +108,18 @@
             Pay with {% if order.payment_method == "mpesa" %}M-Pesa{% else %}Card{% endif %}
         </a>
     </div>
-    {% elif order.payment_method == "paypal" %}
-    <!-- PayPal Payment Button -->
-    <div class="flex justify-center">
-        <a href="{% url 'orders:paypal_checkout' order.id %}"
-           class="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-3 rounded-lg shadow-md">
-            Pay with PayPal
-        </a>
-    </div>
-    {% endif %}
+      {% elif order.payment_method == "paypal" %}
+      <!-- PayPal temporarily removed -->
+      {#
+      <!-- PayPal Payment Button -->
+      <div class="flex justify-center">
+          <a href="{% url 'orders:paypal_checkout' order.id %}"
+             class="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-3 rounded-lg shadow-md">
+              Pay with PayPal
+          </a>
+      </div>
+      #}
+      {% endif %}
 {% else %}
     <!-- Payment Already Done -->
     <div class="text-center text-green-600 font-semibold">

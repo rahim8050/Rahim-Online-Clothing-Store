@@ -63,25 +63,29 @@
         {# hide the default widget #}
         {% render_field form.payment_method class="sr-only" %}
 
-        <div class="space-y-2 mb-4">
-          {% for choice in form.payment_method %}
-            <label class="flex items-center p-3 border rounded-lg cursor-pointer hover:border-indigo-300
-                          {% if choice.data.value == form.payment_method.value %}border-indigo-400 bg-indigo-50{% else %}border-gray-300{% endif %}">
-              <input type="radio"
-                     name="{{ form.payment_method.name }}"
-                     value="{{ choice.data.value }}"
-                     class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300"
-                     {% if choice.data.value == form.payment_method.value %}checked{% endif %}>
-              <span class="ml-3 text-sm font-medium text-gray-700">
-                {{ choice.choice_label }}
-              </span>
-            </label>
-          {% endfor %}
+          <div class="space-y-2 mb-4">
+            {% for choice in form.payment_method %}
+              {% if choice.data.value != 'paypal' %}
+              <label class="flex items-center p-3 border rounded-lg cursor-pointer hover:border-indigo-300
+                            {% if choice.data.value == form.payment_method.value %}border-indigo-400 bg-indigo-50{% else %}border-gray-300{% endif %}">
+                <input type="radio"
+                       name="{{ form.payment_method.name }}"
+                       value="{{ choice.data.value }}"
+                       class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300"
+                       {% if choice.data.value == form.payment_method.value %}checked{% endif %}>
+                <span class="ml-3 text-sm font-medium text-gray-700">
+                  {{ choice.choice_label }}
+                </span>
+              </label>
+              {% else %}
+              <!-- PayPal temporarily removed -->
+              {% endif %}
+            {% endfor %}
 
-          {% if error_msg and form.payment_method.errors %}
-            <p class="mt-2 text-sm text-red-600">{{ form.payment_method.errors|striptags }}</p>
-          {% endif %}
-        </div>
+            {% if error_msg and form.payment_method.errors %}
+              <p class="mt-2 text-sm text-red-600">{{ form.payment_method.errors|striptags }}</p>
+            {% endif %}
+          </div>
 {%comment%}
          [Inactive] Preserved for future testing - MPESA phone input 
         {#
