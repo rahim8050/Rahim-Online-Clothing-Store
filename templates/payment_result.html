@@ -1,25 +1,45 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Payment Status</title>
-</head>
-<body>
-    <h1>Payment Status</h1>
+{% extends "base.html" %}
+
+{% block title %}Payment Status{% endblock %}
+
+{% block content %}
+<div class="max-w-xl mx-auto p-6 bg-white rounded shadow text-center">
+    <h1 class="text-2xl font-bold mb-4">Payment Status</h1>
     {% if error %}
-        <p style="color: red;">{{ error }}</p>
+        <p class="text-red-500">{{ error }}</p>
         {% if mpesa_error %}
             <pre>{{ mpesa_error|safe }}</pre>
         {% endif %}
     {% elif message %}
-        <p style="color: green;">{{ message }}</p>
-        <ul>
-            <li>Reference: {{ order_reference }}</li>
-            <li>Amount: {{ amount }}</li>
-            <li>Phone: {{ phone_number }}</li>
-            <li>Description: {{ transaction_description }}</li>
-        </ul>
+        <p class="text-green-600">{{ message }}</p>
     {% else %}
         <p>No information available.</p>
     {% endif %}
-</body>
-</html>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{% if order %}
+<script>
+    const csrftoken = window.CSRF_TOKEN;
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition((position) => {
+            fetch("{% url 'orders:save_location' %}", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-CSRFToken": csrftoken,
+                },
+                body: JSON.stringify({
+                    order_id: {{ order.id }},
+                    latitude: position.coords.latitude,
+                    longitude: position.coords.longitude,
+                }),
+            }).catch((err) => {
+                console.error("Location save failed", err);
+            });
+        });
+    }
+</script>
+{% endif %}
+{% endblock %}

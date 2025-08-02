@@ -5,7 +5,7 @@ from orders.models import Order, OrderItem
 from django.contrib import messages
 from django.urls import reverse_lazy, reverse
 from django.contrib.auth.decorators import login_required
-from django.views.decorators.http import require_http_methods
+from django.views.decorators.http import require_http_methods, require_POST
 from django.db import transaction
 from django.conf import settings
 import logging
@@ -483,9 +483,36 @@ def payment_success(request, order_id):
     order = get_object_or_404(Order, id=order_id)
     order.paid = True
     order.save()
-    return render(request, "payment_result.html", {"message": "Payment successful"})
+    return render(request, "payment_result.html", {"message": "Payment successful", "order": order})
 
 
 def payment_cancel(request, order_id):
     return render(request, "payment_result.html", {"error": "Payment cancelled"})
+
+
+@login_required
+@require_POST
+def save_location(request):
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+    order_id = data.get("order_id")
+    latitude = data.get("latitude")
+    longitude = data.get("longitude")
+    location_address = data.get("location_address")
+
+    try:
+        order = Order.objects.get(id=order_id, user=request.user)
+    except Order.DoesNotExist:
+        return JsonResponse({"error": "Order not found"}, status=404)
+
+    order.latitude = latitude
+    order.longitude = longitude
+    if location_address:
+        order.location_address = location_address
+    order.save()
+
+    return JsonResponse({"status": "success"})
 
