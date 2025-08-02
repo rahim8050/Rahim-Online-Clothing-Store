@@ -1,6 +1,6 @@
 from django.urls import path
 
-from .views import order_create, order_confirmation, get_location_info
+from .views import order_create, order_confirmation, get_location_info, save_location
 
 from .views import (
     order_create,
@@ -46,5 +46,6 @@ urlpatterns = [
 
     path('payment/success/<int:order_id>/', payment_success, name='payment_success'),
     path('payment/cancel/<int:order_id>/', payment_cancel, name='payment_cancel'),
+    path('save-location/', save_location, name='save_location'),
 
 ]
