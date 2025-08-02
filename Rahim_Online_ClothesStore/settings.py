@@ -49,6 +49,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'channels',
     'product_app',
     'cart.apps.CartConfig',
     'orders.apps.OrdersConfig',
@@ -121,6 +122,7 @@ TEMPLATES = [
     },
 ]
 
+ASGI_APPLICATION = 'Rahim_Online_ClothesStore.asgi.application'
 WSGI_APPLICATION = 'Rahim_Online_ClothesStore.wsgi.application'
 # The Mpesa environment to use
 # Possible values: sandbox, production
@@ -198,11 +200,17 @@ DATABASES = {
           'OPTIONS': {
               'charset': 'utf8mb4',
             'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
-           
+
         }
 
 
     }
+}
+
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels.layers.InMemoryChannelLayer',
+    },
 }
 
 
