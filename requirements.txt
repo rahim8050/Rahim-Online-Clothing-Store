@@ -13,6 +13,7 @@ django-tailwind==4.0.1
 django-widget-tweaks==1.5.0
 djangorestframework==3.16.0
 djangorestframework_simplejwt==5.5.0
+channels==4.1.0
 idna==3.10
 mysqlclient==2.2.7
 paypalrestsdk==1.13.3
