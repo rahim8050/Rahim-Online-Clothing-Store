@@ -24,17 +24,17 @@
                     {% for item in order.items.all %}
                         <div class="border rounded p-2 mt-2">
                             <p>{{ item.quantity }} x {{ item.product.name }}</p>
-                            {% if item.warehouse and order.latitude and order.longitude %}
+                            <p class="text-sm">Delivery status: {{ item.delivery_status }}</p>
+                            {% if item.delivery_status == "dispatched" %}
                                 <button class="mt-1 text-blue-600 text-sm underline track-item-btn"
                                         data-order-id="{{ order.id }}"
                                         data-item-id="{{ item.id }}"
-                                        data-wlat="{{ item.warehouse.latitude }}"
-                                        data-wlng="{{ item.warehouse.longitude }}"
                                         data-clat="{{ order.latitude }}"
                                         data-clng="{{ order.longitude }}">
                                     Track Item
                                 </button>
                                 <div id="map-{{ order.id }}-{{ item.id }}" class="w-full rounded border mt-2 hidden" style="height:300px;"></div>
+                                <p id="status-{{ order.id }}-{{ item.id }}" class="text-sm mt-2"></p>
                             {% else %}
                                 <p class="text-sm text-gray-500 mt-1">Tracking not available.</p>
                             {% endif %}
@@ -53,29 +53,35 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-const geoapifyKey = "{{ geoapify_api_key }}";
 document.querySelectorAll('.track-item-btn').forEach(btn => {
     btn.addEventListener('click', function() {
         const orderId = this.dataset.orderId;
         const itemId = this.dataset.itemId;
-        const wlat = parseFloat(this.dataset.wlat);
-        const wlng = parseFloat(this.dataset.wlng);
         const clat = parseFloat(this.dataset.clat);
         const clng = parseFloat(this.dataset.clng);
         const mapDiv = document.getElementById(`map-${orderId}-${itemId}`);
+        const statusEl = document.getElementById(`status-${orderId}-${itemId}`);
         if (mapDiv.classList.contains('hidden')) {
             mapDiv.classList.remove('hidden');
-            if (!mapDiv.dataset.mapLoaded) {
-                const map = L.map(mapDiv).setView([clat, clng], 6);
-                L.tileLayer(`https://maps.geoapify.com/v1/tile/osm-carto/{z}/{x}/{y}.png?apiKey=${geoapifyKey}`, {
-                    attribution: '&copy; OpenStreetMap contributors'
-                }).addTo(map);
-                L.marker([wlat, wlng]).addTo(map).bindPopup('Warehouse');
-                L.marker([clat, clng]).addTo(map).bindPopup('Destination');
-                L.polyline([[wlat, wlng], [clat, clng]], {color: 'blue'}).addTo(map);
-                map.fitBounds([[wlat, wlng], [clat, clng]]);
-                mapDiv.dataset.mapLoaded = true;
-            }
+            const map = L.map(mapDiv).setView([clat, clng], 13);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19}).addTo(map);
+            const truckIcon = L.icon({
+                iconUrl: 'https://cdn-icons-png.flaticon.com/512/1557/1557523.png',
+                iconSize: [32,32],
+                iconAnchor: [16,16],
+            });
+            const marker = L.marker([clat, clng], {icon: truckIcon}).addTo(map);
+            const socket = new WebSocket(`ws://${window.location.host}/ws/track/${orderId}/${itemId}/`);
+            socket.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                if (data.latitude && data.longitude) {
+                    marker.setLatLng([data.latitude, data.longitude]);
+                    map.setView([data.latitude, data.longitude]);
+                }
+                if (data.status) {
+                    statusEl.textContent = data.status;
+                }
+            };
         } else {
             mapDiv.classList.add('hidden');
         }
