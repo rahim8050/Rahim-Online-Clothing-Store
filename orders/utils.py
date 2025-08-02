@@ -42,8 +42,8 @@ def get_nearest_stock(product, latitude, longitude):
 
 def assign_warehouses_and_update_stock(order):
     """Assign the nearest warehouse to each order item and deduct stock."""
-    if order.stock_updated:
-        return
+    #if order.stock_updated:
+       # return
     for item in order.items.select_related("product"):
         if order.latitude is None or order.longitude is None:
             continue
