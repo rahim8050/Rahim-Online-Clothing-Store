@@ -521,5 +521,8 @@ def save_location(request):
         order.location_address = location_address
     order.save()
 
+    #  Trigger Codename GSI: Geo-Stock Integration
+    assign_warehouses_and_update_stock(order)
+
     return JsonResponse({"status": "success"})
 
