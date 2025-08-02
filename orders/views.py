@@ -13,7 +13,7 @@ from django.http import HttpResponse
 from django.views.decorators.csrf import csrf_exempt
 
 from django.http import JsonResponse
-from orders.utils import reverse_geocode
+from orders.utils import reverse_geocode, assign_warehouses_and_update_stock
 from .models import Transaction
 
 import stripe
@@ -333,6 +333,7 @@ def paystack_webhook(request):
                 order = Order.objects.get(id=order_id)
                 order.paid = True
                 order.save()
+                assign_warehouses_and_update_stock(order)
             except Order.DoesNotExist:
                 pass
     elif event_type == "charge.failed":
@@ -483,7 +484,13 @@ def payment_success(request, order_id):
     order = get_object_or_404(Order, id=order_id)
     order.paid = True
     order.save()
-    return render(request, "payment_result.html", {"message": "Payment successful", "order": order})
+    if order.payment_method in ["card", "mpesa"]:
+        assign_warehouses_and_update_stock(order)
+    return render(
+        request,
+        "payment_result.html",
+        {"message": "Payment successful", "order": order},
+    )
 
 
 def payment_cancel(request, order_id):
