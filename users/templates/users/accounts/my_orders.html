@@ -12,7 +12,7 @@
                 <div class="border rounded-lg p-4 shadow-sm">
                     <p><span class="font-semibold">Order ID:</span> {{ order.id }}</p>
                     <p><span class="font-semibold">Placed on:</span> {{ order.created_at|date:"Y-m-d H:i" }}</p>
-                    <p><span class="font-semibold">Status:</span> 
+                    <p><span class="font-semibold">Status:</span>
                         {% if order.paid %}
                             <span class="text-green-600 font-medium">Paid</span>
                         {% else %}
@@ -20,6 +20,17 @@
                         {% endif %}
                     </p>
                     <p><span class="font-semibold">Address:</span> {{ order.address }}</p>
+                    {% if order.latitude and order.longitude %}
+                        <button class="mt-2 text-blue-600 text-sm underline track-order-btn"
+                                data-order-id="{{ order.id }}"
+                                data-lat="{{ order.latitude }}"
+                                data-lng="{{ order.longitude }}">
+                            Track Order
+                        </button>
+                        <div id="map-{{ order.id }}" class="w-full rounded border mt-4 hidden" style="height:300px;"></div>
+                    {% else %}
+                        <p class="text-sm text-gray-500 mt-2">Location not yet saved.</p>
+                    {% endif %}
                 </div>
             {% endfor %}
         </div>
@@ -27,4 +38,32 @@
         <p class="text-gray-500">You have no orders yet.</p>
     {% endif %}
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+document.querySelectorAll('.track-order-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+        const orderId = this.dataset.orderId;
+        const lat = parseFloat(this.dataset.lat);
+        const lng = parseFloat(this.dataset.lng);
+        const mapDiv = document.getElementById(`map-${orderId}`);
+        if (mapDiv.classList.contains('hidden')) {
+            mapDiv.classList.remove('hidden');
+            if (!mapDiv.dataset.mapLoaded) {
+                const map = L.map(mapDiv).setView([lat, lng], 15);
+                L.tileLayer('https://maps.geoapify.com/v1/tile/osm-carto/{z}/{x}/{y}.png?apiKey=YOUR_GEOAPIFY_KEY', {
+                    attribution: '&copy; OpenStreetMap contributors'
+                }).addTo(map);
+                L.marker([lat, lng]).addTo(map).bindPopup('Order Location');
+                mapDiv.dataset.mapLoaded = true;
+            }
+        } else {
+            mapDiv.classList.add('hidden');
+        }
+    });
+});
+</script>
 {% endblock %}
