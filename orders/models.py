@@ -70,26 +70,39 @@ class Transaction(models.Model):
         ("mpesa", "M-Pesa"),
         ("paypal", "PayPal"),
     )
+
     GATEWAY_CHOICES = (
         ("paystack", "Paystack"),
         ("daraja", "Daraja"),
         ("paypal", "PayPal"),
     )
+
     STATUS_CHOICES = (
-        ("pending", "Pending"),
+        ("unknown", "Unknown"),     
         ("success", "Success"),
         ("failed", "Failed"),
         ("cancelled", "Cancelled"),
     )
+
     user = models.ForeignKey(User, on_delete=models.CASCADE)
+    order = models.ForeignKey(Order, on_delete=models.CASCADE)
+    email = models.EmailField(blank=True, null=True)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     method = models.CharField(max_length=10, choices=METHOD_CHOICES)
     gateway = models.CharField(max_length=10, choices=GATEWAY_CHOICES)
     status = models.CharField(
-        max_length=20, choices=STATUS_CHOICES, default="pending"
+        max_length=20, choices=STATUS_CHOICES, default="unknown"
     )
-    reference = models.CharField(max_length=100)
+    callback_received = models.BooleanField(default=False)
+    email_sent = models.BooleanField(default=False)
+    reference = models.CharField(max_length=100, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return f"{self.user} - {self.method} - {self.reference}"
+
+class EmailDispatchLog(models.Model):
+    transaction = models.ForeignKey(Transaction, on_delete=models.CASCADE)
+    status = models.CharField(max_length=10)
+    timestamp = models.DateTimeField(auto_now_add=True)
+    note = models.TextField(blank=True)

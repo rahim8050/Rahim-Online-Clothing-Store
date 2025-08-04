@@ -43,12 +43,15 @@ ALLOWED_HOSTS = ["*"]
 # Application definition
 
 INSTALLED_APPS = [
+    'daphne',  
+
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+
     'channels',
     'product_app',
     'cart.apps.CartConfig',
@@ -62,15 +65,9 @@ INSTALLED_APPS = [
     'utilities',
     'rest_framework',
     'apis.apps.ApisConfig',
-      'django_extensions',
-      'daphne',
-      
-    
-    
-    
-
-
+    'django_extensions',
 ]
+
 
 
 
