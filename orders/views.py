@@ -8,6 +8,8 @@ from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_http_methods, require_POST
 from django.db import transaction
 from django.conf import settings
+from django.core.mail import send_mail
+from django.template.loader import render_to_string
 import logging
 from django.http import HttpResponse
 from django.views.decorators.csrf import csrf_exempt
@@ -167,20 +169,30 @@ def get_location_info(request):
     data = reverse_geocode(lat, lon)
     return JsonResponse(data)
 
-
+@require_http_methods(["GET", "POST"])
 def paystack_checkout(request, order_id):
     """Initialize a Paystack transaction for card or M-Pesa."""
     order = get_object_or_404(Order, id=order_id)
 
-    payment_method = request.GET.get("payment_method")
+    # Try to fetch payment method from GET or POST
+    payment_method = request.GET.get("payment_method") or request.POST.get("payment_method")
     if payment_method not in {"card", "mpesa"}:
         messages.error(request, "Invalid payment method")
         return redirect("orders:order_confirmation", order.id)
 
+    # Choose Paystack channel
     channel = "card" if payment_method == "card" else "mobile_money"
+
+    # Build email (fallback to user's email)
+    payer_email = order.email or (order.user.email if hasattr(order.user, "email") else None)
+    if not payer_email:
+        messages.error(request, "No valid email found for Paystack checkout.")
+        return redirect("orders:order_confirmation", order.id)
+
+    # Prepare Paystack API payload
     headers = {"Authorization": f"Bearer {settings.PAYSTACK_SECRET_KEY}"}
     data = {
-        "email": order.email,
+        "email": payer_email,
         "amount": int(order.get_total_cost()) * 100,
         "callback_url": request.build_absolute_uri(
             reverse("orders:payment_success", args=[order.id])
@@ -188,6 +200,7 @@ def paystack_checkout(request, order_id):
         "metadata": {"order_id": order.id},
         "channels": [channel],
     }
+
     try:
         response = requests.post(
             "https://api.paystack.co/transaction/initialize",
@@ -196,20 +209,36 @@ def paystack_checkout(request, order_id):
             timeout=30,
         )
         res_data = response.json()
+
+        # Fail gracefully if Paystack rejects the request
+        if not response.ok or "data" not in res_data:
+            print("💥 Paystack Init Failure:", res_data)
+            raise Exception("Invalid Paystack response")
+
+        # Extract redirect URL and reference
         auth_url = res_data["data"]["authorization_url"]
         reference = res_data["data"]["reference"]
+
+        # Save transaction with default 'unknown' status
         Transaction.objects.create(
             user=order.user,
+            order=order,
             amount=order.get_total_cost(),
             method=payment_method,
             gateway="paystack",
-            status="pending",
+            status="unknown",  # ✅ model now defaults to this
             reference=reference,
+            email=payer_email
         )
+
         return redirect(auth_url)
-    except Exception:
-        messages.error(request, "Unable to initialize Paystack payment")
+
+    except Exception as e:
+        print("🔥 Paystack Init Error:", e)
+        messages.error(request, "Unable to initialize Paystack payment.")
+
     return redirect("orders:order_confirmation", order.id)
+
 
 def stripe_checkout(request, order_id):
     order = get_object_or_404(Order, id=order_id)
@@ -313,38 +342,90 @@ def stripe_webhook(request):
 
 @csrf_exempt
 def paystack_webhook(request):
+    # Step 1: Verify signature
     signature = request.META.get("HTTP_X_PAYSTACK_SIGNATURE", "")
     computed = hmac.new(
         settings.PAYSTACK_SECRET_KEY.encode(), request.body, hashlib.sha512
     ).hexdigest()
+
     if not hmac.compare_digest(signature, computed):
         return HttpResponse(status=400)
 
+    # Step 2: Parse payload
     event = json.loads(request.body)
     event_type = event.get("event")
     data = event.get("data", {})
     reference = data.get("reference")
     order_id = data.get("metadata", {}).get("order_id")
+    customer_email = data.get("customer", {}).get("email")
 
-    if event_type == "charge.success":
-        Transaction.objects.filter(reference=reference).update(status="success")
-        if order_id:
-            try:
-                order = Order.objects.get(id=order_id)
-                order.paid = True
-                order.save()
-                assign_warehouses_and_update_stock(order)
-            except Order.DoesNotExist:
-                pass
-    elif event_type == "charge.failed":
-        Transaction.objects.filter(reference=reference).update(status="failed")
-    elif event_type == "charge.cancelled":
-        Transaction.objects.filter(reference=reference).update(status="cancelled")
+    if not reference:
+        return HttpResponse(status=400)
+
+    # Step 3: Find transaction
+    try:
+        transaction = Transaction.objects.get(reference=reference)
+
+        transaction.callback_received = True
+        if customer_email and not transaction.email:
+            transaction.email = customer_email
+
+        # Handle success
+        if event_type == "charge.success":
+            transaction.status = "success"
+            transaction.save()
+
+            if order_id:
+                try:
+                    order = Order.objects.get(id=order_id)
+                    order.paid = True
+                    order.save()
+                    assign_warehouses_and_update_stock(order)
+
+                    # ✅ Send receipt + mark email_sent
+                    send_payment_receipt_email(transaction, order)
+                    transaction.email_sent = True
+                    transaction.save()
+
+                except Order.DoesNotExist:
+                    pass
+
+        # Handle failure
+        elif event_type == "charge.failed":
+            transaction.status = "failed"
+            transaction.save()
+
+        # Handle cancel
+        elif event_type == "charge.cancelled":
+            transaction.status = "cancelled"
+            transaction.save()
+
+    except Transaction.DoesNotExist:
+        print(f"[Webhook] Unknown transaction: {reference}")
 
     return HttpResponse(status=200)
+
 def paystack_payment_confirm(request):
     return render(request, "orders/paystack_confirm.html")
 
+
+def send_payment_receipt_email(transaction, order):
+    subject = f"🧾 Payment Receipt for Order #{order.id}"
+    recipient = [transaction.email]
+    
+    message = render_to_string("emails/payment_receipt.html", {
+        "user": transaction.user,
+        "order": order,
+        "transaction": transaction,
+    })
+
+    send_mail(
+        subject=subject,
+        message="This is an HTML email. Please use an HTML-capable client.",
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        recipient_list=recipient,
+        html_message=message,
+    )
 
 @csrf_exempt
 def paypal_webhook(request):
