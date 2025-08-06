@@ -33,7 +33,7 @@ urlpatterns = [
     path("webhook/stripe/", stripe_webhook, name="stripe-webhook"),
     # Paystack payment urls
     path('paystack/<int:order_id>/', paystack_checkout, name='paystack_checkout'),
-    path('orders/paystack/confirm/', paystack_payment_confirm, name='paystack_payment_confirm'),
+    path('paystack/confirm/', paystack_payment_confirm, name='paystack_payment_confirm'),
     # ✅ New - maps directly to /webhook/paystack/
     path("paystack/", paystack_webhook, name="paystack_webhook"),
     # PayPal payment urls

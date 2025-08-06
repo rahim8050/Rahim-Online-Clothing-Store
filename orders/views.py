@@ -16,7 +16,7 @@ from django.views.decorators.csrf import csrf_exempt
 
 from django.http import JsonResponse
 from orders.utils import reverse_geocode, assign_warehouses_and_update_stock
-from .models import Transaction
+from .models import Transaction, EmailDispatchLog
 
 import stripe
 import paypalrestsdk
@@ -195,7 +195,7 @@ def paystack_checkout(request, order_id):
         "email": payer_email,
         "amount": int(order.get_total_cost()) * 100,
         "callback_url": request.build_absolute_uri(
-            reverse("orders:payment_success", args=[order.id])
+            reverse("orders:paystack_payment_confirm")
         ),
         "metadata": {"order_id": order.id},
         "channels": [channel],
@@ -405,8 +405,58 @@ def paystack_webhook(request):
 
     return HttpResponse(status=200)
 
+
 def paystack_payment_confirm(request):
-    return render(request, "orders/paystack_confirm.html")
+    """Verify Paystack payment on redirect."""
+    reference = request.GET.get("reference")
+    if not reference:
+        return render(request, "payment_result.html", {"error": "Missing reference"})
+
+    url = f"https://api.paystack.co/transaction/verify/{reference}"
+    headers = {"Authorization": f"Bearer {settings.PAYSTACK_SECRET_KEY}"}
+
+    try:
+        res = requests.get(url, headers=headers, timeout=30)
+        data = res.json()
+    except Exception:
+        return render(request, "payment_result.html", {"error": "Verification failed"})
+
+    verify_status = data.get("data", {}).get("status")
+
+    transaction = get_object_or_404(Transaction, reference=reference, gateway="paystack")
+    order = transaction.order
+
+    if verify_status == "success":
+        transaction.status = "success"
+        transaction.callback_received = True
+        if not transaction.email:
+            transaction.email = order.email or getattr(order.user, "email", None)
+        transaction.save()
+
+        order.paid = True
+        order.payment_status = "paid"
+        order.save()
+        assign_warehouses_and_update_stock(order)
+
+        EmailDispatchLog.objects.create(
+            transaction=transaction, status="queued", note="Verified via redirect"
+        )
+
+        return redirect("orders:payment_success", order.id)
+
+    if verify_status in {"failed", "abandoned"}:
+        transaction.status = "failed"
+        transaction.callback_received = True
+        transaction.save()
+        order.payment_status = "failed"
+        order.save()
+        return render(request, "payment_result.html", {"error": "Payment failed"})
+
+    return render(
+        request,
+        "payment_result.html",
+        {"message": "Payment pending verification"},
+    )
 
 
 def send_payment_receipt_email(transaction, order):
@@ -563,10 +613,14 @@ def paypal_payment(request, order_id):
 
 def payment_success(request, order_id):
     order = get_object_or_404(Order, id=order_id)
-    order.paid = True
-    order.save()
-    if order.payment_method in ["card", "mpesa"]:
-        assign_warehouses_and_update_stock(order)
+    last_tx = (
+        Transaction.objects.filter(order=order).order_by("-created_at").first()
+    )
+    if not (last_tx and last_tx.gateway == "paystack"):
+        order.paid = True
+        order.save()
+        if order.payment_method in ["card", "mpesa"]:
+            assign_warehouses_and_update_stock(order)
     return render(
         request,
         "payment_result.html",
