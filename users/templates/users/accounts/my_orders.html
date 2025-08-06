@@ -53,39 +53,109 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-document.querySelectorAll('.track-item-btn').forEach(btn => {
-    btn.addEventListener('click', function() {
-        const orderId = this.dataset.orderId;
-        const itemId = this.dataset.itemId;
-        const clat = parseFloat(this.dataset.clat);
-        const clng = parseFloat(this.dataset.clng);
-        const mapDiv = document.getElementById(`map-${orderId}-${itemId}`);
-        const statusEl = document.getElementById(`status-${orderId}-${itemId}`);
-        if (mapDiv.classList.contains('hidden')) {
-            mapDiv.classList.remove('hidden');
-            const map = L.map(mapDiv).setView([clat, clng], 13);
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19}).addTo(map);
-            const truckIcon = L.icon({
-                iconUrl: 'https://cdn-icons-png.flaticon.com/512/1557/1557523.png',
-                iconSize: [32,32],
-                iconAnchor: [16,16],
-            });
-            const marker = L.marker([clat, clng], {icon: truckIcon}).addTo(map);
-            const socket = new WebSocket(`ws://${window.location.host}/ws/track/${orderId}/${itemId}/`);
-            socket.onmessage = function(event) {
-                const data = JSON.parse(event.data);
-                if (data.latitude && data.longitude) {
-                    marker.setLatLng([data.latitude, data.longitude]);
-                    map.setView([data.latitude, data.longitude]);
-                }
-                if (data.status) {
-                    statusEl.textContent = data.status;
-                }
-            };
-        } else {
-            mapDiv.classList.add('hidden');
+(() => {
+  const states = new Map(); // key: mapDiv.id -> {map, marker, socket}
+
+  document.querySelectorAll('.track-item-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const orderId = btn.dataset.orderId;
+      const itemId  = btn.dataset.itemId;
+      const clat    = parseFloat(btn.dataset.clat);
+      const clng    = parseFloat(btn.dataset.clng);
+
+      const mapDivId = `map-${orderId}-${itemId}`;
+      const mapDiv   = document.getElementById(mapDivId);
+      const statusEl = document.getElementById(`status-${orderId}-${itemId}`);
+
+      // Toggle map visibility
+      const showing = mapDiv.classList.contains('hidden');
+      mapDiv.classList.toggle('hidden');
+
+      if (!showing) {
+        // Hide: close socket to avoid leaks
+        const st = states.get(mapDivId);
+        if (st && st.socket && st.socket.readyState <= 1) {
+          try { st.socket.close(); } catch(_) {}
         }
+        return;
+      }
+
+      // Make sure map container is positioned
+      mapDiv.style.position = mapDiv.style.position || 'relative';
+
+      let st = states.get(mapDivId);
+      if (!st) {
+        // Create map
+        const map = L.map(mapDiv, {
+          center: [clat, clng],
+          zoom: 13,
+          worldCopyJump: true,   // wrap horizontally
+        });
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          maxZoom: 19,
+          noWrap: false,         // allow wrap
+          continuousWorld: true, // repeat tiles horizontally
+          attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(map);
+
+        // Remove any bounds restrictions
+        if (map.setMaxBounds) map.setMaxBounds(null);
+
+        // Truck icon
+        const truckIcon = L.icon({
+          iconUrl: 'https://cdn-icons-png.flaticon.com/512/1557/1557523.png',
+          iconSize: [32, 32],
+          iconAnchor: [16, 16],
+        });
+
+        const marker = L.marker([clat, clng], { icon: truckIcon }).addTo(map);
+
+        // WebSocket
+        const wsProto = location.protocol === 'https:' ? 'wss' : 'ws';
+        const socket = new WebSocket(`${wsProto}://${window.location.host}/ws/track/${orderId}/${itemId}/`);
+
+        socket.onmessage = (event) => {
+          const data = JSON.parse(event.data || '{}');
+          if (data.latitude != null && data.longitude != null) {
+            const latlng = [data.latitude, data.longitude];
+            marker.setLatLng(latlng);
+            // Always center on marker
+            map.setView(latlng);
+          }
+          if (data.status && statusEl) {
+            statusEl.textContent = data.status;
+          }
+        };
+
+        socket.onerror = (e) => console.warn('WS error:', e);
+        st = { map, marker, socket };
+        states.set(mapDivId, st);
+      } else {
+        // Reopen existing map
+        st.map.invalidateSize();
+        if (!st.socket || st.socket.readyState > 1) {
+          const wsProto = location.protocol === 'https:' ? 'wss' : 'ws';
+          const socket = new WebSocket(`${wsProto}://${window.location.host}/ws/track/${orderId}/${itemId}/`);
+          socket.onmessage = (event) => {
+            const data = JSON.parse(event.data || '{}');
+            if (data.latitude != null && data.longitude != null) {
+              const latlng = [data.latitude, data.longitude];
+              st.marker.setLatLng(latlng);
+              st.map.setView(latlng);
+            }
+            if (data.status && statusEl) {
+              statusEl.textContent = data.status;
+            }
+          };
+          socket.onerror = (e) => console.warn('WS error:', e);
+          st.socket = socket;
+        }
+      }
     });
-});
+  });
+})();
 </script>
+
+
 {% endblock %}
