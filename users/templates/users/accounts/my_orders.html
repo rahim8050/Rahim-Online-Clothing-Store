@@ -13,8 +13,10 @@
                     <p><span class="font-semibold">Order ID:</span> {{ order.id }}</p>
                     <p><span class="font-semibold">Placed on:</span> {{ order.created_at|date:"Y-m-d H:i" }}</p>
                     <p><span class="font-semibold">Status:</span>
-                        {% with tx=order.transaction_set.last %}
-                            {% if (tx and tx.status == "success") or order.payment_status == "paid" %}
+                        {% with order.transaction_set.last as tx %}
+                            {% if tx and tx.status == "success" %}
+                                <span class="text-green-600 font-medium">Paid (verified)</span>
+                            {% elif order.payment_status == "paid" %}
                                 <span class="text-green-600 font-medium">Paid (verified)</span>
                             {% elif order.paid %}
                                 <span class="text-yellow-600 font-medium">Paid (unverified)</span>
@@ -58,7 +60,7 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 (() => {
-  const states = new Map(); // key: mapDiv.id -> {map, marker, socket}
+  const states = new Map();
 
   document.querySelectorAll('.track-item-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -71,12 +73,10 @@
       const mapDiv   = document.getElementById(mapDivId);
       const statusEl = document.getElementById(`status-${orderId}-${itemId}`);
 
-      // Toggle map visibility
       const showing = mapDiv.classList.contains('hidden');
       mapDiv.classList.toggle('hidden');
 
       if (!showing) {
-        // Hide: close socket to avoid leaks
         const st = states.get(mapDivId);
         if (st && st.socket && st.socket.readyState <= 1) {
           try { st.socket.close(); } catch(_) {}
@@ -84,29 +84,25 @@
         return;
       }
 
-      // Make sure map container is positioned
       mapDiv.style.position = mapDiv.style.position || 'relative';
 
       let st = states.get(mapDivId);
       if (!st) {
-        // Create map
         const map = L.map(mapDiv, {
           center: [clat, clng],
           zoom: 13,
-          worldCopyJump: true,   // wrap horizontally
+          worldCopyJump: true
         });
 
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
           maxZoom: 19,
-          noWrap: false,         // allow wrap
-          continuousWorld: true, // repeat tiles horizontally
+          noWrap: false,
+          continuousWorld: true,
           attribution: '&copy; OpenStreetMap contributors'
         }).addTo(map);
 
-        // Remove any bounds restrictions
         if (map.setMaxBounds) map.setMaxBounds(null);
 
-        // Truck icon
         const truckIcon = L.icon({
           iconUrl: 'https://cdn-icons-png.flaticon.com/512/1557/1557523.png',
           iconSize: [32, 32],
@@ -115,7 +111,6 @@
 
         const marker = L.marker([clat, clng], { icon: truckIcon }).addTo(map);
 
-        // WebSocket
         const wsProto = location.protocol === 'https:' ? 'wss' : 'ws';
         const socket = new WebSocket(`${wsProto}://${window.location.host}/ws/track/${orderId}/${itemId}/`);
 
@@ -124,7 +119,6 @@
           if (data.latitude != null && data.longitude != null) {
             const latlng = [data.latitude, data.longitude];
             marker.setLatLng(latlng);
-            // Always center on marker
             map.setView(latlng);
           }
           if (data.status && statusEl) {
@@ -136,7 +130,6 @@
         st = { map, marker, socket };
         states.set(mapDivId, st);
       } else {
-        // Reopen existing map
         st.map.invalidateSize();
         if (!st.socket || st.socket.readyState > 1) {
           const wsProto = location.protocol === 'https:' ? 'wss' : 'ws';
@@ -160,6 +153,4 @@
   });
 })();
 </script>
-
-
 {% endblock %}

@@ -200,8 +200,16 @@ class ResendActivationEmailView(View):
 @login_required
 def my_orders(request):
     orders = Order.objects.filter(user=request.user).order_by('-created_at')
+
+    # Attach last transaction to each order
+    for order in orders:
+        order.last_tx = order.transaction_set.order_by('-id').first()
+
     return render(
         request,
         'users/accounts/my_orders.html',
-        {'orders': orders, 'geoapify_api_key': settings.GEOAPIFY_API_KEY},
+        {
+            'orders': orders,
+            'geoapify_api_key': settings.GEOAPIFY_API_KEY
+        },
     )
