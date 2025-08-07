@@ -13,17 +13,15 @@
                     <p><span class="font-semibold">Order ID:</span> {{ order.id }}</p>
                     <p><span class="font-semibold">Placed on:</span> {{ order.created_at|date:"Y-m-d H:i" }}</p>
                     <p><span class="font-semibold">Status:</span>
-                        {% with order.transaction_set.last as tx %}
-                            {% if tx and tx.status == "success" %}
+                        {% if order.paid %}
+                            {% if order.last_tx and order.last_tx.callback_received %}
                                 <span class="text-green-600 font-medium">Paid (verified)</span>
-                            {% elif order.payment_status == "paid" %}
-                                <span class="text-green-600 font-medium">Paid (verified)</span>
-                            {% elif order.paid %}
-                                <span class="text-yellow-600 font-medium">Paid (unverified)</span>
                             {% else %}
-                                <span class="text-red-500 font-medium">Pending</span>
+                                <span class="text-yellow-600 font-medium">Paid (awaiting confirmation)</span>
                             {% endif %}
-                        {% endwith %}
+                        {% else %}
+                            <span class="text-red-500 font-medium">Not Paid</span>
+                        {% endif %}
                     </p>
                     <p><span class="font-semibold">Address:</span> {{ order.address }}</p>
 
