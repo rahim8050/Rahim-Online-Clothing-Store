@@ -341,17 +341,17 @@ def stripe_webhook(request):
 
 
 @csrf_exempt
+@csrf_exempt
 def paystack_webhook(request):
-    # Step 1: Verify signature
+    """Handle Paystack payment notifications."""
     signature = request.META.get("HTTP_X_PAYSTACK_SIGNATURE", "")
     computed = hmac.new(
         settings.PAYSTACK_SECRET_KEY.encode(), request.body, hashlib.sha512
     ).hexdigest()
-
     if not hmac.compare_digest(signature, computed):
+        logger.warning("Invalid Paystack signature")
         return HttpResponse(status=400)
 
-    # Step 2: Parse payload
     event = json.loads(request.body)
     event_type = event.get("event")
     data = event.get("data", {})
@@ -362,101 +362,67 @@ def paystack_webhook(request):
     if not reference:
         return HttpResponse(status=400)
 
-    # Step 3: Find transaction
     try:
         transaction = Transaction.objects.get(reference=reference)
-
-        transaction.callback_received = True
-        if customer_email and not transaction.email:
-            transaction.email = customer_email
-
-        # Handle success
-        if event_type == "charge.success":
-            transaction.status = "success"
-            transaction.save()
-
-            if order_id:
-                try:
-                    order = Order.objects.get(id=order_id)
-                    order.paid = True
-                    order.save()
-                    assign_warehouses_and_update_stock(order)
-
-                    # ✅ Send receipt + mark email_sent
-                    send_payment_receipt_email(transaction, order)
-                    transaction.email_sent = True
-                    transaction.save()
-
-                except Order.DoesNotExist:
-                    pass
-
-        # Handle failure
-        elif event_type == "charge.failed":
-            transaction.status = "failed"
-            transaction.save()
-
-        # Handle cancel
-        elif event_type == "charge.cancelled":
-            transaction.status = "cancelled"
-            transaction.save()
-
     except Transaction.DoesNotExist:
-        print(f"[Webhook] Unknown transaction: {reference}")
+        logger.error(f"[Webhook] Unknown transaction: {reference}")
+        return HttpResponse(status=200)
+
+    transaction.callback_received = True
+    transaction.verified = True
+    if customer_email and not transaction.email:
+        transaction.email = customer_email
+
+    if event_type == "charge.success":
+        transaction.status = "success"
+        transaction.save(update_fields=["callback_received", "verified", "status", "email"])
+
+        order = None
+        if order_id:
+            try:
+                order = Order.objects.get(id=order_id)
+            except Order.DoesNotExist:
+                order = None
+
+        if order:
+            order.paid = True
+            order.payment_status = "paid"
+            order.save(update_fields=["paid", "payment_status"])
+            assign_warehouses_and_update_stock(order)
+
+            send_payment_receipt_email(transaction, order)
+            transaction.email_sent = True
+            transaction.save(update_fields=["email_sent"])
+
+    elif event_type == "charge.failed":
+        transaction.status = "failed"
+        transaction.save(update_fields=["callback_received", "verified", "status", "email"])
+        if order_id:
+            Order.objects.filter(id=order_id).update(payment_status="failed")
+
+    elif event_type == "charge.cancelled":
+        transaction.status = "cancelled"
+        transaction.save(update_fields=["callback_received", "verified", "status", "email"])
+        if order_id:
+            Order.objects.filter(id=order_id).update(payment_status="cancelled")
+    else:
+        transaction.save(update_fields=["callback_received", "verified", "email"])
 
     return HttpResponse(status=200)
 
 
 def paystack_payment_confirm(request):
-    """Verify Paystack payment on redirect."""
+    """Redirect from Paystack after user completes checkout.
+
+    The webhook will verify the payment and update records, so this view simply
+    redirects to the success page without modifying any state.
+    """
     reference = request.GET.get("reference")
     if not reference:
         return render(request, "payment_result.html", {"error": "Missing reference"})
 
-    url = f"https://api.paystack.co/transaction/verify/{reference}"
-    headers = {"Authorization": f"Bearer {settings.PAYSTACK_SECRET_KEY}"}
-
-    try:
-        res = requests.get(url, headers=headers, timeout=30)
-        data = res.json()
-    except Exception:
-        return render(request, "payment_result.html", {"error": "Verification failed"})
-
-    verify_status = data.get("data", {}).get("status")
-
     transaction = get_object_or_404(Transaction, reference=reference, gateway="paystack")
-    order = transaction.order
-
-    if verify_status == "success":
-        transaction.status = "success"
-        transaction.callback_received = True
-        if not transaction.email:
-            transaction.email = order.email or getattr(order.user, "email", None)
-        transaction.save()
-
-        order.paid = True
-        order.payment_status = "paid"
-        order.save()
-        assign_warehouses_and_update_stock(order)
-
-        EmailDispatchLog.objects.create(
-            transaction=transaction, status="queued", note="Verified via redirect"
-        )
-
-        return redirect("orders:payment_success", order.id)
-
-    if verify_status in {"failed", "abandoned"}:
-        transaction.status = "failed"
-        transaction.callback_received = True
-        transaction.save()
-        order.payment_status = "failed"
-        order.save()
-        return render(request, "payment_result.html", {"error": "Payment failed"})
-
-    return render(
-        request,
-        "payment_result.html",
-        {"message": "Payment pending verification"},
-    )
+    return redirect("orders:payment_success", transaction.order.id)
 
 
 def send_payment_receipt_email(transaction, order):
@@ -613,19 +579,20 @@ def paypal_payment(request, order_id):
 
 def payment_success(request, order_id):
     order = get_object_or_404(Order, id=order_id)
-    last_tx = (
-        Transaction.objects.filter(order=order).order_by("-created_at").first()
-    )
+    last_tx = Transaction.objects.filter(order=order).order_by("-created_at").first()
+
+    # Only non-Paystack gateways should mark the order as paid here.
+    message = "Payment successful"
     if not (last_tx and last_tx.gateway == "paystack"):
         order.paid = True
-        order.save()
+        order.payment_status = "paid"
+        order.save(update_fields=["paid", "payment_status"])
         if order.payment_method in ["card", "mpesa"]:
             assign_warehouses_and_update_stock(order)
-    return render(
-        request,
-        "payment_result.html",
-        {"message": "Payment successful", "order": order},
-    )
+    else:
+        message = "Payment received. Awaiting confirmation."
+
+    return render(request, "payment_result.html", {"message": message, "order": order})
 
 
 def payment_cancel(request, order_id):
