@@ -94,6 +94,7 @@ class Transaction(models.Model):
         max_length=20, choices=STATUS_CHOICES, default="unknown"
     )
     callback_received = models.BooleanField(default=False)
+    verified = models.BooleanField(default=False)
     email_sent = models.BooleanField(default=False)
     reference = models.CharField(max_length=100, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
