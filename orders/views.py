@@ -342,7 +342,9 @@ def stripe_webhook(request):
 
 @csrf_exempt
 def paystack_webhook(request):
-    # Step 1: Verify signature
+    import logging
+    logger = logging.getLogger("paystack")
+
     signature = request.META.get("HTTP_X_PAYSTACK_SIGNATURE", "")
     computed = hmac.new(
         settings.PAYSTACK_SECRET_KEY.encode(), request.body, hashlib.sha512
@@ -351,7 +353,6 @@ def paystack_webhook(request):
     if not hmac.compare_digest(signature, computed):
         return HttpResponse(status=400)
 
-    # Step 2: Parse payload
     event = json.loads(request.body)
     event_type = event.get("event")
     data = event.get("data", {})
@@ -362,48 +363,49 @@ def paystack_webhook(request):
     if not reference:
         return HttpResponse(status=400)
 
-    # Step 3: Find transaction
     try:
         transaction = Transaction.objects.get(reference=reference)
-
         transaction.callback_received = True
+        transaction.verified = True  # ✅ Mark as secure source
+
         if customer_email and not transaction.email:
             transaction.email = customer_email
 
-        # Handle success
         if event_type == "charge.success":
             transaction.status = "success"
-            transaction.save()
+            transaction.save(update_fields=["status", "callback_received", "email", "verified"])
 
             if order_id:
                 try:
                     order = Order.objects.get(id=order_id)
                     order.paid = True
-                    order.save()
+                    order.payment_status = "paid"
+                    order.save(update_fields=["paid", "payment_status"])
+
                     assign_warehouses_and_update_stock(order)
 
-                    # ✅ Send receipt + mark email_sent
                     send_payment_receipt_email(transaction, order)
                     transaction.email_sent = True
-                    transaction.save()
-
+                    transaction.save(update_fields=["email_sent"])
                 except Order.DoesNotExist:
-                    pass
+                    logger.warning(f"Order {order_id} not found for reference {reference}")
 
-        # Handle failure
         elif event_type == "charge.failed":
             transaction.status = "failed"
-            transaction.save()
+            transaction.save(update_fields=["status", "callback_received", "verified"])
 
-        # Handle cancel
         elif event_type == "charge.cancelled":
             transaction.status = "cancelled"
-            transaction.save()
+            transaction.save(update_fields=["status", "callback_received", "verified"])
+
+        else:
+            logger.warning(f"Unhandled event type: {event_type}")
 
     except Transaction.DoesNotExist:
-        print(f"[Webhook] Unknown transaction: {reference}")
+        logger.error(f"Unknown transaction reference in webhook: {reference}")
 
     return HttpResponse(status=200)
+
 
 
 def paystack_payment_confirm(request):
@@ -613,19 +615,28 @@ def paypal_payment(request, order_id):
 
 def payment_success(request, order_id):
     order = get_object_or_404(Order, id=order_id)
-    last_tx = (
-        Transaction.objects.filter(order=order).order_by("-created_at").first()
-    )
-    if not (last_tx and last_tx.gateway == "paystack"):
+    last_tx = Transaction.objects.filter(order=order).order_by("-created_at").first()
+
+    if last_tx and last_tx.gateway == "paystack":
+        # Don't trust yet — wait for webhook
+        order.payment_status = "pending_confirmation"
+        order.paid = False
+        order.save(update_fields=["payment_status", "paid"])
+    else:
+        # For mpesa/card (or any other gateway you trust at redirect)
         order.paid = True
-        order.save()
+        order.payment_status = "paid"
+        order.save(update_fields=["payment_status", "paid"])
         if order.payment_method in ["card", "mpesa"]:
             assign_warehouses_and_update_stock(order)
+
     return render(
         request,
         "payment_result.html",
         {"message": "Payment successful", "order": order},
     )
+
+
 
 
 def payment_cancel(request, order_id):
