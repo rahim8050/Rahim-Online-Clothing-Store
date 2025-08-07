@@ -1,58 +1,86 @@
+# orders/management/commands/reconcile_paystack.py
+
+import json
+import hmac
+import hashlib
+import logging
+import requests
+
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 from django.conf import settings
 from datetime import timedelta
-import requests
-
 from orders.models import Transaction, EmailDispatchLog, Order
 
+logger = logging.getLogger(__name__)
 
 class Command(BaseCommand):
-    help = "Reconcile missed Paystack webhooks via transaction verify API."
+    help = "Reconcile stale Paystack transactions via the verify API."
 
-    def handle(self, *args, **options):
-        cutoff = timezone.now() - timedelta(minutes=10)
-        txs = Transaction.objects.filter(
-            gateway="paystack", status="unknown", created_at__lt=cutoff
+    def add_arguments(self, parser):
+        parser.add_argument(
+            "--minutes",
+            type=int,
+            default=10,
+            help="Only reconcile transactions older than this many minutes (default: 10)",
         )
 
-        if not txs.exists():
-            self.stdout.write("No transactions to reconcile.")
+    def handle(self, *args, **options):
+        cutoff = timezone.now() - timedelta(minutes=options["minutes"])
+        qs = Transaction.objects.filter(
+            gateway="paystack",
+            status="unknown",
+            callback_received=False,
+            created_at__lt=cutoff,
+        )
+
+        if not qs.exists():
+            self.stdout.write("No stale Paystack transactions to reconcile.")
             return
 
         headers = {"Authorization": f"Bearer {settings.PAYSTACK_SECRET_KEY}"}
-
-        for tx in txs:
+        for tx in qs:
             url = f"https://api.paystack.co/transaction/verify/{tx.reference}"
             try:
-                res = requests.get(url, headers=headers, timeout=30)
-                data = res.json()
+                resp = requests.get(url, headers=headers, timeout=15)
+                data = resp.json()
             except Exception as e:
-                self.stdout.write(self.style.WARNING(f"{tx.reference}: error {e}"))
+                logger.warning(f"Network error verifying {tx.reference}: {e}")
                 continue
 
-            status = data.get("data", {}).get("status")
-            order = tx.order
+            api_ok = data.get("status", False)
+            api_status = data.get("data", {}).get("status")
 
-            if status == "success":
+            # Mark the callback as received (we’ve done the manual check)
+            tx.callback_received = True
+            tx.verified = api_ok and api_status == "success"
+
+            # Map Paystack statuses to our model
+            if api_ok and api_status == "success":
                 tx.status = "success"
-                tx.callback_received = True
-                tx.save(update_fields=["status", "callback_received"])
+            elif api_ok and api_status in ("failed", "abandoned", "error"):
+                tx.status = "failed"
+            else:
+                # leave it unknown if Paystack didn’t confirm failure
+                tx.status = "unknown"
+
+            tx.save(update_fields=["status", "callback_received", "verified"])
+
+            self.stdout.write(
+                self.style.SUCCESS(f"{tx.reference}: reconciled → {tx.status}")
+            )
+
+            # If it succeeded, update order + queue email
+            if tx.status == "success" and tx.verified:
+                order = tx.order
                 order.paid = True
                 order.payment_status = "paid"
                 order.save(update_fields=["paid", "payment_status"])
-                EmailDispatchLog.objects.create(
-                    transaction=tx, status="queued", note="Reconciled via verify"
-                )
-                self.stdout.write(self.style.SUCCESS(f"{tx.reference}: success"))
-            elif status in {"failed", "abandoned"}:
-                tx.status = "failed"
-                tx.callback_received = True
-                tx.save(update_fields=["status", "callback_received"])
-                order.payment_status = "failed"
-                order.save(update_fields=["payment_status"])
-                self.stdout.write(self.style.WARNING(f"{tx.reference}: failed"))
-            else:
-                self.stdout.write(f"{tx.reference}: pending")
 
-        self.stdout.write(self.style.SUCCESS("Reconciliation complete."))
+                EmailDispatchLog.objects.create(
+                    transaction=tx,
+                    status="queued",
+                    note="Reconciled via verify API"
+                )
+
+        self.stdout.write(self.style.SUCCESS("Reconciliation run complete."))
