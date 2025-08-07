@@ -451,10 +451,6 @@ def paystack_webhook(request):
         else:
             logger.warning(f"Unhandled event type: {event_type}")
 
-    except Transaction.DoesNotExist:
-        logger.error(f"Unknown transaction reference in webhook: {reference}")
-
-
     return HttpResponse(status=200)
 
 
@@ -627,39 +623,36 @@ def paypal_payment(request, order_id):
 
 def payment_success(request, order_id):
     order = get_object_or_404(Order, id=order_id)
-    last_tx = Transaction.objects.filter(order=order).order_by("-created_at").first()
+    last_tx = (
+        Transaction.objects.filter(order=order)
+        .order_by("-created_at")
+        .first()
+    )
 
-
-    # Only non-Paystack gateways should mark the order as paid here.
+    # Default message for non‐Paystack flows
     message = "Payment successful"
-    if not (last_tx and last_tx.gateway == "paystack"):
-        order.paid = True
-        order.payment_status = "paid"
-        order.save(update_fields=["paid", "payment_status"])
-        if order.payment_method in ["card", "mpesa"]:
-            assign_warehouses_and_update_stock(order)
-    else:
-        message = "Payment received. Awaiting confirmation."
 
-    return render(request, "payment_result.html", {"message": message, "order": order})
-
+    # If this was a Paystack transaction, we soft-trust until webhook
     if last_tx and last_tx.gateway == "paystack":
-        # Don't trust yet — wait for webhook
         order.payment_status = "pending_confirmation"
         order.paid = False
         order.save(update_fields=["payment_status", "paid"])
+        message = "Payment received. Awaiting confirmation."
     else:
-        # For mpesa/card (or any other gateway you trust at redirect)
+        # All other gateways we trust at redirect time
         order.paid = True
         order.payment_status = "paid"
-        order.save(update_fields=["payment_status", "paid"])
+        order.save(update_fields=["paid", "payment_status"])
         if order.payment_method in ["card", "mpesa"]:
             assign_warehouses_and_update_stock(order)
 
     return render(
         request,
         "payment_result.html",
-        {"message": "Payment successful", "order": order},
+        {
+            "message": message,
+            "order": order,
+        },
     )
 
 
