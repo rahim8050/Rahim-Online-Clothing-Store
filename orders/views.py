@@ -343,7 +343,13 @@ def stripe_webhook(request):
 @csrf_exempt
 @csrf_exempt
 def paystack_webhook(request):
+
     """Handle Paystack payment notifications."""
+
+    import logging
+    logger = logging.getLogger("paystack")
+
+
     signature = request.META.get("HTTP_X_PAYSTACK_SIGNATURE", "")
     computed = hmac.new(
         settings.PAYSTACK_SECRET_KEY.encode(), request.body, hashlib.sha512
@@ -364,6 +370,7 @@ def paystack_webhook(request):
 
     try:
         transaction = Transaction.objects.get(reference=reference)
+
     except Transaction.DoesNotExist:
         logger.error(f"[Webhook] Unknown transaction: {reference}")
         return HttpResponse(status=200)
@@ -408,7 +415,48 @@ def paystack_webhook(request):
     else:
         transaction.save(update_fields=["callback_received", "verified", "email"])
 
+        transaction.callback_received = True
+        transaction.verified = True  # ✅ Mark as secure source
+
+        if customer_email and not transaction.email:
+            transaction.email = customer_email
+
+        if event_type == "charge.success":
+            transaction.status = "success"
+            transaction.save(update_fields=["status", "callback_received", "email", "verified"])
+
+            if order_id:
+                try:
+                    order = Order.objects.get(id=order_id)
+                    order.paid = True
+                    order.payment_status = "paid"
+                    order.save(update_fields=["paid", "payment_status"])
+
+                    assign_warehouses_and_update_stock(order)
+
+                    send_payment_receipt_email(transaction, order)
+                    transaction.email_sent = True
+                    transaction.save(update_fields=["email_sent"])
+                except Order.DoesNotExist:
+                    logger.warning(f"Order {order_id} not found for reference {reference}")
+
+        elif event_type == "charge.failed":
+            transaction.status = "failed"
+            transaction.save(update_fields=["status", "callback_received", "verified"])
+
+        elif event_type == "charge.cancelled":
+            transaction.status = "cancelled"
+            transaction.save(update_fields=["status", "callback_received", "verified"])
+
+        else:
+            logger.warning(f"Unhandled event type: {event_type}")
+
+    except Transaction.DoesNotExist:
+        logger.error(f"Unknown transaction reference in webhook: {reference}")
+
+
     return HttpResponse(status=200)
+
 
 
 def paystack_payment_confirm(request):
@@ -581,6 +629,7 @@ def payment_success(request, order_id):
     order = get_object_or_404(Order, id=order_id)
     last_tx = Transaction.objects.filter(order=order).order_by("-created_at").first()
 
+
     # Only non-Paystack gateways should mark the order as paid here.
     message = "Payment successful"
     if not (last_tx and last_tx.gateway == "paystack"):
@@ -593,6 +642,28 @@ def payment_success(request, order_id):
         message = "Payment received. Awaiting confirmation."
 
     return render(request, "payment_result.html", {"message": message, "order": order})
+
+    if last_tx and last_tx.gateway == "paystack":
+        # Don't trust yet — wait for webhook
+        order.payment_status = "pending_confirmation"
+        order.paid = False
+        order.save(update_fields=["payment_status", "paid"])
+    else:
+        # For mpesa/card (or any other gateway you trust at redirect)
+        order.paid = True
+        order.payment_status = "paid"
+        order.save(update_fields=["payment_status", "paid"])
+        if order.payment_method in ["card", "mpesa"]:
+            assign_warehouses_and_update_stock(order)
+
+    return render(
+        request,
+        "payment_result.html",
+        {"message": "Payment successful", "order": order},
+    )
+
+
+
 
 
 def payment_cancel(request, order_id):
