@@ -32,9 +32,7 @@
                             {% if item.delivery_status == "dispatched" %}
                                 <button class="mt-1 text-blue-600 text-sm underline track-item-btn"
                                         data-order-id="{{ order.id }}"
-                                        data-item-id="{{ item.id }}"
-                                        data-clat="{{ order.latitude }}"
-                                        data-clng="{{ order.longitude }}">
+                                        data-item-id="{{ item.id }}">
                                     Track Item
                                 </button>
                                 <div id="map-{{ order.id }}-{{ item.id }}" class="w-full rounded border mt-2 hidden" style="height:300px;"></div>
@@ -64,8 +62,6 @@
     btn.addEventListener('click', () => {
       const orderId = btn.dataset.orderId;
       const itemId  = btn.dataset.itemId;
-      const clat    = parseFloat(btn.dataset.clat);
-      const clng    = parseFloat(btn.dataset.clng);
 
       const mapDivId = `map-${orderId}-${itemId}`;
       const mapDiv   = document.getElementById(mapDivId);
@@ -82,16 +78,9 @@
         return;
       }
 
-      mapDiv.style.position = mapDiv.style.position || 'relative';
-
       let st = states.get(mapDivId);
       if (!st) {
-        const map = L.map(mapDiv, {
-          center: [clat, clng],
-          zoom: 13,
-          worldCopyJump: true
-        });
-
+        const map = L.map(mapDiv, { zoom: 13, worldCopyJump: true });
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
           maxZoom: 19,
           noWrap: false,
@@ -99,52 +88,66 @@
           attribution: '&copy; OpenStreetMap contributors'
         }).addTo(map);
 
-        if (map.setMaxBounds) map.setMaxBounds(null);
-
         const truckIcon = L.icon({
           iconUrl: 'https://cdn-icons-png.flaticon.com/512/1557/1557523.png',
           iconSize: [32, 32],
           iconAnchor: [16, 16],
         });
 
-        const marker = L.marker([clat, clng], { icon: truckIcon }).addTo(map);
-
         const wsProto = location.protocol === 'https:' ? 'wss' : 'ws';
         const socket = new WebSocket(`${wsProto}://${window.location.host}/ws/track/${orderId}/${itemId}/`);
 
+        st = { map, truckIcon, socket };
+        states.set(mapDivId, st);
+
         socket.onmessage = (event) => {
           const data = JSON.parse(event.data || '{}');
-          if (data.latitude != null && data.longitude != null) {
+          if (data.type === 'init') {
+            const wh = [data.warehouse.latitude, data.warehouse.longitude];
+            const dest = [data.destination.latitude, data.destination.longitude];
+            st.map.setView(wh, 13);
+            st.whMarker = L.marker(wh).addTo(st.map);
+            st.destMarker = L.marker(dest).addTo(st.map);
+            st.route = L.polyline([wh, dest], {color: 'blue'}).addTo(st.map);
+            st.marker = L.marker(wh, { icon: st.truckIcon }).addTo(st.map);
+            if (statusEl) statusEl.textContent = data.status;
+          } else if (data.type === 'tick') {
             const latlng = [data.latitude, data.longitude];
-            marker.setLatLng(latlng);
-            map.setView(latlng);
-          }
-          if (data.status && statusEl) {
-            statusEl.textContent = data.status;
+            if (st.marker) st.marker.setLatLng(latlng);
+            if (statusEl) statusEl.textContent = data.status;
+          } else if (data.type === 'complete') {
+            const latlng = [data.latitude, data.longitude];
+            if (st.marker) st.marker.setLatLng(latlng);
+            if (statusEl) statusEl.textContent = data.status;
+            socket.close();
           }
         };
 
         socket.onerror = (e) => console.warn('WS error:', e);
-        st = { map, marker, socket };
-        states.set(mapDivId, st);
       } else {
         st.map.invalidateSize();
         if (!st.socket || st.socket.readyState > 1) {
           const wsProto = location.protocol === 'https:' ? 'wss' : 'ws';
           const socket = new WebSocket(`${wsProto}://${window.location.host}/ws/track/${orderId}/${itemId}/`);
+          st.socket = socket;
           socket.onmessage = (event) => {
             const data = JSON.parse(event.data || '{}');
-            if (data.latitude != null && data.longitude != null) {
+            if (data.type === 'init') {
+              const wh = [data.warehouse.latitude, data.warehouse.longitude];
+              const dest = [data.destination.latitude, data.destination.longitude];
+              st.map.setView(wh, 13);
+              st.whMarker = L.marker(wh).addTo(st.map);
+              st.destMarker = L.marker(dest).addTo(st.map);
+              st.route = L.polyline([wh, dest], {color: 'blue'}).addTo(st.map);
+              st.marker = L.marker(wh, { icon: st.truckIcon }).addTo(st.map);
+            } else if (data.type === 'tick' || data.type === 'complete') {
               const latlng = [data.latitude, data.longitude];
-              st.marker.setLatLng(latlng);
-              st.map.setView(latlng);
+              if (st.marker) st.marker.setLatLng(latlng);
+              if (data.type === 'complete') socket.close();
             }
-            if (data.status && statusEl) {
-              statusEl.textContent = data.status;
-            }
+            if (statusEl && data.status) statusEl.textContent = data.status;
           };
           socket.onerror = (e) => console.warn('WS error:', e);
-          st.socket = socket;
         }
       }
     });

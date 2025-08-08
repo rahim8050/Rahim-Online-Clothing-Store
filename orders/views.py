@@ -15,7 +15,9 @@ from django.http import HttpResponse
 from django.views.decorators.csrf import csrf_exempt
 
 from django.http import JsonResponse
-from orders.utils import reverse_geocode, assign_warehouses_and_update_stock
+from orders.utils import reverse_geocode
+from orders.services.assignment import assign_warehouses_and_update_stock
+from django.utils import timezone
 from .models import Transaction, EmailDispatchLog
 
 import stripe
@@ -681,13 +683,31 @@ def save_location(request):
     except Order.DoesNotExist:
         return JsonResponse({"error": "Order not found"}, status=404)
 
+    if order.coords_locked:
+        return JsonResponse({"status": "locked"})
+
+    try:
+        latitude = float(latitude)
+        longitude = float(longitude)
+    except (TypeError, ValueError):
+        return JsonResponse({"error": "Invalid coordinates"}, status=400)
+
     order.latitude = latitude
     order.longitude = longitude
     if location_address:
         order.location_address = location_address
-    order.save()
+    order.coords_locked = True
+    order.coords_source = "browser"
+    order.coords_updated_at = timezone.now()
+    order.save(update_fields=[
+        "latitude",
+        "longitude",
+        "location_address",
+        "coords_locked",
+        "coords_source",
+        "coords_updated_at",
+    ])
 
-    #  Trigger Codename GSI: Geo-Stock Integration
     assign_warehouses_and_update_stock(order)
 
     return JsonResponse({"status": "success"})
