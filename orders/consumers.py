@@ -1,9 +1,13 @@
 import asyncio
-from channels.generic.websocket import AsyncWebsocketConsumer
+from channels.generic.websocket import AsyncJsonWebsocketConsumer
 from channels.db import database_sync_to_async
 from .models import Order, OrderItem
 
-class DeliveryTrackerConsumer(AsyncWebsocketConsumer):
+
+class DeliveryTrackerConsumer(AsyncJsonWebsocketConsumer):
+    STEPS = 60
+    TICK_DELAY = 0.5
+
     async def connect(self):
         self.order_id = self.scope["url_route"]["kwargs"]["order_id"]
         self.item_id = self.scope["url_route"]["kwargs"]["item_id"]
@@ -15,38 +19,67 @@ class DeliveryTrackerConsumer(AsyncWebsocketConsumer):
             await self.close()
             return
 
-        if self.item.delivery_status != "dispatched":
-            await self.close()
-            return
-
-        await self.set_status("in_transit")
-        await self.accept()
-
         start_lat = self.item.warehouse.latitude
         start_lng = self.item.warehouse.longitude
         end_lat = self.order.latitude
         end_lng = self.order.longitude
 
-        steps = 30
-        lat_step = (end_lat - start_lat) / steps
-        lng_step = (end_lng - start_lng) / steps
+        await self.accept()
 
-        for i in range(1, steps + 1):
+        if self.item.delivery_status == "delivered":
+            await self.send_json(
+                {
+                    "type": "complete",
+                    "latitude": end_lat,
+                    "longitude": end_lng,
+                    "status": "delivered",
+                }
+            )
+            await self.close()
+            return
+
+        if self.item.delivery_status != "dispatched":
+            await self.close()
+            return
+
+        await self.set_status("en_route")
+        await self.send_json(
+            {
+                "type": "init",
+                "warehouse": {"latitude": start_lat, "longitude": start_lng},
+                "destination": {"latitude": end_lat, "longitude": end_lng},
+                "status": "en_route",
+            }
+        )
+
+        lat_step = (end_lat - start_lat) / self.STEPS
+        lng_step = (end_lng - start_lng) / self.STEPS
+
+        for i in range(1, self.STEPS + 1):
             lat = start_lat + lat_step * i
             lng = start_lng + lng_step * i
-            await self.send_json({
-                "latitude": lat,
-                "longitude": lng,
-                "status": "in_transit",
-            })
-            await asyncio.sleep(0.5)
+            status = "en_route"
+            if i > self.STEPS * 0.9:
+                status = "nearby"
+            await self.send_json(
+                {
+                    "type": "tick",
+                    "latitude": lat,
+                    "longitude": lng,
+                    "status": status,
+                }
+            )
+            await asyncio.sleep(self.TICK_DELAY)
 
         await self.set_status("delivered")
-        await self.send_json({
-            "latitude": end_lat,
-            "longitude": end_lng,
-            "status": "delivered",
-        })
+        await self.send_json(
+            {
+                "type": "complete",
+                "latitude": end_lat,
+                "longitude": end_lng,
+                "status": "delivered",
+            }
+        )
         await self.close()
 
     @database_sync_to_async
