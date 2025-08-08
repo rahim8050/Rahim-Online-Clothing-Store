@@ -12,6 +12,9 @@ class Order(models.Model):
     latitude = models.FloatField(null=True, blank=True)
     longitude = models.FloatField(null=True, blank=True)
     location_address = models.TextField(null=True, blank=True)
+    coords_locked = models.BooleanField(default=False)
+    coords_source = models.CharField(max_length=20, blank=True, default="")
+    coords_updated_at = models.DateTimeField(null=True, blank=True)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -40,8 +43,12 @@ class OrderItem(models.Model):
     DELIVERY_STATUS_CHOICES = [
         ("pending", "Pending"),
         ("dispatched", "Dispatched"),
-        ("in_transit", "In transit"),
+        ("en_route", "En route"),
+        ("nearby", "Nearby"),
         ("delivered", "Delivered"),
+        ("failed", "Failed"),
+        ("cancelled", "Cancelled"),
+        ("compromised", "Compromised"),
     ]
 
     order = models.ForeignKey(Order, related_name="items", on_delete=models.CASCADE)
