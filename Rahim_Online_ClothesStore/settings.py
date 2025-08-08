@@ -123,8 +123,9 @@ TEMPLATES = [
     },
 ]
 
-ASGI_APPLICATION = 'Rahim_Online_ClothesStore.asgi.application'
-WSGI_APPLICATION = 'Rahim_Online_ClothesStore.wsgi.application'
+ASGI_APPLICATION = "Rahim_Online_ClothesStore.asgi.application"
+ALLOWED_HOSTS = ["127.0.0.1", "localhost"]
+CHANNEL_LAYERS = {"default": {"BACKEND": "channels.layers.InMemoryChannelLayer"}}
 # The Mpesa environment to use
 # Possible values: sandbox, production
 
