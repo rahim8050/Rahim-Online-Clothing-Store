@@ -1,7 +1,8 @@
 from django.db import models
-from product_app.models import Product, Warehouse
+from django.db.models import CheckConstraint, Q
 from django.contrib.auth import get_user_model
 from django.conf import settings
+from product_app.models import Product, Warehouse
 
 User = get_user_model()
 
@@ -30,7 +31,17 @@ class Order(models.Model):
     payment_intent_id = models.CharField(max_length=100, blank=True, null=True)
     stripe_receipt_url = models.URLField(blank=True, null=True)
 
-
+    class Meta:
+        constraints = [
+            CheckConstraint(
+                check=(Q(latitude__gte=-90) & Q(latitude__lte=90)) | Q(latitude__isnull=True),
+                name="order_lat_range",
+            ),
+            CheckConstraint(
+                check=(Q(longitude__gte=-180) & Q(longitude__lte=180)) | Q(longitude__isnull=True),
+                name="order_lng_range",
+            ),
+        ]
 
     def get_total_cost(self):
         return int(sum(item.get_cost() for item in self.items.all()))
@@ -41,14 +52,10 @@ class Order(models.Model):
 
 class OrderItem(models.Model):
     DELIVERY_STATUS_CHOICES = [
-        ("pending", "Pending"),
+        ("created", "Created"),
         ("dispatched", "Dispatched"),
         ("en_route", "En route"),
-        ("nearby", "Nearby"),
         ("delivered", "Delivered"),
-        ("failed", "Failed"),
-        ("cancelled", "Cancelled"),
-        ("compromised", "Compromised"),
     ]
 
     order = models.ForeignKey(Order, related_name="items", on_delete=models.CASCADE)
@@ -61,7 +68,7 @@ class OrderItem(models.Model):
     delivery_status = models.CharField(
         max_length=20,
         choices=DELIVERY_STATUS_CHOICES,
-        default="pending",
+        default="created",
     )
 
     def get_cost(self):
