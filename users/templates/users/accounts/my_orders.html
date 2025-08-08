@@ -29,17 +29,8 @@
                         <div class="border rounded p-2 mt-2">
                             <p>{{ item.quantity }} x {{ item.product.name }}</p>
                             <p class="text-sm">Delivery status: {{ item.delivery_status }}</p>
-                            {% if item.delivery_status == "dispatched" %}
-                                <button class="mt-1 text-blue-600 text-sm underline track-item-btn"
-                                        data-order-id="{{ order.id }}"
-                                        data-item-id="{{ item.id }}">
-                                    Track Item
-                                </button>
-                                <div id="map-{{ order.id }}-{{ item.id }}" class="w-full rounded border mt-2 hidden" style="height:300px;"></div>
-                                <p id="status-{{ order.id }}-{{ item.id }}" class="text-sm mt-2"></p>
-                            {% else %}
-                                <p class="text-sm text-gray-500 mt-1">Tracking not available.</p>
-                            {% endif %}
+                            <button class="track-item-btn" data-order-id="{{ order.id }}" data-item-id="{{ item.id }}">Track</button>
+                            <div id="map-{{ order.id }}-{{ item.id }}" class="w-full h-64 rounded hidden"></div>
                         </div>
                     {% endfor %}
                 </div>
@@ -52,8 +43,8 @@
 {% endblock %}
 
 {% block extra_js %}
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 <script>
 (function() {
   const maps = {};      // mapDivId -> {map, marker}
