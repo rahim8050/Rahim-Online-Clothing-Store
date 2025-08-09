@@ -46,100 +46,64 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 <script>
-(function() {
-  const maps = {};      // mapDivId -> {map, marker}
-  const sockets = {};   // "order:item" -> WebSocket
+(function () {
+  const wsScheme = location.protocol === 'https:' ? 'wss' : 'ws';
 
-  function ensureVisible(div) {
-    div.classList.remove('hidden');
-    if (!div.style.height) div.style.height = '256px';
-  }
-  function isNum(x){ return Number.isFinite(Number(x)); }
-
-  function initMap(mapDiv, lat, lng) {
-    ensureVisible(mapDiv);
-    lat = Number(lat); lng = Number(lng);
-    if (!isNum(lat) || !isNum(lng)) {
-      console.error("Bad init coords", lat, lng);
-      mapDiv.innerHTML = `<div class="p-3 text-red-600">Invalid coordinates</div>`;
-      return null;
-    }
-    const m = L.map(mapDiv, { center:[lat,lng], zoom:13, zoomControl:true, attributionControl:true });
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19, attribution: '&copy; OpenStreetMap contributors'
-    }).addTo(m);
-    const marker = L.marker([lat,lng]).addTo(m);
-    setTimeout(()=>m.invalidateSize(), 0);  // fixes blank tiles after unhide
-    return {map:m, marker};
+  function buildMap(div) {
+    if (!div.style.height || div.clientHeight < 50) div.style.height = '256px';
+    const map = L.map(div).setView([-1.286389, 36.817223], 12);
+    const tiles = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 });
+    tiles.addTo(map);
+    tiles.on('tileerror', (e) => console.warn('Tile error', e));
+    // Important: recalc size after becoming visible
+    setTimeout(() => map.invalidateSize(), 0);
+    return map;
   }
 
-  function connectTrack(orderId, itemId) {
-    const mapDivId = `map-${orderId}-${itemId}`;
-    const mapDiv   = document.getElementById(mapDivId);
-    if (!mapDiv) return console.error("Missing map div", mapDivId);
-    ensureVisible(mapDiv);
+  document.addEventListener('click', function (e) {
+    const btn = e.target.closest('.track-item-btn');
+    if (!btn) return;
 
-    // reuse socket if already open
-    const key = `${orderId}:${itemId}`;
-    if (sockets[key] && sockets[key].readyState === WebSocket.OPEN) {
-      console.log("WS already open", key);
-      return;
+    const orderId = btn.dataset.orderId;
+    const itemId  = btn.dataset.itemId;
+
+    const mapDiv = document.getElementById(`map-${orderId}-${itemId}`);
+    if (!mapDiv) return console.warn('No map div');
+
+    // 1) Show first, then build/resize
+    mapDiv.classList.remove('hidden');
+    let map = mapDiv._map;
+    if (!map) {
+      map = buildMap(mapDiv);
+      mapDiv._map = map;
+    } else {
+      setTimeout(() => map.invalidateSize(), 0);
     }
 
-    const scheme = location.protocol === "https:" ? "wss" : "ws";
-    const ws = new WebSocket(`${scheme}://${location.host}/ws/track/${orderId}/${itemId}/`);
-    sockets[key] = ws;
+    // (Optional) now start WS after map is visible
+    const ws = new WebSocket(`${wsScheme}://${location.host}/ws/track/${orderId}/${itemId}/`);
+    let marker = mapDiv._marker;
 
-    ws.onopen = () => console.log("WS OPEN", key);
     ws.onmessage = (e) => {
-      let msg = null;
-      try { msg = JSON.parse(e.data); } catch { console.log("WS TEXT", e.data); return; }
-      console.log("WS JSON", key, msg);
-
-      if (msg.type === "error") {
-        mapDiv.innerHTML = `<div class="p-3 text-red-600">Tracking error: ${msg.message || msg.code}</div>`;
-        return;
-      }
-
-      if (msg.type === "init") {
-        const start = msg.warehouse || {};
-        const entry = initMap(mapDiv, start.latitude, start.longitude);
-        if (entry) maps[mapDivId] = entry;
-        return;
-      }
-
-      if (msg.type === "tick") {
-        const entry = maps[mapDivId];
-        if (entry && isNum(msg.latitude) && isNum(msg.longitude)) {
-          entry.marker.setLatLng([msg.latitude, msg.longitude]);
-          // optional: keep map centered
-          // entry.map.setView([msg.latitude, msg.longitude]);
+      try {
+        const d = JSON.parse(e.data);
+        if (d.type === 'tick' && d.lat && d.lng) {
+          if (!marker) {
+            marker = L.marker([d.lat, d.lng]).addTo(map);
+            mapDiv._marker = marker;
+          } else {
+            marker.setLatLng([d.lat, d.lng]);
+          }
+          map.setView([d.lat, d.lng]);
+        } else if (d.type === 'error') {
+          console.warn('Tracking error:', d.code);
         }
-        return;
-      }
-
-      if (msg.type === "complete") {
-        const entry = maps[mapDivId];
-        if (entry && isNum(msg.latitude) && isNum(msg.longitude)) {
-          entry.marker.setLatLng([msg.latitude, msg.longitude]);
-        }
-        try { ws.close(); } catch {}
-        return;
-      }
+      } catch {}
     };
-
-    ws.onerror = (e) => console.warn("WS ERROR", key, e);
-    ws.onclose = (e) => console.log("WS CLOSE", key, e.code, e.reason);
-  }
-
-  // Hook your "Track" buttons
-  document.querySelectorAll('.track-item-btn').forEach(btn => {
-    btn.addEventListener('click', function() {
-      const orderId = this.dataset.orderId;
-      const itemId  = this.dataset.itemId;
-      connectTrack(orderId, itemId);
-    });
+    ws.onclose = (e) => console.log('WS CLOSE', e.code);
   });
 })();
 </script>
+
+
 {% endblock %}

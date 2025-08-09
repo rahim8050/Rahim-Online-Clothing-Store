@@ -1,130 +1,238 @@
 """WebSocket consumers for order delivery tracking."""
 
 import asyncio
-import traceback
+import logging
+from typing import Optional
 
 from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
 
 from .models import Order, OrderItem
 
+logger = logging.getLogger("orders.ws")
+
 
 class DeliveryTrackerConsumer(AsyncJsonWebsocketConsumer):
-    """Simulate live delivery tracking for a single ``OrderItem``."""
+    """
+    Simulate live delivery tracking for a single OrderItem.
+    Open the socket at: /ws/track/<order_id>/<item_id>/
+    """
 
     STEPS = 60
     TICK_DELAY = 0.5  # seconds
 
-    async def _fail(self, code: int, message: str):
-        """Send an error payload then close the socket with ``code``."""
-        await self.send_json({"type": "error", "code": code, "message": message})
-        await self.close(code=code)
+    # -------------------------
+    # Lifecycle
+    # -------------------------
 
     async def connect(self):
+        """
+        Accept the connection first so we can send structured errors to the client
+        instead of failing the handshake (which shows up as 1006 in the browser).
+        """
+        # Parse URL kwargs (don’t crash if missing)
+        self.order_id: Optional[int] = None
+        self.item_id: Optional[int] = None
+        self._runner_task: Optional[asyncio.Task] = None
+
         try:
-            self.order_id = int(self.scope["url_route"]["kwargs"]["order_id"])
-            self.item_id = int(self.scope["url_route"]["kwargs"]["item_id"])
-            await self.accept()  # accept early to avoid client-side errors
+            self.order_id = int(self.scope["url_route"]["kwargs"].get("order_id"))
+            self.item_id = int(self.scope["url_route"]["kwargs"].get("item_id"))
+        except Exception:
+            await self.accept()
+            await self._fail(4000, "bad_url_params")
+            return
 
-            self.order = await self.get_order(self.order_id)
-            if not self.order:
-                return await self._fail(4000, "order_not_found")
+        # Accept early
+        await self.accept()
+        print(f"[WS] connect start order={self.order_id} item={self.item_id}")
 
-            self.item = await self.get_item(self.item_id)
-            if not self.item:
-                return await self._fail(4001, "item_not_found")
+        # Kick off the simulation as a background task
+        self._runner_task = asyncio.create_task(self._run_simulation())
 
-            if not self.item.warehouse:
-                return await self._fail(4002, "warehouse_missing")
+    async def disconnect(self, close_code):
+        # Cancel background simulation if still running
+        if self._runner_task and not self._runner_task.done():
+            self._runner_task.cancel()
+            try:
+                await self._runner_task
+            except asyncio.CancelledError:
+                pass
+        print(f"[WS] disconnected with code {close_code}")
 
-            start_lat = self.item.warehouse.latitude
-            start_lng = self.item.warehouse.longitude
-            end_lat = self.order.latitude
-            end_lng = self.order.longitude
+    async def receive_json(self, content, **kwargs):
+        """
+        Keep a lightweight handler for client messages.
+        - {type:"ping"} -> {type:"pong"}
+        - echo everything else for testing
+        """
+        t = content.get("type")
+        if t == "ping":
+            await self.send_json({"type": "pong"})
+            return
+        await self.send_json({"type": "echo", "data": content})
 
-            if None in (start_lat, start_lng, end_lat, end_lng):
-                return await self._fail(4005, "coords_missing")
+    # -------------------------
+    # Simulation Runner
+    # -------------------------
 
-            if self.item.delivery_status == "delivered":
-                await self.send_json(
-                    {
-                        "type": "complete",
-                        "latitude": end_lat,
-                        "longitude": end_lng,
-                        "status": "delivered",
-                    }
-                )
-                return await self.close()
+    async def _run_simulation(self):
+        """
+        Validate inputs, load data, and stream ticks.
+        Runs in a background task so connect() can return immediately.
+        """
+        try:
+            # Load and validate
+            order = await self._get_order(self.order_id)
+            if not order:
+                await self._fail(4001, "order_not_found")
+                return
 
-            if self.item.delivery_status not in {"dispatched", "en_route"}:
-                return await self._fail(
-                    4004, f"not_dispatched (got {self.item.delivery_status})"
-                )
+            item = await self._get_item(self.item_id, self.order_id)
+            if not item:
+                await self._fail(4002, "item_not_found_or_mismatch")
+                return
 
-            await self.set_status("en_route")
-            await self.send_json(
-                {
-                    "type": "init",
-                    "warehouse": {"latitude": start_lat, "longitude": start_lng},
-                    "destination": {"latitude": end_lat, "longitude": end_lng},
-                    "status": "en_route",
-                }
-            )
+            if not item.warehouse_id:
+                await self._fail(4003, "warehouse_missing")
+                return
 
+            start_lat = item.warehouse.latitude
+            start_lng = item.warehouse.longitude
+            end_lat = order.latitude
+            end_lng = order.longitude
+
+            if start_lat is None or start_lng is None:
+                await self._fail(4005, "warehouse_coords_missing")
+                return
+            if end_lat is None or end_lng is None:
+                await self._fail(4006, "destination_coords_missing")
+                return
+
+            # Status gates
+            if item.delivery_status == "delivered":
+                await self.send_json({
+                    "type": "complete",
+                    "lat": end_lat, "lng": end_lng,
+                    "latitude": end_lat, "longitude": end_lng,
+                    "status": "delivered",
+                })
+                await self.close()
+                return
+
+            if item.delivery_status not in {"dispatched", "en_route"}:
+                await self._fail(4004, f"not_dispatched (got {item.delivery_status})")
+                return
+
+            if item.delivery_status == "dispatched":
+                await self._set_status(item.pk, "en_route")
+
+            # Initial payload
+            await self.send_json({
+                "type": "init",
+                "warehouse": {
+                    "lat": start_lat, "lng": start_lng,
+                    "latitude": start_lat, "longitude": start_lng,
+                },
+                "destination": {
+                    "lat": end_lat, "lng": end_lng,
+                    "latitude": end_lat, "longitude": end_lng,
+                },
+                "status": "en_route",
+            })
+
+            # Straight-line simulator
             lat_step = (end_lat - start_lat) / self.STEPS
             lng_step = (end_lng - start_lng) / self.STEPS
+
             for i in range(1, self.STEPS + 1):
                 lat = start_lat + lat_step * i
                 lng = start_lng + lng_step * i
                 status = "nearby" if i > self.STEPS * 0.9 else "en_route"
-                await self.send_json(
-                    {
-                        "type": "tick",
-                        "latitude": lat,
-                        "longitude": lng,
-                        "status": status,
-                    }
-                )
+
+                await self.send_json({
+                    "type": "tick",
+                    "lat": lat, "lng": lng,
+                    "latitude": lat, "longitude": lng,
+                    "status": status,
+                    "progress": round(i * 100 / self.STEPS, 2),
+                })
+
+                # yield control; if client disconnects this will raise CancelledError quickly
                 await asyncio.sleep(self.TICK_DELAY)
 
-            await self.set_status("delivered")
-            await self.send_json(
-                {
-                    "type": "complete",
-                    "latitude": end_lat,
-                    "longitude": end_lng,
-                    "status": "delivered",
-                }
-            )
+            # Mark delivered and send final
+            await self._set_status(item.pk, "delivered")
+            await self.send_json({
+                "type": "complete",
+                "lat": end_lat, "lng": end_lng,
+                "latitude": end_lat, "longitude": end_lng,
+                "status": "delivered",
+            })
             await self.close()
 
-        except Exception:  # pragma: no cover - defensive programming
-            traceback.print_exc()
+        except asyncio.CancelledError:
+            # Normal path when the client disconnects mid-stream
+            logger.debug("Simulation cancelled (client disconnected) order=%s item=%s", self.order_id, self.item_id)
+            raise
+        except Exception as exc:
+            logger.exception("Simulation crashed: %s", exc)
             try:
                 await self.send_json({"type": "error", "message": "server_error"})
             finally:
                 await self.close(code=1011)
 
-    async def receive_json(self, content, **kwargs):
-        """Echo any received payload back to the client."""
-        await self.send_json({"type": "echo", "data": content})
+    # -------------------------
+    # Helpers
+    # -------------------------
+
+    async def _fail(self, code: int, message: str):
+        """
+        Send an error payload then close the socket with `code`.
+        Codes 4000-4999 are application-defined close codes.
+        """
+        await self.send_json({
+            "type": "error",
+            "code": code,
+            "message": message,
+            "order_id": self.order_id,
+            "item_id": self.item_id,
+        })
+        await self.close(code=code)
+
+    # -------------------------
+    # DB helpers (thread off)
+    # -------------------------
 
     @database_sync_to_async
-    def get_order(self, order_id: int):
+    def _get_order(self, order_id: int):
         try:
             return Order.objects.get(pk=order_id)
         except Order.DoesNotExist:
             return None
 
     @database_sync_to_async
-    def get_item(self, item_id: int):
+    def _get_item(self, item_id: int, order_id: int):
+        """
+        Fetch item by pk AND its order to prevent mismatches.
+        """
         try:
-            return OrderItem.objects.select_related("warehouse").get(pk=item_id)
+            return (OrderItem.objects
+                    .select_related("warehouse", "order")
+                    .get(pk=item_id, order_id=order_id))
         except OrderItem.DoesNotExist:
             return None
 
     @database_sync_to_async
-    def set_status(self, status: str):
-        self.item.delivery_status = status
-        self.item.save(update_fields=["delivery_status"])
-
+    def _set_status(self, item_pk: int, status: str):
+        """
+        Update status safely inside the DB thread. We refetch by pk to avoid
+        sharing ORM instances across threads.
+        """
+        try:
+            obj = OrderItem.objects.get(pk=item_pk)
+            obj.delivery_status = status
+            obj.save(update_fields=["delivery_status"])
+        except OrderItem.DoesNotExist:
+            # If it vanished mid-stream, just log it; the WS will already be open.
+            logger.warning("Item %s disappeared while setting status=%s", item_pk, status)
