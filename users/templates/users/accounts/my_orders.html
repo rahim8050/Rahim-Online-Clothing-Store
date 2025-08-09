@@ -29,19 +29,8 @@
                         <div class="border rounded p-2 mt-2">
                             <p>{{ item.quantity }} x {{ item.product.name }}</p>
                             <p class="text-sm">Delivery status: {{ item.delivery_status }}</p>
-                            {% if item.delivery_status == "dispatched" %}
-                                <button class="mt-1 text-blue-600 text-sm underline track-item-btn"
-                                        data-order-id="{{ order.id }}"
-                                        data-item-id="{{ item.id }}"
-                                        data-clat="{{ order.latitude }}"
-                                        data-clng="{{ order.longitude }}">
-                                    Track Item
-                                </button>
-                                <div id="map-{{ order.id }}-{{ item.id }}" class="w-full rounded border mt-2 hidden" style="height:300px;"></div>
-                                <p id="status-{{ order.id }}-{{ item.id }}" class="text-sm mt-2"></p>
-                            {% else %}
-                                <p class="text-sm text-gray-500 mt-1">Tracking not available.</p>
-                            {% endif %}
+                            <button class="track-item-btn" data-order-id="{{ order.id }}" data-item-id="{{ item.id }}" data-clat="{{ order.latitude|default_if_none:'' }}" data-clng="{{ order.longitude|default_if_none:'' }}" data-whlat="{{ item.warehouse.latitude|default_if_none:'' }}" data-whlng="{{ item.warehouse.longitude|default_if_none:'' }}">Track</button>
+                            <div id="map-{{ order.id }}-{{ item.id }}" class="w-full h-64 rounded hidden"></div>
                         </div>
                     {% endfor %}
                 </div>
@@ -54,100 +43,171 @@
 {% endblock %}
 
 {% block extra_js %}
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+
 <script>
-(() => {
-  const states = new Map();
+(function () {
+  const wsScheme = location.protocol === 'https:' ? 'wss' : 'ws';
+  const TICK_SNAP_NEAREST_EVERY = 5; // when no route, snap to nearest road every 5 ticks
 
-  document.querySelectorAll('.track-item-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const orderId = btn.dataset.orderId;
-      const itemId  = btn.dataset.itemId;
-      const clat    = parseFloat(btn.dataset.clat);
-      const clng    = parseFloat(btn.dataset.clng);
+  const toNum = (v) => {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  };
 
-      const mapDivId = `map-${orderId}-${itemId}`;
-      const mapDiv   = document.getElementById(mapDivId);
-      const statusEl = document.getElementById(`status-${orderId}-${itemId}`);
+  async function fetchRoute(start, dest) {
+    // start/dest: [lat,lng]
+    const url =
+      `https://router.project-osrm.org/route/v1/driving/${start[1]},${start[0]};${dest[1]},${dest[0]}?overview=full&geometries=geojson`;
+    const r = await fetch(url);
+    const j = await r.json();
+    if (j.code !== 'Ok') throw new Error('route_failed');
+    return j.routes[0].geometry; // GeoJSON LineString
+  }
 
-      const showing = mapDiv.classList.contains('hidden');
-      mapDiv.classList.toggle('hidden');
+  async function nearestRoad(pos) {
+    // pos: [lat,lng]
+    const url =
+      `https://router.project-osrm.org/nearest/v1/driving/${pos[1]},${pos[0]}?number=1`;
+    const r = await fetch(url);
+    const j = await r.json();
+    const loc = j.waypoints && j.waypoints[0] && j.waypoints[0].location;
+    return Array.isArray(loc) ? [loc[1], loc[0]] : pos;
+  }
 
-      if (!showing) {
-        const st = states.get(mapDivId);
-        if (st && st.socket && st.socket.readyState <= 1) {
-          try { st.socket.close(); } catch(_) {}
-        }
-        return;
+  function snapToRoute(geoLine, pos) {
+    // geoLine: GeoJSON LineString, pos: [lat,lng]
+    const pt = turf.point([pos[1], pos[0]]);
+    const snapped = turf.nearestPointOnLine(geoLine, pt);
+    const [lng, lat] = snapped.geometry.coordinates;
+    return [lat, lng];
+  }
+
+  function ensureMap(div) {
+    if (!div.style.height || div.clientHeight < 50) div.style.height = '320px';
+    let map = div._map;
+    if (!map) {
+      map = L.map(div).setView([-1.286389, 36.817223], 12);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+      setTimeout(() => map.invalidateSize(), 0);
+      div._map = map;
+    } else {
+      setTimeout(() => map.invalidateSize(), 0);
+    }
+    return map;
+  }
+
+  document.addEventListener('click', async function (e) {
+    const btn = e.target.closest('.track-item-btn');
+    if (!btn) return;
+
+    const orderId = btn.dataset.orderId;
+    const itemId  = btn.dataset.itemId;
+
+    // destination (order/customer)
+    const dest = [toNum(btn.dataset.clat), toNum(btn.dataset.clng)];
+    // start (warehouse)
+    const start = [toNum(btn.dataset.whlat), toNum(btn.dataset.whlng)];
+
+    const mapDiv = document.getElementById(`map-${orderId}-${itemId}`);
+    if (!mapDiv) return;
+
+    mapDiv.classList.remove('hidden');
+    const map = ensureMap(mapDiv);
+
+    // Close any previous socket for this map
+    if (mapDiv._ws && mapDiv._ws.readyState === WebSocket.OPEN) {
+      try { mapDiv._ws.close(1000, 'restart'); } catch {}
+    }
+
+    // Parse/validate coords
+    let startLL = (start[0] !== null && start[1] !== null) ? start : null;
+    let destLL  = (dest[0]  !== null && dest[1]  !== null) ? dest  : null;
+
+    // Snap static points to road (best effort)
+    try {
+      if (startLL) startLL = await nearestRoad(startLL);
+      if (destLL)  destLL  = await nearestRoad(destLL);
+    } catch (_) {}
+
+    // Render static markers
+    if (startLL) {
+      if (!mapDiv._startMarker) mapDiv._startMarker = L.marker(startLL).addTo(map).bindTooltip('Start');
+      else mapDiv._startMarker.setLatLng(startLL);
+    }
+    if (destLL) {
+      if (!mapDiv._destMarker) mapDiv._destMarker = L.marker(destLL).addTo(map).bindTooltip('Destination');
+      else mapDiv._destMarker.setLatLng(destLL);
+    }
+
+    // Fit view
+    if (startLL && destLL) {
+      map.fitBounds(L.latLngBounds(startLL, destLL), { padding: [24, 24] });
+    } else if (startLL) {
+      map.setView(startLL, 14);
+    }
+
+    // Fetch & draw route if we have destination
+    mapDiv._route = null;
+    if (startLL && destLL) {
+      try {
+        const geo = await fetchRoute(startLL, destLL);
+        mapDiv._route = geo;
+        if (mapDiv._routeLayer) map.removeLayer(mapDiv._routeLayer);
+        mapDiv._routeLayer = L.geoJSON(geo, { weight: 3, dashArray: '4,6' }).addTo(map);
+        map.fitBounds(mapDiv._routeLayer.getBounds(), { padding: [24, 24] });
+      } catch (err) {
+        console.warn('Route fetch failed', err);
       }
+    } else if (!destLL && !mapDiv._noDestMsg) {
+      // Informative message for missing destination
+      const note = document.createElement('div');
+      note.textContent = 'Destination not set — showing live trail only.';
+      note.className = 'text-sm text-gray-500 mb-1';
+      mapDiv.parentNode.insertBefore(note, mapDiv);
+      mapDiv._noDestMsg = true;
+    }
 
-      mapDiv.style.position = mapDiv.style.position || 'relative';
+    // Open WebSocket
+    const ws = new WebSocket(`${wsScheme}://${location.host}/ws/track/${orderId}/${itemId}/`);
+    mapDiv._ws = ws;
 
-      let st = states.get(mapDivId);
-      if (!st) {
-        const map = L.map(mapDiv, {
-          center: [clat, clng],
-          zoom: 13,
-          worldCopyJump: true
-        });
+    let tick = 0;
+    ws.onmessage = async (evt) => {
+      try {
+        const d = JSON.parse(evt.data);
+        if (d.type !== 'tick') return;
 
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-          maxZoom: 19,
-          noWrap: false,
-          continuousWorld: true,
-          attribution: '&copy; OpenStreetMap contributors'
-        }).addTo(map);
+        let pos = [toNum(d.lat), toNum(d.lng)];
+        if (pos[0] === null || pos[1] === null) return;
 
-        if (map.setMaxBounds) map.setMaxBounds(null);
-
-        const truckIcon = L.icon({
-          iconUrl: 'https://cdn-icons-png.flaticon.com/512/1557/1557523.png',
-          iconSize: [32, 32],
-          iconAnchor: [16, 16],
-        });
-
-        const marker = L.marker([clat, clng], { icon: truckIcon }).addTo(map);
-
-        const wsProto = location.protocol === 'https:' ? 'wss' : 'ws';
-        const socket = new WebSocket(`${wsProto}://${window.location.host}/ws/track/${orderId}/${itemId}/`);
-
-        socket.onmessage = (event) => {
-          const data = JSON.parse(event.data || '{}');
-          if (data.latitude != null && data.longitude != null) {
-            const latlng = [data.latitude, data.longitude];
-            marker.setLatLng(latlng);
-            map.setView(latlng);
-          }
-          if (data.status && statusEl) {
-            statusEl.textContent = data.status;
-          }
-        };
-
-        socket.onerror = (e) => console.warn('WS error:', e);
-        st = { map, marker, socket };
-        states.set(mapDivId, st);
-      } else {
-        st.map.invalidateSize();
-        if (!st.socket || st.socket.readyState > 1) {
-          const wsProto = location.protocol === 'https:' ? 'wss' : 'ws';
-          const socket = new WebSocket(`${wsProto}://${window.location.host}/ws/track/${orderId}/${itemId}/`);
-          socket.onmessage = (event) => {
-            const data = JSON.parse(event.data || '{}');
-            if (data.latitude != null && data.longitude != null) {
-              const latlng = [data.latitude, data.longitude];
-              st.marker.setLatLng(latlng);
-              st.map.setView(latlng);
-            }
-            if (data.status && statusEl) {
-              statusEl.textContent = data.status;
-            }
-          };
-          socket.onerror = (e) => console.warn('WS error:', e);
-          st.socket = socket;
+        // Snap live position
+        if (mapDiv._route) {
+          pos = snapToRoute(mapDiv._route, pos);
+        } else if ((++tick % TICK_SNAP_NEAREST_EVERY) === 0) {
+          try { pos = await nearestRoad(pos); } catch (_) {}
         }
+
+        if (!mapDiv._liveMarker) {
+          mapDiv._liveMarker = L.marker(pos).addTo(map).bindTooltip('Live');
+        } else {
+          mapDiv._liveMarker.setLatLng(pos);
+        }
+
+        // Gentle pan, avoid jitter
+        const c = map.getCenter();
+        if (c.distanceTo(L.latLng(pos)) > 30) map.panTo(pos, { animate: true });
+      } catch (_) {}
+    };
+
+    ws.onclose = (e) => {
+      if (e.code >= 4000) {
+        mapDiv.textContent = `${e.code}: socket closed`;
       }
-    });
+      console.log('WS CLOSE', e.code);
+    };
   });
 })();
 </script>
