@@ -45,34 +45,124 @@
 {% block extra_js %}
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+
 <script>
 (function () {
   const wsScheme = location.protocol === 'https:' ? 'wss' : 'ws';
+  const TICK_SNAP_NEAREST_EVERY = 5; // when no route, snap to nearest road every 5 ticks
 
-  function buildMap(div) {
-    if (!div.style.height || div.clientHeight < 50) div.style.height = '256px';
-    const map = L.map(div).setView([-1.286389, 36.817223], 12);
-    const tiles = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 });
-    tiles.addTo(map);
-    tiles.on('tileerror', (e) => console.warn('Tile error', e));
-    // Important: recalc size after becoming visible
-    setTimeout(() => map.invalidateSize(), 0);
+  const toNum = (v) => {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  };
+
+  async function fetchRoute(start, dest) {
+    // start/dest: [lat,lng]
+    const url =
+      `https://router.project-osrm.org/route/v1/driving/${start[1]},${start[0]};${dest[1]},${dest[0]}?overview=full&geometries=geojson`;
+    const r = await fetch(url);
+    const j = await r.json();
+    if (j.code !== 'Ok') throw new Error('route_failed');
+    return j.routes[0].geometry; // GeoJSON LineString
+  }
+
+  async function nearestRoad(pos) {
+    // pos: [lat,lng]
+    const url =
+      `https://router.project-osrm.org/nearest/v1/driving/${pos[1]},${pos[0]}?number=1`;
+    const r = await fetch(url);
+    const j = await r.json();
+    const loc = j.waypoints && j.waypoints[0] && j.waypoints[0].location;
+    return Array.isArray(loc) ? [loc[1], loc[0]] : pos;
+  }
+
+  function snapToRoute(geoLine, pos) {
+    // geoLine: GeoJSON LineString, pos: [lat,lng]
+    const pt = turf.point([pos[1], pos[0]]);
+    const snapped = turf.nearestPointOnLine(geoLine, pt);
+    const [lng, lat] = snapped.geometry.coordinates;
+    return [lat, lng];
+  }
+
+  function ensureMap(div) {
+    if (!div.style.height || div.clientHeight < 50) div.style.height = '320px';
+    let map = div._map;
+    if (!map) {
+      map = L.map(div).setView([-1.286389, 36.817223], 12);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+      setTimeout(() => map.invalidateSize(), 0);
+      div._map = map;
+    } else {
+      setTimeout(() => map.invalidateSize(), 0);
+    }
     return map;
   }
 
-  document.addEventListener('click', function (e) {
+  document.addEventListener('click', async function (e) {
     const btn = e.target.closest('.track-item-btn');
     if (!btn) return;
 
     const orderId = btn.dataset.orderId;
     const itemId  = btn.dataset.itemId;
-    const lat = parseFloat(btn.dataset.clat);
-    const lng = parseFloat(btn.dataset.clng);
-    const hasDest = !(isNaN(lat) || isNaN(lng));
+
+    // destination (order/customer)
+    const dest = [toNum(btn.dataset.clat), toNum(btn.dataset.clng)];
+    // start (warehouse)
+    const start = [toNum(btn.dataset.whlat), toNum(btn.dataset.whlng)];
 
     const mapDiv = document.getElementById(`map-${orderId}-${itemId}`);
-    if (!mapDiv) return console.warn('No map div');
-    if (!hasDest && !mapDiv._noDestMsg) {
+    if (!mapDiv) return;
+
+    mapDiv.classList.remove('hidden');
+    const map = ensureMap(mapDiv);
+
+    // Close any previous socket for this map
+    if (mapDiv._ws && mapDiv._ws.readyState === WebSocket.OPEN) {
+      try { mapDiv._ws.close(1000, 'restart'); } catch {}
+    }
+
+    // Parse/validate coords
+    let startLL = (start[0] !== null && start[1] !== null) ? start : null;
+    let destLL  = (dest[0]  !== null && dest[1]  !== null) ? dest  : null;
+
+    // Snap static points to road (best effort)
+    try {
+      if (startLL) startLL = await nearestRoad(startLL);
+      if (destLL)  destLL  = await nearestRoad(destLL);
+    } catch (_) {}
+
+    // Render static markers
+    if (startLL) {
+      if (!mapDiv._startMarker) mapDiv._startMarker = L.marker(startLL).addTo(map).bindTooltip('Start');
+      else mapDiv._startMarker.setLatLng(startLL);
+    }
+    if (destLL) {
+      if (!mapDiv._destMarker) mapDiv._destMarker = L.marker(destLL).addTo(map).bindTooltip('Destination');
+      else mapDiv._destMarker.setLatLng(destLL);
+    }
+
+    // Fit view
+    if (startLL && destLL) {
+      map.fitBounds(L.latLngBounds(startLL, destLL), { padding: [24, 24] });
+    } else if (startLL) {
+      map.setView(startLL, 14);
+    }
+
+    // Fetch & draw route if we have destination
+    mapDiv._route = null;
+    if (startLL && destLL) {
+      try {
+        const geo = await fetchRoute(startLL, destLL);
+        mapDiv._route = geo;
+        if (mapDiv._routeLayer) map.removeLayer(mapDiv._routeLayer);
+        mapDiv._routeLayer = L.geoJSON(geo, { weight: 3, dashArray: '4,6' }).addTo(map);
+        map.fitBounds(mapDiv._routeLayer.getBounds(), { padding: [24, 24] });
+      } catch (err) {
+        console.warn('Route fetch failed', err);
+      }
+    } else if (!destLL && !mapDiv._noDestMsg) {
+      // Informative message for missing destination
       const note = document.createElement('div');
       note.textContent = 'Destination not set — showing live trail only.';
       note.className = 'text-sm text-gray-500 mb-1';
@@ -80,45 +170,45 @@
       mapDiv._noDestMsg = true;
     }
 
-    // 1) Show first, then build/resize
-    mapDiv.classList.remove('hidden');
-    let map = mapDiv._map;
-    if (!map) {
-      map = buildMap(mapDiv);
-      mapDiv._map = map;
-    } else {
-      setTimeout(() => map.invalidateSize(), 0);
-    }
-
+    // Open WebSocket
     const ws = new WebSocket(`${wsScheme}://${location.host}/ws/track/${orderId}/${itemId}/`);
-    let marker = mapDiv._marker;
+    mapDiv._ws = ws;
 
-    ws.onmessage = (e) => {
+    let tick = 0;
+    ws.onmessage = async (evt) => {
       try {
-        const d = JSON.parse(e.data);
-        if (d.type === 'tick' && d.lat && d.lng) {
-          if (!marker) {
-            marker = L.marker([d.lat, d.lng]).addTo(map);
-            mapDiv._marker = marker;
-          } else {
-            marker.setLatLng([d.lat, d.lng]);
-          }
-          map.setView([d.lat, d.lng]);
-        } else if (d.type === 'error') {
-          mapDiv.textContent = `${d.code}: ${d.message}`;
-          ws.close();
+        const d = JSON.parse(evt.data);
+        if (d.type !== 'tick') return;
+
+        let pos = [toNum(d.lat), toNum(d.lng)];
+        if (pos[0] === null || pos[1] === null) return;
+
+        // Snap live position
+        if (mapDiv._route) {
+          pos = snapToRoute(mapDiv._route, pos);
+        } else if ((++tick % TICK_SNAP_NEAREST_EVERY) === 0) {
+          try { pos = await nearestRoad(pos); } catch (_) {}
         }
-      } catch {}
+
+        if (!mapDiv._liveMarker) {
+          mapDiv._liveMarker = L.marker(pos).addTo(map).bindTooltip('Live');
+        } else {
+          mapDiv._liveMarker.setLatLng(pos);
+        }
+
+        // Gentle pan, avoid jitter
+        const c = map.getCenter();
+        if (c.distanceTo(L.latLng(pos)) > 30) map.panTo(pos, { animate: true });
+      } catch (_) {}
     };
+
     ws.onclose = (e) => {
       if (e.code >= 4000) {
-        mapDiv.textContent += ` (socket closed ${e.code})`;
+        mapDiv.textContent = `${e.code}: socket closed`;
       }
       console.log('WS CLOSE', e.code);
     };
   });
 })();
 </script>
-
-
 {% endblock %}
