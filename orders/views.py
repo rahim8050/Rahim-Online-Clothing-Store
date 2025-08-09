@@ -16,7 +16,7 @@ from django.views.decorators.csrf import csrf_exempt
 
 from django.http import JsonResponse
 from orders.utils import reverse_geocode
-from orders.services.assignment import assign_warehouses_and_update_stock
+from orders.services import assign_warehouses_and_update_stock
 from django.utils import timezone
 from .models import Transaction, EmailDispatchLog
 
