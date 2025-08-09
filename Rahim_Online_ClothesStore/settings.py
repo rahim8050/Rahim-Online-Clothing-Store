@@ -15,9 +15,11 @@ import os
 from django.db import models
 from django.db.models import CharField
 from dotenv import load_dotenv
+import environ
 from datetime import timedelta
 # Load environment   variables from .env file
 load_dotenv()
+env = environ.Env()
 
 
 
@@ -183,7 +185,9 @@ MPESA_INITIATOR_USERNAME = 'initiator_username'
 
 MPESA_INITIATOR_SECURITY_CREDENTIAL = 'initiator_security_credential'
 # Geopify settings
-GEOAPIFY_API_KEY = os.environ.get('GEOAPIFY_API_KEY')
+GEOAPIFY_API_KEY = env('GEOAPIFY_API_KEY', default='')
+GEOCODING_TIMEOUT = 6
+GEOCODING_USER_AGENT = 'RahimOnline/1.0 (contact: admin@example.com)'
 
 
 

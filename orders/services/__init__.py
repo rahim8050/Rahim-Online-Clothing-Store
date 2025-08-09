@@ -4,8 +4,8 @@ from typing import Iterable, Tuple
 
 from product_app.models import ProductStock
 
-from .assignment import pick_warehouse
-from .models import Order, OrderItem
+from ..assignment import pick_warehouse
+from ..models import Order, OrderItem
 
 
 def create_order_with_items(user, cart: Iterable[Tuple], coords=None):

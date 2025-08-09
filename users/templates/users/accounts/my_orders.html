@@ -29,7 +29,7 @@
                         <div class="border rounded p-2 mt-2">
                             <p>{{ item.quantity }} x {{ item.product.name }}</p>
                             <p class="text-sm">Delivery status: {{ item.delivery_status }}</p>
-                            <button class="track-item-btn" data-order-id="{{ order.id }}" data-item-id="{{ item.id }}" data-clat="{{ order.latitude|default_if_none:'' }}" data-clng="{{ order.longitude|default_if_none:'' }}">Track</button>
+                            <button class="track-item-btn" data-order-id="{{ order.id }}" data-item-id="{{ item.id }}" data-clat="{{ order.latitude|default_if_none:'' }}" data-clng="{{ order.longitude|default_if_none:'' }}" data-whlat="{{ item.warehouse.latitude|default_if_none:'' }}" data-whlng="{{ item.warehouse.longitude|default_if_none:'' }}">Track</button>
                             <div id="map-{{ order.id }}-{{ item.id }}" class="w-full h-64 rounded hidden"></div>
                         </div>
                     {% endfor %}
@@ -68,12 +68,16 @@
     const itemId  = btn.dataset.itemId;
     const lat = parseFloat(btn.dataset.clat);
     const lng = parseFloat(btn.dataset.clng);
+    const hasDest = !(isNaN(lat) || isNaN(lng));
 
     const mapDiv = document.getElementById(`map-${orderId}-${itemId}`);
     if (!mapDiv) return console.warn('No map div');
-    if (isNaN(lat) || isNaN(lng)) {
-      mapDiv.textContent = 'Missing destination coordinates.';
-      return;
+    if (!hasDest && !mapDiv._noDestMsg) {
+      const note = document.createElement('div');
+      note.textContent = 'Destination not set — showing live trail only.';
+      note.className = 'text-sm text-gray-500 mb-1';
+      mapDiv.parentNode.insertBefore(note, mapDiv);
+      mapDiv._noDestMsg = true;
     }
 
     // 1) Show first, then build/resize

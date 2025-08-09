@@ -17,6 +17,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
 from orders.utils import reverse_geocode
 from orders.services import assign_warehouses_and_update_stock
+from .services.destinations import ensure_order_coords
 from django.utils import timezone
 from .models import Transaction, EmailDispatchLog
 
@@ -99,6 +100,7 @@ def order_create(request):
                         order = form.save(commit=False)
                         order.user = request.user
                         order.save()
+                        ensure_order_coords(order)
 
                         # Create order items for selected cart items
                         for item in cart.items.filter(is_selected=True):
