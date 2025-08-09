@@ -19,27 +19,4 @@
 {% endblock %}
 
 {% block extra_js %}
-{% if order %}
-<script>
-    const csrftoken = window.CSRF_TOKEN;
-    if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition((position) => {
-            fetch("{% url 'orders:save_location' %}", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "X-CSRFToken": csrftoken,
-                },
-                body: JSON.stringify({
-                    order_id: {{ order.id }},
-                    latitude: position.coords.latitude,
-                    longitude: position.coords.longitude,
-                }),
-            }).catch((err) => {
-                console.error("Location save failed", err);
-            });
-        });
-    }
-</script>
-{% endif %}
 {% endblock %}

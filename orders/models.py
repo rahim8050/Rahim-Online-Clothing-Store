@@ -16,6 +16,12 @@ class Order(models.Model):
     coords_locked = models.BooleanField(default=False)
     coords_source = models.CharField(max_length=20, blank=True, default="")
     coords_updated_at = models.DateTimeField(null=True, blank=True)
+
+    # Destination selected via Geoapify autocomplete
+    dest_address_text = models.CharField(max_length=255)
+    dest_lat = models.DecimalField(max_digits=9, decimal_places=6)
+    dest_lng = models.DecimalField(max_digits=9, decimal_places=6)
+    dest_source = models.CharField(max_length=32, default="autocomplete")
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -48,6 +54,14 @@ class Order(models.Model):
                     (Q(latitude__isnull=True) & Q(longitude__isnull=True))
                 ),
                 name="order_lat_lng_range_or_null",
+            ),
+            CheckConstraint(
+                name="order_dest_lat_range",
+                check=Q(dest_lat__gte=-90) & Q(dest_lat__lte=90),
+            ),
+            CheckConstraint(
+                name="order_dest_lng_range",
+                check=Q(dest_lng__gte=-180) & Q(dest_lng__lte=180),
             ),
         ]
 
