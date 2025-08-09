@@ -18,14 +18,12 @@
           novalidate>
       {% csrf_token %}
 
-      {# Show Django non‑field errors #}
       {% if form.non_field_errors %}
         <div class="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
           {{ form.non_field_errors }}
         </div>
       {% endif %}
 
-      {# Show our custom banner only when real validation failed #}
       {% if error_msg %}
         <div class="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
           {{ error_msg }}
@@ -34,13 +32,24 @@
 
       <!-- Left Column: Order Details -->
       <div class="w-full md:w-1/2 p-6 border-r border-gray-200">
+        <div class="mb-4">
+          <label for="dest-search" class="block text-sm font-medium text-gray-700 mb-1">
+            Delivery Address<span class="text-red-500">*</span>
+          </label>
+          <input id="dest-search" type="text" class="w-full px-3 py-2 border border-gray-300 rounded-md" autocomplete="off">
+          <ul id="dest-suggestions" class="border border-gray-300 mt-1 bg-white rounded-md shadow-md max-h-60 overflow-auto hidden"></ul>
+          {% render_field form.address type="hidden" id="id_address" %}
+          <input type="hidden" name="dest_address_text" id="dest_address_text">
+          <input type="hidden" name="dest_lat" id="dest_lat">
+          <input type="hidden" name="dest_lng" id="dest_lng">
+          <input type="hidden" name="dest_source" id="dest_source" value="autocomplete">
+        </div>
         {% for field in form %}
-          {% if field.name not in "payment_method,mpesa_phone" %}
+          {% if field.name not in "payment_method,mpesa_phone,address" %}
             <div class="mb-4">
               <label class="block text-sm font-medium text-gray-700 mb-1">
                 {{ field.label }}{% if field.field.required %}<span class="text-red-500">*</span>{% endif %}
               </label>
-
               {% if error_msg and field.errors %}
                 {% render_field field class="w-full px-3 py-2 border border-red-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500" %}
                 <p class="mt-1 text-sm text-red-600">{{ field.errors|striptags }}</p>
@@ -60,34 +69,33 @@
           Payment Method
         </h3>
 
-        {# hide the default widget #}
         {% render_field form.payment_method class="sr-only" %}
 
-          <div class="space-y-2 mb-4">
-            {% for choice in form.payment_method %}
-              {% if choice.data.value != 'paypal' %}
-              <label class="flex items-center p-3 border rounded-lg cursor-pointer hover:border-indigo-300
-                            {% if choice.data.value == form.payment_method.value %}border-indigo-400 bg-indigo-50{% else %}border-gray-300{% endif %}">
-                <input type="radio"
-                       name="{{ form.payment_method.name }}"
-                       value="{{ choice.data.value }}"
-                       class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300"
-                       {% if choice.data.value == form.payment_method.value %}checked{% endif %}>
-                <span class="ml-3 text-sm font-medium text-gray-700">
-                  {{ choice.choice_label }}
-                </span>
-              </label>
-              {% else %}
-              <!-- PayPal temporarily removed -->
-              {% endif %}
-            {% endfor %}
-
-            {% if error_msg and form.payment_method.errors %}
-              <p class="mt-2 text-sm text-red-600">{{ form.payment_method.errors|striptags }}</p>
+        <div class="space-y-2 mb-4">
+          {% for choice in form.payment_method %}
+            {% if choice.data.value != 'paypal' %}
+            <label class="flex items-center p-3 border rounded-lg cursor-pointer hover:border-indigo-300
+                          {% if choice.data.value == form.payment_method.value %}border-indigo-400 bg-indigo-50{% else %}border-gray-300{% endif %}">
+              <input type="radio"
+                     name="{{ form.payment_method.name }}"
+                     value="{{ choice.data.value }}"
+                     class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300"
+                     {% if choice.data.value == form.payment_method.value %}checked{% endif %}>
+              <span class="ml-3 text-sm font-medium text-gray-700">
+                {{ choice.choice_label }}
+              </span>
+            </label>
+            {% else %}
+            <!-- PayPal temporarily removed -->
             {% endif %}
-          </div>
+          {% endfor %}
+
+          {% if error_msg and form.payment_method.errors %}
+            <p class="mt-2 text-sm text-red-600">{{ form.payment_method.errors|striptags }}</p>
+          {% endif %}
+        </div>
 {%comment%}
-         [Inactive] Preserved for future testing - MPESA phone input 
+         [Inactive] Preserved for future testing - MPESA phone input
         {#
         <div id="mpesa-phone-container" class="mb-4 hidden">
           <label class="block text-sm font-medium text-gray-700 mb-1">
@@ -119,7 +127,9 @@
         </div>
 
         <button type="submit"
-                class="w-full mt-6 bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-6 py-3 rounded-lg">
+                id="submit-btn"
+                class="w-full mt-6 bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-6 py-3 rounded-lg opacity-50 cursor-not-allowed"
+                disabled>
           Complete Order
         </button>
       </div>
@@ -129,14 +139,97 @@
 {% endblock %}
 
 {% block extra_js %}
+{% if GEOAPIFY_ENABLED %}
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-  var addressInput = document.getElementById('id_address');
-  if (addressInput && window.autocomplete) {
-    new autocomplete.GeocoderAutocomplete(addressInput, '{{ geoapify_api_key }}', {
-      filter: { circle: { lat: -1.286389, lon: 36.817223, radius: 30000 } }
-    });
+document.addEventListener('DOMContentLoaded', function () {
+  const input = document.getElementById('dest-search');
+  const list = document.getElementById('dest-suggestions');
+  const submitBtn = document.getElementById('submit-btn');
+  const addr = document.getElementById('id_address');
+  const destTxt = document.getElementById('dest_address_text');
+  const destLat = document.getElementById('dest_lat');
+  const destLng = document.getElementById('dest_lng');
+  let controller;
+
+  function resetSelection() {
+    destTxt.value = '';
+    destLat.value = '';
+    destLng.value = '';
+    addr.value = '';
+    submitBtn.disabled = true;
+    submitBtn.classList.add('opacity-50','cursor-not-allowed');
   }
+
+  input.addEventListener('input', function () {
+    const q = input.value.trim();
+    resetSelection();
+    list.innerHTML = '';
+    if (q.length < 3) {
+      list.classList.add('hidden');
+      return;
+    }
+    if (controller) controller.abort();
+    controller = new AbortController();
+    fetch('{% url "orders:geo-autocomplete" %}?q=' + encodeURIComponent(q), {signal: controller.signal})
+      .then(r => r.ok ? r.json() : {results: []})
+      .then(data => {
+        list.innerHTML = '';
+        (data.results || []).forEach((p) => {
+          const li = document.createElement('li');
+          li.tabIndex = 0;
+          li.className = 'p-2 hover:bg-indigo-600 hover:text-white cursor-pointer';
+          li.textContent = p.formatted;
+          function choose() {
+            input.value = p.formatted;
+            addr.value = p.formatted;
+            destTxt.value = p.formatted;
+            destLat.value = p.lat;
+            destLng.value = p.lon;
+            submitBtn.disabled = false;
+            submitBtn.classList.remove('opacity-50','cursor-not-allowed');
+            list.classList.add('hidden');
+          }
+          li.addEventListener('click', choose);
+          li.addEventListener('keydown', e => { if (e.key === 'Enter') choose(); });
+          list.appendChild(li);
+        });
+        if (list.children.length) {
+          list.classList.remove('hidden');
+        } else {
+          list.classList.add('hidden');
+        }
+      }).catch(() => {});
+  });
+
+  input.addEventListener('keydown', function(e){
+    if (e.key === 'ArrowDown' && list.children.length) {
+      e.preventDefault();
+      list.children[0].focus();
+    }
+  });
+
+  list.addEventListener('keydown', function(e){
+    const items = Array.from(list.children);
+    const idx = items.indexOf(document.activeElement);
+    if (e.key === 'ArrowDown' && idx < items.length - 1) {
+      e.preventDefault();
+      items[idx+1].focus();
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (idx > 0) items[idx-1].focus(); else input.focus();
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      document.activeElement.click();
+    }
+  });
+
+  document.getElementById('checkout-form').addEventListener('submit', function(e){
+    if (!destLat.value || !destLng.value) {
+      e.preventDefault();
+      alert('Please select a delivery address from suggestions.');
+    }
+  });
 });
 </script>
+{% endif %}
 {% endblock %}

@@ -28,7 +28,18 @@ class EnsureOrderCoordsTests(TestCase):
     @patch("orders.services.destinations.geocode_address")
     def test_updates_missing_coords(self, mock_geo):
         mock_geo.return_value = (1.1, 2.2)
-        order = Order.objects.create(user=self.user, full_name="F", email="e@e.com", address="A")
+        order = Order.objects.create(
+            user=self.user,
+            full_name="F",
+            email="e@e.com",
+            address="A",
+            dest_address_text="A",
+            dest_lat=0,
+            dest_lng=0,
+        )
+        order.latitude = None
+        order.longitude = None
+        order.save(update_fields=["latitude", "longitude"])
         changed = ensure_order_coords(order)
         self.assertTrue(changed)
         order.refresh_from_db()

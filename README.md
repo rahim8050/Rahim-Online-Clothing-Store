@@ -21,3 +21,10 @@ ws.onmessage = (e) => console.log(JSON.parse(e.data));
 
 Replace `ORDER_ID` and `ITEM_ID` with real identifiers.
 
+## Geoapify setup
+
+The checkout address autocomplete relies on Geoapify through a server-side proxy.
+Set the `GEOAPIFY_API_KEY` environment variable in production and restrict the
+key in the Geoapify dashboard to your backend domain. Only the backend calls
+Geoapify; the key is never exposed to the browser.
+
