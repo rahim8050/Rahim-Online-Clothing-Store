@@ -41,6 +41,14 @@ class Order(models.Model):
                 check=(Q(longitude__gte=-180) & Q(longitude__lte=180)) | Q(longitude__isnull=True),
                 name="order_lng_range",
             ),
+            CheckConstraint(
+                check=(
+                    (Q(latitude__gte=-90) & Q(latitude__lte=90) &
+                     Q(longitude__gte=-180) & Q(longitude__lte=180)) |
+                    (Q(latitude__isnull=True) & Q(longitude__isnull=True))
+                ),
+                name="order_lat_lng_range_or_null",
+            ),
         ]
 
     def get_total_cost(self):
@@ -70,6 +78,14 @@ class OrderItem(models.Model):
         choices=DELIVERY_STATUS_CHOICES,
         default="created",
     )
+
+    class Meta:
+        constraints = [
+            CheckConstraint(
+                check=Q(delivery_status='created') | Q(warehouse__isnull=False),
+                name="item_requires_warehouse_when_moving",
+            ),
+        ]
 
     def get_cost(self):
         return int(self.price * self.quantity)

@@ -8,6 +8,7 @@ from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
 
 from .models import Order, OrderItem
+from .ws_codes import WSErr
 
 logger = logging.getLogger("orders.ws")
 
@@ -45,8 +46,6 @@ class DeliveryTrackerConsumer(AsyncJsonWebsocketConsumer):
 
         # Accept early
         await self.accept()
-        print(f"[WS] connect start order={self.order_id} item={self.item_id}")
-
         # Kick off the simulation as a background task
         self._runner_task = asyncio.create_task(self._run_simulation())
 
@@ -58,7 +57,7 @@ class DeliveryTrackerConsumer(AsyncJsonWebsocketConsumer):
                 await self._runner_task
             except asyncio.CancelledError:
                 pass
-        print(f"[WS] disconnected with code {close_code}")
+        logger.debug("WS disconnected with code %s", close_code)
 
     async def receive_json(self, content, **kwargs):
         """
@@ -83,18 +82,27 @@ class DeliveryTrackerConsumer(AsyncJsonWebsocketConsumer):
         """
         try:
             # Load and validate
-            order = await self._get_order(self.order_id)
-            if not order:
-                await self._fail(4001, "order_not_found")
+            user = self.scope.get("user")
+            if not user or not user.is_authenticated:
+                await self._fail(WSErr.FORBIDDEN, "forbidden")
                 return
 
-            item = await self._get_item(self.item_id, self.order_id)
-            if not item:
-                await self._fail(4002, "item_not_found_or_mismatch")
+            order = await self._get_order(self.order_id)
+            if not order:
+                await self._fail(WSErr.ORDER_NOT_FOUND, "order_not_found")
+                return
+
+            if order.user_id != user.id:
+                await self._fail(WSErr.FORBIDDEN, "forbidden")
+                return
+
+            item = await self._get_item(self.item_id)
+            if not item or item.order_id != order.id:
+                await self._fail(WSErr.ITEM_NOT_FOUND, "item_not_found")
                 return
 
             if not item.warehouse_id:
-                await self._fail(4003, "warehouse_missing")
+                await self._fail(WSErr.WAREHOUSE_MISSING, "warehouse_missing")
                 return
 
             start_lat = item.warehouse.latitude
@@ -102,11 +110,8 @@ class DeliveryTrackerConsumer(AsyncJsonWebsocketConsumer):
             end_lat = order.latitude
             end_lng = order.longitude
 
-            if start_lat is None or start_lng is None:
-                await self._fail(4005, "warehouse_coords_missing")
-                return
             if end_lat is None or end_lng is None:
-                await self._fail(4006, "destination_coords_missing")
+                await self._fail(WSErr.DEST_COORDS_MISSING, "destination_missing")
                 return
 
             # Status gates
@@ -207,19 +212,30 @@ class DeliveryTrackerConsumer(AsyncJsonWebsocketConsumer):
     @database_sync_to_async
     def _get_order(self, order_id: int):
         try:
-            return Order.objects.get(pk=order_id)
+            return Order.objects.only("id", "user_id", "latitude", "longitude").get(pk=order_id)
         except Order.DoesNotExist:
             return None
 
     @database_sync_to_async
-    def _get_item(self, item_id: int, order_id: int):
-        """
-        Fetch item by pk AND its order to prevent mismatches.
-        """
+    def _get_item(self, item_id: int):
         try:
-            return (OrderItem.objects
-                    .select_related("warehouse", "order")
-                    .get(pk=item_id, order_id=order_id))
+            return (
+                OrderItem.objects
+                .select_related("warehouse", "order")
+                .only(
+                    "id",
+                    "order_id",
+                    "warehouse_id",
+                    "delivery_status",
+                    "warehouse__latitude",
+                    "warehouse__longitude",
+                    "order__id",
+                    "order__user_id",
+                    "order__latitude",
+                    "order__longitude",
+                )
+                .get(pk=item_id)
+            )
         except OrderItem.DoesNotExist:
             return None
 
