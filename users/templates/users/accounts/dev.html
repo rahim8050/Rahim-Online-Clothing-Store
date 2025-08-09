@@ -1,0 +1,79 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Geoapify Test (No Widget)</title>
+  <style>
+    body{font-family:system-ui;margin:24px;max-width:720px}
+    .input{width:100%;padding:10px;border:1px solid #d1d5db;border-radius:8px}
+    .list{border:1px solid #e5e7eb;border-radius:8px;margin-top:6px;overflow:hidden;display:none}
+    .item{display:block;width:100%;text-align:left;padding:10px;border-bottom:1px solid #f1f5f9;background:#fff}
+    .item:hover{background:#f8fafc}
+    .muted{color:#6b7280;font-size:12px;margin-top:6px}
+    .row{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:12px}
+    code{background:#f1f5f9;padding:2px 6px;border-radius:6px}
+  </style>
+</head>
+<body>
+  <h2>Geoapify Autocomplete — Test</h2>
+
+  <label>Delivery address (destination)</label>
+  <input id="addr" class="input" placeholder="Search (e.g., Umoja, Nairobi)" autocomplete="off" />
+  <div id="list" class="list"></div>
+  <p id="out" class="muted">Pick a suggestion…</p>
+
+  <div class="row">
+    <div><strong>lat</strong>: <code id="lat"></code></div>
+    <div><strong>lon</strong>: <code id="lon"></code></div>
+  </div>
+<script>
+const KEY = "{{ GEOAPIFY_API_KEY|default:'' }}";
+
+const addr = document.getElementById('addr');
+const list = document.getElementById('list');
+const out  = document.getElementById('out');
+const latEl= document.getElementById('lat');
+const lonEl= document.getElementById('lon');
+
+function render(items){
+  if (!items.length){ list.style.display='none'; list.innerHTML=''; return; }
+  list.innerHTML = items.map(p => {
+    const text = p.formatted || p.properties?.formatted || [p.address_line1,p.address_line2].filter(Boolean).join(', ');
+    const lat  = p.lat ?? p.properties?.lat;
+    const lon  = p.lon ?? p.properties?.lon;
+    return `<button type="button" class="item" data-text="${(text||'').replace(/"/g,'&quot;')}" data-lat="${lat}" data-lon="${lon}">${text}</button>`;
+  }).join('');
+  list.style.display='block';
+}
+
+let t;
+addr.addEventListener('input', () => {
+  clearTimeout(t);
+  const q = addr.value.trim();
+  if (q.length < 3){ list.style.display='none'; list.innerHTML=''; return; }
+
+  t = setTimeout(async () => {
+    try{
+      const url = `https://api.geoapify.com/v1/geocode/autocomplete?text=${encodeURIComponent(q)}&limit=6&format=json&filter=countrycode:ke&apiKey=${KEY}`;
+      const res = await fetch(url);
+      if (!res.ok){ out.textContent = `Error ${res.status}`; return; }
+      const data = await res.json();
+      const items = data.results || data.features || [];
+      render(items);
+    }catch(e){
+      out.textContent = 'Network error'; console.error(e);
+    }
+  }, 250);
+});
+
+list.addEventListener('click', (e) => {
+  const btn = e.target.closest('button.item'); if (!btn) return;
+  addr.value = btn.dataset.text;
+  latEl.textContent = btn.dataset.lat;
+  lonEl.textContent = btn.dataset.lon;
+  out.textContent = `Selected: ${btn.dataset.text}`;
+  list.style.display='none'; list.innerHTML='';
+});
+</script>
+</body>
+</html>
