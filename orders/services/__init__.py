@@ -18,6 +18,9 @@ def create_order_with_items(user, cart: Iterable[Tuple], coords=None):
         address="A",
         latitude=lat,
         longitude=lng,
+        dest_address_text="A",
+        dest_lat=lat or 0,
+        dest_lng=lng or 0,
     )
     for product, qty in cart:
         wh = pick_warehouse(lat, lng)

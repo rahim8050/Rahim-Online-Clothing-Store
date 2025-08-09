@@ -13,11 +13,11 @@ from product_app.models import Category, Product, Warehouse
 class TrackingTests(TestCase):
     def setUp(self):
         User = get_user_model()
-        self.owner = User.objects.create_user(username="owner", password="p")
-        self.intruder = User.objects.create_user(username="intruder", password="p")
+        self.owner = User.objects.create_user(username="owner", email="owner@example.com", password="p")
+        self.intruder = User.objects.create_user(username="intruder", email="intruder@example.com", password="p")
         self.category = Category.objects.create(name="c", slug="c")
         self.product = Product.objects.create(category=self.category, name="p", slug="p", price=10)
-        self.wh = Warehouse.objects.create(name="W", latitude=0, longitude=0)
+        self.wh = Warehouse.objects.create(name="W", latitude=0, longitude=37)
 
     def _ws(self, user, order_id, item_id):
         comm = WebsocketCommunicator(application, f"/ws/track/{order_id}/{item_id}/")
@@ -33,6 +33,9 @@ class TrackingTests(TestCase):
             address="A",
             latitude=1 if with_coords else None,
             longitude=1 if with_coords else None,
+            dest_address_text="A",
+            dest_lat=0,
+            dest_lng=0,
         )
         wh = self.wh if with_wh else None
         item = OrderItem.objects.create(
@@ -41,7 +44,7 @@ class TrackingTests(TestCase):
             price=10,
             quantity=1,
             warehouse=wh,
-            delivery_status="dispatched",
+            delivery_status="dispatched" if wh else "created",
         )
         return order, item
 
