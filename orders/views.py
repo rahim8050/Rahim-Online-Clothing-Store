@@ -5,7 +5,7 @@ from orders.models import Order, OrderItem
 from django.contrib import messages
 from django.urls import reverse_lazy, reverse
 from django.contrib.auth.decorators import login_required
-from django.views.decorators.http import require_http_methods, require_POST
+from django.views.decorators.http import require_http_methods, require_POST, require_GET
 from django.db import transaction
 from django.conf import settings
 from django.core.mail import send_mail
@@ -17,7 +17,6 @@ from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
 from orders.utils import reverse_geocode
 from orders.services import assign_warehouses_and_update_stock
-from .services.destinations import ensure_order_coords
 from django.utils import timezone
 from .models import Transaction, EmailDispatchLog
 
@@ -27,6 +26,8 @@ import requests
 import json
 import hmac
 import hashlib
+import time
+from decimal import Decimal, InvalidOperation
 
 # Configure Stripe and PayPal with keys from settings
 stripe.api_key = settings.STRIPE_SECRET_KEY
@@ -43,6 +44,45 @@ paypalrestsdk.configure({
 
 
 logger = logging.getLogger(__name__)
+
+_LAST_CALLS: dict[str, float] = {}
+
+
+def _parse_coord(val):
+    try:
+        return Decimal(val)
+    except (InvalidOperation, TypeError):
+        raise
+
+
+@require_GET
+def geo_autocomplete(request):
+    q = (request.GET.get("q") or "").strip()
+    if len(q) < 3:
+        return JsonResponse({"results": []})
+
+    ip = request.META.get("REMOTE_ADDR", "unknown")
+    now = time.time()
+    if now - _LAST_CALLS.get(ip, 0) < 0.2:
+        return JsonResponse({"results": []})
+    _LAST_CALLS[ip] = now
+
+    try:
+        r = requests.get(
+            "https://api.geoapify.com/v1/geocode/autocomplete",
+            params={
+                "text": q,
+                "limit": 6,
+                "format": "json",
+                "filter": "countrycode:ke",
+                "apiKey": settings.GEOAPIFY_API_KEY,
+            },
+            timeout=5,
+        )
+        data = r.json() if r.ok else {"results": []}
+        return JsonResponse(data, status=r.status_code if r.ok else 200)
+    except requests.RequestException:
+        return JsonResponse({"results": []}, status=200)
 
 @require_http_methods(["GET", "POST"])
 def order_create(request):
@@ -96,11 +136,28 @@ def order_create(request):
             form = OrderForm(request.POST)
             if form.is_valid():
                 try:
+                    try:
+                        txt = (request.POST.get("dest_address_text") or "").strip()
+                        lat = _parse_coord(request.POST.get("dest_lat"))
+                        lng = _parse_coord(request.POST.get("dest_lng"))
+                        if not (-90 <= lat <= 90 and -180 <= lng <= 180):
+                            raise ValueError
+                    except Exception:
+                        messages.error(request, "Please select a valid delivery address from suggestions.")
+                        return redirect("orders:order_create")
+
                     with transaction.atomic():
                         order = form.save(commit=False)
                         order.user = request.user
+                        order.dest_address_text = txt
+                        order.dest_lat = lat
+                        order.dest_lng = lng
+                        order.dest_source = "autocomplete"
+                        # Backwards compatibility
+                        order.address = txt
+                        order.latitude = float(lat)
+                        order.longitude = float(lng)
                         order.save()
-                        ensure_order_coords(order)
 
                         # Create order items for selected cart items
                         for item in cart.items.filter(is_selected=True):
@@ -145,14 +202,14 @@ def order_create(request):
         cart_items = []
         selected_total = 0
 
-   
+
     return render(request, "orders/order_create.html", {
         "form": form,
         "cart": cart,
         "cart_items": cart_items,
         "selected_total": selected_total,
         "error_msg": error_msg,
-        "geoapify_api_key": settings.GEOAPIFY_API_KEY,
+        "GEOAPIFY_ENABLED": bool(settings.GEOAPIFY_API_KEY),
     })
     
 
