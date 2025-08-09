@@ -29,7 +29,7 @@
                         <div class="border rounded p-2 mt-2">
                             <p>{{ item.quantity }} x {{ item.product.name }}</p>
                             <p class="text-sm">Delivery status: {{ item.delivery_status }}</p>
-                            <button class="track-item-btn" data-order-id="{{ order.id }}" data-item-id="{{ item.id }}">Track</button>
+                            <button class="track-item-btn" data-order-id="{{ order.id }}" data-item-id="{{ item.id }}" data-clat="{{ order.latitude|default_if_none:'' }}" data-clng="{{ order.longitude|default_if_none:'' }}">Track</button>
                             <div id="map-{{ order.id }}-{{ item.id }}" class="w-full h-64 rounded hidden"></div>
                         </div>
                     {% endfor %}
@@ -66,9 +66,15 @@
 
     const orderId = btn.dataset.orderId;
     const itemId  = btn.dataset.itemId;
+    const lat = parseFloat(btn.dataset.clat);
+    const lng = parseFloat(btn.dataset.clng);
 
     const mapDiv = document.getElementById(`map-${orderId}-${itemId}`);
     if (!mapDiv) return console.warn('No map div');
+    if (isNaN(lat) || isNaN(lng)) {
+      mapDiv.textContent = 'Missing destination coordinates.';
+      return;
+    }
 
     // 1) Show first, then build/resize
     mapDiv.classList.remove('hidden');
@@ -80,7 +86,6 @@
       setTimeout(() => map.invalidateSize(), 0);
     }
 
-    // (Optional) now start WS after map is visible
     const ws = new WebSocket(`${wsScheme}://${location.host}/ws/track/${orderId}/${itemId}/`);
     let marker = mapDiv._marker;
 
@@ -96,11 +101,17 @@
           }
           map.setView([d.lat, d.lng]);
         } else if (d.type === 'error') {
-          console.warn('Tracking error:', d.code);
+          mapDiv.textContent = `${d.code}: ${d.message}`;
+          ws.close();
         }
       } catch {}
     };
-    ws.onclose = (e) => console.log('WS CLOSE', e.code);
+    ws.onclose = (e) => {
+      if (e.code >= 4000) {
+        mapDiv.textContent += ` (socket closed ${e.code})`;
+      }
+      console.log('WS CLOSE', e.code);
+    };
   });
 })();
 </script>

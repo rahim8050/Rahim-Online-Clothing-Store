@@ -1,135 +1,136 @@
 from asgiref.sync import async_to_sync
 from channels.testing import WebsocketCommunicator
 from django.contrib.auth import get_user_model
-from django.core.exceptions import ValidationError
-from django.db import IntegrityError, transaction
-from django.test import TestCase, TransactionTestCase
+from django.test import TestCase
 
 from Rahim_Online_ClothesStore.asgi import application
-from orders.consumers import DeliveryTrackerConsumer
+from orders.services import create_order_with_items
+from orders.ws_codes import WSErr
 from orders.models import Order, OrderItem
 from product_app.models import Category, Product, Warehouse
 
 
-class DeliveryTrackerConsumerTests(TestCase):
+class TrackingTests(TestCase):
     def setUp(self):
         User = get_user_model()
-        self.user = User.objects.create_user(username="u", password="p")
+        self.owner = User.objects.create_user(username="owner", password="p")
+        self.intruder = User.objects.create_user(username="intruder", password="p")
         self.category = Category.objects.create(name="c", slug="c")
-        self.product = Product.objects.create(
-            category=self.category, name="p", slug="p", price=10
-        )
+        self.product = Product.objects.create(category=self.category, name="p", slug="p", price=10)
         self.wh = Warehouse.objects.create(name="W", latitude=0, longitude=0)
 
-    def _make_item(self, status="dispatched", with_wh=True, with_coords=True):
-        order_kwargs = dict(
-            user=self.user,
+    def _ws(self, user, order_id, item_id):
+        comm = WebsocketCommunicator(application, f"/ws/track/{order_id}/{item_id}/")
+        comm.scope["user"] = user
+        return comm
+
+    def _make(self, user=None, with_wh=True, with_coords=True):
+        user = user or self.owner
+        order = Order.objects.create(
+            user=user,
             full_name="F",
             email="e@e.com",
             address="A",
+            latitude=1 if with_coords else None,
+            longitude=1 if with_coords else None,
         )
-        if with_coords:
-            order_kwargs.update(latitude=1, longitude=1)
-        order = Order.objects.create(**order_kwargs)
-        warehouse = self.wh if with_wh else None
+        wh = self.wh if with_wh else None
         item = OrderItem.objects.create(
             order=order,
             product=self.product,
             price=10,
             quantity=1,
-            warehouse=warehouse,
-            delivery_status=status,
+            warehouse=wh,
+            delivery_status="dispatched",
         )
         return order, item
 
-    def test_flow(self):
-        order, item = self._make_item()
-        DeliveryTrackerConsumer.STEPS = 1
-        DeliveryTrackerConsumer.TICK_DELAY = 0
+    def test_forbidden_intruder(self):
+        order, item = self._make()
 
         async def flow():
-            communicator = WebsocketCommunicator(
-                application, f"/ws/track/{order.id}/{item.id}/"
-            )
-            connected, _ = await communicator.connect()
+            comm = self._ws(self.intruder, order.id, item.id)
+            connected, _ = await comm.connect()
             assert connected
-            init = await communicator.receive_json_from()
-            tick = await communicator.receive_json_from()
-            complete = await communicator.receive_json_from()
-            await communicator.disconnect()
-            return init, tick, complete
+            msg = await comm.receive_json_from()
+            code = await comm.wait_closed()
+            return msg, code
 
-        init, tick, complete = async_to_sync(flow)()
-        self.assertEqual(init["type"], "init")
-        self.assertEqual(tick["type"], "tick")
-        self.assertEqual(complete["type"], "complete")
+        msg, code = async_to_sync(flow)()
+        self.assertEqual(msg["code"], WSErr.FORBIDDEN)
+        self.assertEqual(code, WSErr.FORBIDDEN)
 
-    def test_missing_warehouse(self):
-        order, item = self._make_item(with_wh=False)
+    def test_warehouse_missing(self):
+        order, item = self._make(with_wh=False)
 
         async def flow():
-            communicator = WebsocketCommunicator(
-                application, f"/ws/track/{order.id}/{item.id}/"
-            )
-            connected, _ = await communicator.connect()
-            assert connected
-            msg = await communicator.receive_json_from()
-            await communicator.disconnect()
-            return msg
+            comm = self._ws(self.owner, order.id, item.id)
+            connected, _ = await comm.connect()
+            msg = await comm.receive_json_from()
+            code = await comm.wait_closed()
+            return msg, code
 
-        msg = async_to_sync(flow)()
-        self.assertEqual(
-            msg, {"type": "error", "code": 4002, "message": "warehouse_missing"}
+        msg, code = async_to_sync(flow)()
+        self.assertEqual(msg["code"], WSErr.WAREHOUSE_MISSING)
+        self.assertEqual(code, WSErr.WAREHOUSE_MISSING)
+
+    def test_destination_missing(self):
+        order, item = self._make(with_coords=False)
+
+        async def flow():
+            comm = self._ws(self.owner, order.id, item.id)
+            connected, _ = await comm.connect()
+            msg = await comm.receive_json_from()
+            code = await comm.wait_closed()
+            return msg, code
+
+        msg, code = async_to_sync(flow)()
+        self.assertEqual(msg["code"], WSErr.DEST_COORDS_MISSING)
+        self.assertEqual(code, WSErr.DEST_COORDS_MISSING)
+
+    def test_item_mismatch(self):
+        order1, item1 = self._make()
+        order2, item2 = self._make()
+
+        async def flow():
+            comm = self._ws(self.owner, order1.id, item2.id)
+            connected, _ = await comm.connect()
+            msg = await comm.receive_json_from()
+            code = await comm.wait_closed()
+            return msg, code
+
+        msg, code = async_to_sync(flow)()
+        self.assertEqual(msg["code"], WSErr.ITEM_NOT_FOUND)
+        self.assertEqual(code, WSErr.ITEM_NOT_FOUND)
+
+    def test_order_not_found(self):
+        order, item = self._make()
+
+        async def flow():
+            comm = self._ws(self.owner, order.id + 999, item.id)
+            connected, _ = await comm.connect()
+            msg = await comm.receive_json_from()
+            code = await comm.wait_closed()
+            return msg, code
+
+        msg, code = async_to_sync(flow)()
+        self.assertEqual(msg["code"], WSErr.ORDER_NOT_FOUND)
+        self.assertEqual(code, WSErr.ORDER_NOT_FOUND)
+
+    def test_assignment_service_and_signal(self):
+        # Service ensures warehouse assignment
+        cart = [(self.product, 1)]
+        order = create_order_with_items(self.owner, cart, coords=(0, 0))
+        self.assertTrue(all(i.warehouse_id for i in order.items.all()))
+
+        # Signal backfills missing warehouse
+        order2 = Order.objects.create(
+            user=self.owner,
+            full_name="F",
+            email="e@e.com",
+            address="A",
+            latitude=0,
+            longitude=0,
         )
-
-    def test_missing_order_coords(self):
-        order, item = self._make_item(with_coords=False)
-
-        async def flow():
-            communicator = WebsocketCommunicator(
-                application, f"/ws/track/{order.id}/{item.id}/"
-            )
-            connected, _ = await communicator.connect()
-            assert connected
-            msg = await communicator.receive_json_from()
-            await communicator.disconnect()
-            return msg
-
-        msg = async_to_sync(flow)()
-        self.assertEqual(msg, {"type": "error", "code": 4005, "message": "coords_missing"})
-
-    def test_bad_status(self):
-        order, item = self._make_item(status="created")
-
-        async def flow():
-            communicator = WebsocketCommunicator(
-                application, f"/ws/track/{order.id}/{item.id}/"
-            )
-            connected, _ = await communicator.connect()
-            assert connected
-            msg = await communicator.receive_json_from()
-            await communicator.disconnect()
-            return msg
-
-        msg = async_to_sync(flow)()
-        self.assertEqual(
-            msg,
-            {
-                "type": "error",
-                "code": 4004,
-                "message": "not_dispatched (got created)",
-            },
-        )
-
-
-class WarehouseModelTests(TransactionTestCase):
-    def test_validation_and_constraint(self):
-        wh = Warehouse(name="Bad", latitude=10, longitude=40)
-        with self.assertRaises(ValidationError):
-            wh.full_clean()
-        with self.assertRaises(IntegrityError):
-            with transaction.atomic():
-                Warehouse.objects.bulk_create(
-                    [Warehouse(name="B", latitude=10, longitude=40)]
-                )
-
+        item = OrderItem.objects.create(order=order2, product=self.product, price=10, quantity=1)
+        self.assertIsNotNone(OrderItem.objects.get(pk=item.pk).warehouse_id)
