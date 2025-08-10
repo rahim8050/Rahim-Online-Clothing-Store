@@ -28,3 +28,26 @@ Set the `GEOAPIFY_API_KEY` environment variable in production and restrict the
 key in the Geoapify dashboard to your backend domain. Only the backend calls
 Geoapify; the key is never exposed to the browser.
 
+## Roles & permissions
+
+The project provisions Django groups for five roles: **Admin**, **Customer**,
+**Vendor**, **Vendor Staff**, and **Driver**.
+
+Apply migrations and sync the role groups:
+
+```bash
+python manage.py migrate
+python manage.py sync_roles
+```
+
+Running `sync_roles` multiple times is safe and updates any missing groups or
+permissions.
+
+### Smoke test
+
+```bash
+python manage.py migrate
+python manage.py sync_roles
+python manage.py test users
+```
+
