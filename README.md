@@ -51,3 +51,16 @@ python manage.py sync_roles
 python manage.py test users
 ```
 
+## Auth tokens
+
+Obtain JWTs for API access:
+
+```
+POST /api/auth/token/ {"username": "<user>", "password": "<pass>"}
+POST /api/auth/token/refresh/ {"refresh": "<token>"}
+```
+
+Dashboards are available for vendors and drivers at `/users/vendor-dashboard/`
+and `/users/driver-dashboard/` respectively. Matching read-only APIs live under
+`/api/vendor/products/` and `/api/driver/deliveries/`.
+
