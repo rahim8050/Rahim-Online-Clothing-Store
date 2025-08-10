@@ -1,7 +1,7 @@
 from django.urls import path
 from .views import ResendActivationEmailView
 from django.contrib.auth import views as auth_views
-from users.views import CustomLoginView,Logout,RegisterUser,activate, profile_view,my_orders
+from users.views import CustomLoginView,Logout,RegisterUser,activate, profile_view,my_orders, geoapify_test
 from django.urls import reverse_lazy
 
 
@@ -36,6 +36,6 @@ path('my-orders/', my_orders, name='my_orders'),
         template_name='users/accounts/password_reset_complete.html'
     ), name='password_reset_complete'),
 
-     
+     path("dev/geoapify/", geoapify_test, name="geoapify-test"),
 
 ]

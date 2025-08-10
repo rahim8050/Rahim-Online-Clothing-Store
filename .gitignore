@@ -1,9 +1,10 @@
 # ===== Python =====
+**/__pycache__/
 *.pyc
 *.pyo
 *.pyd
 *.py[cod]
-**/__pycache__/
+
 
 # ===== Virtual Environments =====
 .venv/
@@ -69,4 +70,11 @@ celerybeat-schedule
 *.pid
 
 # ===== Pytest =====
-.pytest_cache/
+.pytest_cache/# Python bytecode
+__pycache__/
+*.py[cod]
+*.pyo
+# Python bytecode
+__pycache__/
+*.py[cod]
+*.pyo
