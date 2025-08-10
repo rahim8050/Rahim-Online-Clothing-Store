@@ -18,6 +18,11 @@ from dotenv import load_dotenv
 import environ
 from datetime import timedelta
 import dj_database_url
+
+
+from urllib.parse import urlparse, parse_qs
+
+
 # Load environment   variables from .env file
 load_dotenv()
 env = environ.Env()
@@ -37,6 +42,45 @@ DEBUG = os.getenv("DEBUG", "0") == "1"
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 
+def _db_from_url(url: str):
+    p = urlparse(url)
+    scheme = (p.scheme or "").lower()
+    if scheme in {"postgres", "postgresql", "postgresql+psycopg", "postgis"}:
+        engine = "django.db.backends.postgresql"
+    elif scheme in {"sqlite", "sqlite3"}:
+        engine = "django.db.backends.sqlite3"
+    else:
+        raise RuntimeError(f"Unsupported DB scheme: {scheme}")
+
+    if engine.endswith("sqlite3"):
+        name = p.path[1:] if p.path and p.path != "/" else (BASE_DIR / "db.sqlite3")
+        return {"ENGINE": engine, "NAME": str(name)}
+
+    q = {k: v[-1] for k, v in parse_qs(p.query).items()}
+    opts = {}
+    # Force SSL in prod unless disabled explicitly
+    if not DEBUG and q.get("sslmode", "require"):
+        opts["sslmode"] = q.get("sslmode", "require")
+
+    return {
+        "ENGINE": engine,
+        "NAME": p.path.lstrip("/"),
+        "USER": p.username or "",
+        "PASSWORD": p.password or "",
+        "HOST": p.hostname or "",
+        "PORT": p.port or "",
+        "OPTIONS": opts,
+        "CONN_MAX_AGE": 600,
+    }
+
+if DATABASE_URL:
+    DATABASES = {"default": _db_from_url(DATABASE_URL)}
+else:
+
+
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+
 if DATABASE_URL:
     # Postgres on Render
     DATABASES = {
@@ -48,12 +92,24 @@ if DATABASE_URL:
     }
 else:
     # Local fallback (no env var)
+
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.sqlite3",
             "NAME": BASE_DIR / "db.sqlite3",
         }
     }
+
+
+
+# Debug line (safe to keep for now; remove later)
+print("DB_CONFIG_DEBUG:", {
+    "ENGINE": DATABASES["default"].get("ENGINE"),
+    "NAME": DATABASES["default"].get("NAME"),
+    "HAS_URL": bool(DATABASE_URL),
+})
+
+
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.environ.get('SECRET_KEY')
 
@@ -149,7 +205,6 @@ TEMPLATES = [
 ]
 
 ASGI_APPLICATION = "Rahim_Online_ClothesStore.asgi.application"
-ALLOWED_HOSTS = ["127.0.0.1", "localhost"]
 CHANNEL_LAYERS = {"default": {"BACKEND": "channels.layers.InMemoryChannelLayer"}}
 # The Mpesa environment to use
 # Possible values: sandbox, production
@@ -219,6 +274,7 @@ GEOCODING_USER_AGENT = 'RahimOnline/1.0 (contact: admin@example.com)'
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 
+
 # DATABASES = {
 #     'default': {
 #         'ENGINE': os.environ.get('ENGINE'),
@@ -244,6 +300,9 @@ CHANNEL_LAYERS = {
         else {"BACKEND": "channels.layers.InMemoryChannelLayer"}
     )
 }
+
+
+
 
 
 
