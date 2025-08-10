@@ -17,6 +17,7 @@ from django.db.models import CharField
 from dotenv import load_dotenv
 import environ
 from datetime import timedelta
+import dj_database_url
 # Load environment   variables from .env file
 load_dotenv()
 env = environ.Env()
@@ -31,7 +32,16 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
+BASE_DIR = Path(__file__).resolve().parent.parent
+DEBUG = os.getenv("DEBUG", "0") == "1"
 
+DATABASES = {
+    "default": dj_database_url.config(
+        default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",  # local fallback
+        conn_max_age=600,
+        ssl_require=not DEBUG,  # require SSL in prod (Render)
+    )
+}
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.environ.get('SECRET_KEY')
 
