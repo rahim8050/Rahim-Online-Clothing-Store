@@ -18,7 +18,9 @@ from dotenv import load_dotenv
 import environ
 from datetime import timedelta
 import dj_database_url
+
 from urllib.parse import urlparse, parse_qs
+
 # Load environment   variables from .env file
 load_dotenv()
 env = environ.Env()
@@ -34,6 +36,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
 DEBUG = os.getenv("DEBUG", "0") == "1"
+
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 def _db_from_url(url: str):
@@ -70,6 +73,22 @@ def _db_from_url(url: str):
 if DATABASE_URL:
     DATABASES = {"default": _db_from_url(DATABASE_URL)}
 else:
+
+
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+if DATABASE_URL:
+    # Postgres on Render
+    DATABASES = {
+        "default": dj_database_url.parse(
+            DATABASE_URL,
+            conn_max_age=600,
+            ssl_require=not DEBUG,
+        )
+    }
+else:
+    # Local fallback (no env var)
+
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.sqlite3",
@@ -77,12 +96,14 @@ else:
         }
     }
 
+
 # Debug line (safe to keep for now; remove later)
 print("DB_CONFIG_DEBUG:", {
     "ENGINE": DATABASES["default"].get("ENGINE"),
     "NAME": DATABASES["default"].get("NAME"),
     "HAS_URL": bool(DATABASE_URL),
 })
+
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.environ.get('SECRET_KEY')
 
