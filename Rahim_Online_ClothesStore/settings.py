@@ -32,6 +32,7 @@ ALLOWED_HOSTS = os.getenv(
 
 CSRF_TRUSTED_ORIGINS = ["https://codealpa-online-clothesstore.onrender.com"]
 
+
 ROOT_URLCONF = "Rahim_Online_ClothesStore.urls"
 ASGI_APPLICATION = "Rahim_Online_ClothesStore.asgi.application"
 
