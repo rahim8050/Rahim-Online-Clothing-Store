@@ -34,8 +34,10 @@ msgpack==1.1.1
 mysqlclient==2.2.7
 paypalrestsdk==1.13.3
 pillow==11.2.1
+
 psycopg==3.2.9
 psycopg-binary==3.2.9
+
 pyasn1==0.6.1
 pyasn1_modules==0.4.2
 pycparser==2.22
@@ -57,5 +59,13 @@ typing_extensions==4.14.1
 tzdata==2025.2
 urllib3==2.4.0
 wheel==0.45.1
+
 whitenoise==6.9.0
 zope.interface==7.2
+
+zope.interface==7.2
+dj-database-url==3.0.1
+psycopg[binary]==3.2.9
+whitenoise==6.7.0
+
+

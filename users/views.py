@@ -212,3 +212,8 @@ def my_orders(request):
             'orders': orders,
         },
     )
+    
+def geoapify_test(request):
+    return render(request, "users/accounts/dev.html", {
+        "GEOAPIFY_API_KEY": settings.GEOAPIFY_API_KEY,
+    })    
