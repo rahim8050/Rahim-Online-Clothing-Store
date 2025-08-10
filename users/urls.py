@@ -1,7 +1,17 @@
 from django.urls import path
 from .views import ResendActivationEmailView
 from django.contrib.auth import views as auth_views
-from users.views import CustomLoginView,Logout,RegisterUser,activate, profile_view,my_orders, geoapify_test
+from users.views import (
+    CustomLoginView,
+    Logout,
+    RegisterUser,
+    activate,
+    profile_view,
+    my_orders,
+    geoapify_test,
+    vendor_dashboard,
+    driver_dashboard,
+)
 from django.urls import reverse_lazy
 
 
@@ -14,6 +24,8 @@ path('activate/<uidb64>/<token>/', activate, name='activate'),
 path('profile/', profile_view, name='profile'),
 path('resend-activation/', ResendActivationEmailView.as_view(), name='resend_activation'),
 path('my-orders/', my_orders, name='my_orders'),
+path('vendor-dashboard/', vendor_dashboard, name='vendor_dashboard'),
+path('driver-dashboard/', driver_dashboard, name='driver_dashboard'),
 # Password reset URLs
     # These URLs are used for password reset functionality
     path('reset_password/', auth_views.PasswordResetView.as_view(
