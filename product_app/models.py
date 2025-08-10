@@ -1,8 +1,7 @@
 from django.db import models
 from django.urls import reverse
-
-
-# Create your models here.
+from django.core.exceptions import ValidationError
+from django.db.models import CheckConstraint, Q
 
 
 class Category(models.Model):
@@ -12,7 +11,7 @@ class Category(models.Model):
     class Meta:
         verbose_name_plural = "categories"
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.name
 
 
@@ -29,7 +28,7 @@ class Product(models.Model):
     updated = models.DateTimeField(auto_now=True)
     image = models.ImageField(upload_to="products", blank=True, null=True)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.name
 
     def get_absolute_url(self):
@@ -44,7 +43,40 @@ class Warehouse(models.Model):
     longitude = models.FloatField()
     address = models.CharField(max_length=255, blank=True)
 
-    def __str__(self):
+    def clean(self) -> None:
+        """Validate coordinates are within the global range and inside Kenya."""
+        super().clean()
+        if self.latitude is None or self.longitude is None:
+            return
+        if not (-90 <= self.latitude <= 90 and -180 <= self.longitude <= 180):
+            raise ValidationError("Invalid latitude/longitude range.")
+        if not (-4.8 <= self.latitude <= 5.3 and 33.5 <= self.longitude <= 42.2):
+            raise ValidationError("Coordinates must be within Kenya’s boundaries.")
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+    class Meta:
+        constraints = [
+            CheckConstraint(
+                check=Q(latitude__gte=-90) & Q(latitude__lte=90),
+                name="warehouse_lat_range",
+            ),
+            CheckConstraint(
+                check=Q(longitude__gte=-180) & Q(longitude__lte=180),
+                name="warehouse_lng_range",
+            ),
+            CheckConstraint(
+                check=Q(latitude__gte=-4.8)
+                & Q(latitude__lte=5.3)
+                & Q(longitude__gte=33.5)
+                & Q(longitude__lte=42.2),
+                name="warehouse_in_kenya_bbox",
+            ),
+        ]
+
+    def __str__(self) -> str:
         return self.name
 
 
@@ -60,7 +92,6 @@ class ProductStock(models.Model):
     class Meta:
         unique_together = ("product", "warehouse")
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"{self.product.name} - {self.warehouse.name}"
-
 
