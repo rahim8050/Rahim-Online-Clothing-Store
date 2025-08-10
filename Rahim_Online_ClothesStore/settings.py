@@ -91,6 +91,7 @@ TEMPLATES = [
         },
     },
 ]
+# okay   
 # -------------------------- Database --------------------------
 db_default = dj_database_url.config(
     default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
@@ -109,6 +110,7 @@ else:
     db_default.pop("OPTIONS", None)
 
 DATABASES = {"default": db_default}
+
 
 # -------------------------- Channels --------------------------
 REDIS_URL = os.getenv("REDIS_URL")
