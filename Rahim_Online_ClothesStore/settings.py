@@ -15,9 +15,11 @@ import os
 from django.db import models
 from django.db.models import CharField
 from dotenv import load_dotenv
+import environ
 from datetime import timedelta
 # Load environment   variables from .env file
 load_dotenv()
+env = environ.Env()
 
 
 
@@ -37,7 +39,6 @@ SECRET_KEY = os.environ.get('SECRET_KEY')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ["*"]
 
 
 # Application definition
@@ -81,6 +82,8 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 
+    # Must remain last to ensure geolocation is always disabled
+    'core.middleware.PermissionsPolicyMiddleware',
 ]
 AUTHENTICATION_BACKENDS = [
     'users.backends.EmailOrUsernameModelBackend',
@@ -123,8 +126,9 @@ TEMPLATES = [
     },
 ]
 
-ASGI_APPLICATION = 'Rahim_Online_ClothesStore.asgi.application'
-WSGI_APPLICATION = 'Rahim_Online_ClothesStore.wsgi.application'
+ASGI_APPLICATION = "Rahim_Online_ClothesStore.asgi.application"
+ALLOWED_HOSTS = ["127.0.0.1", "localhost"]
+CHANNEL_LAYERS = {"default": {"BACKEND": "channels.layers.InMemoryChannelLayer"}}
 # The Mpesa environment to use
 # Possible values: sandbox, production
 
@@ -183,7 +187,10 @@ MPESA_INITIATOR_USERNAME = 'initiator_username'
 
 MPESA_INITIATOR_SECURITY_CREDENTIAL = 'initiator_security_credential'
 # Geopify settings
-GEOAPIFY_API_KEY = os.environ.get('GEOAPIFY_API_KEY')
+# API key is read from the environment; never expose to templates
+GEOAPIFY_API_KEY = env("GEOAPIFY_API_KEY")
+GEOCODING_TIMEOUT = 6
+GEOCODING_USER_AGENT = 'RahimOnline/1.0 (contact: admin@example.com)'
 
 
 
@@ -193,25 +200,29 @@ GEOAPIFY_API_KEY = os.environ.get('GEOAPIFY_API_KEY')
 DATABASES = {
     'default': {
         'ENGINE': os.environ.get('ENGINE'),
-        'NAME':os.environ.get('NAME'),
-        'USER' : os.environ.get('User'),
-        'PASSWORD' :os.environ.get('PASSWORD'),
-        'HOST' : os.environ.get('HOST'),
-        'PORT' : os.environ.get('PORT'),
-          'OPTIONS': {
-              'charset': 'utf8mb4',
+        'NAME': os.environ.get('NAME'),
+        'USER': os.environ.get('User'),
+        'PASSWORD': os.environ.get('PASSWORD'),
+        'HOST': os.environ.get('HOST'),
+        'PORT': os.environ.get('PORT'),
+        'OPTIONS': {
+            'charset': 'utf8mb4',
             'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
-
-        }
-
-
+        } if os.environ.get('ENGINE') == 'django.db.backends.mysql' else {},
     }
 }
 
 CHANNEL_LAYERS = {
-    'default': {
-        'BACKEND': 'channels.layers.InMemoryChannelLayer',
-    },
+    'default': (
+        {
+            'BACKEND': 'channels_redis.core.RedisChannelLayer',
+            'CONFIG': {
+                'hosts': [os.environ.get('REDIS_URL', 'redis://localhost:6379')]
+            },
+        }
+        if os.environ.get('REDIS_URL')
+        else {'BACKEND': 'channels.layers.InMemoryChannelLayer'}
+    )
 }
 
 
@@ -296,4 +307,14 @@ EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', default=True)
 EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER')
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD')
 DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', default=EMAIL_HOST_USER)
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {"console": {"class": "logging.StreamHandler"}},
+    "loggers": {
+        "channels": {"handlers": ["console"], "level": "INFO"},
+        "orders": {"handlers": ["console"], "level": "DEBUG"},
+    },
+}
 

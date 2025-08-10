@@ -1,9 +1,10 @@
 # ===== Python =====
+**/__pycache__/
 *.pyc
 *.pyo
 *.pyd
 *.py[cod]
-**/__pycache__/
+
 
 # ===== Virtual Environments =====
 .venv/

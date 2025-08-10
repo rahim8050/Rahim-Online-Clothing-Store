@@ -1,7 +1,8 @@
 from django.db import models
-from product_app.models import Product, Warehouse
+from django.db.models import CheckConstraint, Q
 from django.contrib.auth import get_user_model
 from django.conf import settings
+from product_app.models import Product, Warehouse
 
 User = get_user_model()
 
@@ -12,6 +13,15 @@ class Order(models.Model):
     latitude = models.FloatField(null=True, blank=True)
     longitude = models.FloatField(null=True, blank=True)
     location_address = models.TextField(null=True, blank=True)
+    coords_locked = models.BooleanField(default=False)
+    coords_source = models.CharField(max_length=20, blank=True, default="")
+    coords_updated_at = models.DateTimeField(null=True, blank=True)
+
+    # Destination selected via Geoapify autocomplete
+    dest_address_text = models.CharField(max_length=255)
+    dest_lat = models.DecimalField(max_digits=9, decimal_places=6)
+    dest_lng = models.DecimalField(max_digits=9, decimal_places=6)
+    dest_source = models.CharField(max_length=32, default="autocomplete")
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -27,7 +37,33 @@ class Order(models.Model):
     payment_intent_id = models.CharField(max_length=100, blank=True, null=True)
     stripe_receipt_url = models.URLField(blank=True, null=True)
 
-
+    class Meta:
+        constraints = [
+            CheckConstraint(
+                check=(Q(latitude__gte=-90) & Q(latitude__lte=90)) | Q(latitude__isnull=True),
+                name="order_lat_range",
+            ),
+            CheckConstraint(
+                check=(Q(longitude__gte=-180) & Q(longitude__lte=180)) | Q(longitude__isnull=True),
+                name="order_lng_range",
+            ),
+            CheckConstraint(
+                check=(
+                    (Q(latitude__gte=-90) & Q(latitude__lte=90) &
+                     Q(longitude__gte=-180) & Q(longitude__lte=180)) |
+                    (Q(latitude__isnull=True) & Q(longitude__isnull=True))
+                ),
+                name="order_lat_lng_range_or_null",
+            ),
+            CheckConstraint(
+                name="order_dest_lat_range",
+                check=Q(dest_lat__gte=-90) & Q(dest_lat__lte=90),
+            ),
+            CheckConstraint(
+                name="order_dest_lng_range",
+                check=Q(dest_lng__gte=-180) & Q(dest_lng__lte=180),
+            ),
+        ]
 
     def get_total_cost(self):
         return int(sum(item.get_cost() for item in self.items.all()))
@@ -38,9 +74,9 @@ class Order(models.Model):
 
 class OrderItem(models.Model):
     DELIVERY_STATUS_CHOICES = [
-        ("pending", "Pending"),
+        ("created", "Created"),
         ("dispatched", "Dispatched"),
-        ("in_transit", "In transit"),
+        ("en_route", "En route"),
         ("delivered", "Delivered"),
     ]
 
@@ -54,8 +90,16 @@ class OrderItem(models.Model):
     delivery_status = models.CharField(
         max_length=20,
         choices=DELIVERY_STATUS_CHOICES,
-        default="pending",
+        default="created",
     )
+
+    class Meta:
+        constraints = [
+            CheckConstraint(
+                check=Q(delivery_status='created') | Q(warehouse__isnull=False),
+                name="item_requires_warehouse_when_moving",
+            ),
+        ]
 
     def get_cost(self):
         return int(self.price * self.quantity)
