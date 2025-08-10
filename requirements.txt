@@ -22,9 +22,14 @@ django-widget-tweaks==1.5.0
 djangorestframework==3.16.0
 djangorestframework_simplejwt==5.5.0
 
+dj-database-url>=3.0
+psycopg[binary]>=3.2
+
+
 
 dj-database-url>=3.0
 psycopg[binary]>=3.2
+
 
 
 geographiclib==2.0
