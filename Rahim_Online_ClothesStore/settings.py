@@ -91,15 +91,24 @@ TEMPLATES = [
         },
     },
 ]
-
 # -------------------------- Database --------------------------
-DATABASES = {
-    "default": dj_database_url.config(
-        default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
-        conn_max_age=600,
-        ssl_require=not DEBUG,
-    )
-}
+db_default = dj_database_url.config(
+    default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
+    conn_max_age=600,
+    ssl_require=False,  # don't force here; we'll add for Postgres only
+)
+
+engine = (db_default.get("ENGINE") or "").lower()
+
+if engine.endswith("postgresql") and not DEBUG:
+    opts = db_default.get("OPTIONS") or {}
+    opts.setdefault("sslmode", "require")
+    db_default["OPTIONS"] = opts
+else:
+    # SQLite or anything else: ensure no ssl-only options leak in
+    db_default.pop("OPTIONS", None)
+
+DATABASES = {"default": db_default}
 
 # -------------------------- Channels --------------------------
 REDIS_URL = os.getenv("REDIS_URL")
