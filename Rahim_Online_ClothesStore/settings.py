@@ -25,13 +25,17 @@ SECRET_KEY = os.getenv("SECRET_KEY")
 if not SECRET_KEY:
     raise RuntimeError("SECRET_KEY is not set in environment.")
 
+# ALLOWED_HOSTS: include your actual Render hostname
 ALLOWED_HOSTS = os.getenv(
     "ALLOWED_HOSTS",
-    "127.0.0.1,localhost,codealpa-online-clothesstore.onrender.com",
+    "127.0.0.1,localhost,rahim-online-clothing-store.onrender.com"
 ).split(",")
 
-CSRF_TRUSTED_ORIGINS = ["https://codealpa-online-clothesstore.onrender.com"]
-
+# CSRF: trust your Render origin (must be https)
+CSRF_TRUSTED_ORIGINS = os.getenv(
+    "CSRF_TRUSTED_ORIGINS",
+    "https://rahim-online-clothing-store.onrender.com"
+).split(",")
 ROOT_URLCONF = "Rahim_Online_ClothesStore.urls"
 ASGI_APPLICATION = "Rahim_Online_ClothesStore.asgi.application"
 
