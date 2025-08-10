@@ -29,6 +29,7 @@ from django.contrib import messages
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+ALLOWED_HOSTS = ["127.0.0.1", "localhost", "codealpa-online-clothesstore.onrender.com"]
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
@@ -58,7 +59,7 @@ SECRET_KEY = os.environ.get('SECRET_KEY')
 
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+
 
 
 
@@ -218,33 +219,32 @@ GEOCODING_USER_AGENT = 'RahimOnline/1.0 (contact: admin@example.com)'
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': os.environ.get('ENGINE'),
-        'NAME': os.environ.get('NAME'),
-        'USER': os.environ.get('User'),
-        'PASSWORD': os.environ.get('PASSWORD'),
-        'HOST': os.environ.get('HOST'),
-        'PORT': os.environ.get('PORT'),
-        'OPTIONS': {
-            'charset': 'utf8mb4',
-            'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
-        } if os.environ.get('ENGINE') == 'django.db.backends.mysql' else {},
-    }
-}
+# DATABASES = {
+#     'default': {
+#         'ENGINE': os.environ.get('ENGINE'),
+#         'NAME': os.environ.get('NAME'),
+#         'USER': os.environ.get('User'),
+#         'PASSWORD': os.environ.get('PASSWORD'),
+#         'HOST': os.environ.get('HOST'),
+#         'PORT': os.environ.get('PORT'),
+#         'OPTIONS': {
+#             'charset': 'utf8mb4',
+#             'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
+#         } if os.environ.get('ENGINE') == 'django.db.backends.mysql' else {},
+#     }
+# }
 
 CHANNEL_LAYERS = {
-    'default': (
+    "default": (
         {
-            'BACKEND': 'channels_redis.core.RedisChannelLayer',
-            'CONFIG': {
-                'hosts': [os.environ.get('REDIS_URL', 'redis://localhost:6379')]
-            },
+            "BACKEND": "channels_redis.core.RedisChannelLayer",
+            "CONFIG": {"hosts": [os.environ.get("REDIS_URL")]},
         }
-        if os.environ.get('REDIS_URL')
-        else {'BACKEND': 'channels.layers.InMemoryChannelLayer'}
+        if os.environ.get("REDIS_URL")
+        else {"BACKEND": "channels.layers.InMemoryChannelLayer"}
     )
 }
+
 
 
 # Password validation
