@@ -15,11 +15,13 @@ from django.urls import reverse_lazy
 from django.urls import reverse
 import logging
 from django.contrib.auth.decorators import login_required
-from django.http import HttpResponse
-from orders.models import Order
+from django.http import HttpResponse, HttpResponseForbidden
+from django.apps import apps
+from django.core.exceptions import FieldError
+from orders.models import Order, OrderItem
 from django.conf import settings
 from django.contrib.auth.views import LoginView
-from .forms import CustomLoginForm  
+from .forms import CustomLoginForm
 from .tokens import account_activation_token
 from .forms import (
     RegisterUserForm,
@@ -27,6 +29,7 @@ from .forms import (
     CustomPasswordChangeForm,
     ResendActivationEmailForm,
 )
+from .roles import ROLE_VENDOR, ROLE_VENDOR_STAFF, ROLE_DRIVER
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
@@ -212,8 +215,46 @@ def my_orders(request):
             'orders': orders,
         },
     )
-    
+
+
+@login_required
+def vendor_dashboard(request):
+    if not request.user.groups.filter(name__in=[ROLE_VENDOR, ROLE_VENDOR_STAFF]).exists():
+        return HttpResponseForbidden()
+    Product = apps.get_model('product_app', 'Product')
+    from product_app.utils import get_vendor_field
+    field = get_vendor_field(Product)
+    try:
+        products = Product.objects.filter(**{field: request.user})
+    except FieldError:
+        logger.warning("Product model missing vendor field '%s'", field)
+        products = Product.objects.none()
+    items = OrderItem.objects.filter(product__in=products).select_related('order', 'product')
+    return render(
+        request,
+        'users/vendor_dashboard.html',
+        {
+            'products': products,
+            'order_items': items,
+        },
+    )
+
+
+@login_required
+def driver_dashboard(request):
+    if not request.user.groups.filter(name=ROLE_DRIVER).exists():
+        return HttpResponseForbidden()
+    Delivery = apps.get_model('orders', 'Delivery')
+    deliveries = []
+    if Delivery:
+        deliveries = Delivery.objects.filter(driver=request.user)
+    return render(
+        request,
+        'users/driver_dashboard.html',
+        {'deliveries': deliveries},
+    )
+
 def geoapify_test(request):
     return render(request, "users/accounts/dev.html", {
         "GEOAPIFY_API_KEY": settings.GEOAPIFY_API_KEY,
-    })    
+    })

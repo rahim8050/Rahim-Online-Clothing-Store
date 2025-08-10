@@ -30,6 +30,8 @@ urlpatterns = [
                   path('orders/', include("orders.urls",namespace='orders')),
                   # path('mpesa/', include('Mpesa.urls')),  # [Inactive] Preserved for future testing
                   path('', views.product_list, name='index'),
+
+                  path('api/', include('apis.urls')),
                   
 
                   path('webhook/paystack/', paystack_webhook, name='paystack_webhook'),  # ✅ direct path, no include

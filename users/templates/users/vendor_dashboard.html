@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block content %}
+<h2 class="text-xl font-bold mb-4">Vendor Dashboard</h2>
+<h3 class="font-semibold">Products</h3>
+<ul>
+  {% for product in products %}
+  <li class="mb-2">
+    {{ product.name }}
+  </li>
+  {% empty %}
+  <li>No products found.</li>
+  {% endfor %}
+</ul>
+<h3 class="font-semibold mt-6">Order Items</h3>
+<ul>
+  {% for item in order_items %}
+  <li class="mb-1">
+    {{ item.quantity }} x {{ item.product.name }} (Order #{{ item.order.id }})
+  </li>
+  {% empty %}
+  <li>No order items.</li>
+  {% endfor %}
+</ul>
+{% endblock %}
