@@ -4,75 +4,42 @@ Production settings for Rahim_Online_ClothesStore on Render.
 from pathlib import Path
 import os
 from datetime import timedelta
-
-import dj_database_url
-from django.db import models
-from django.db.models import CharField
-
-from dotenv import load_dotenv
 import environ
-from datetime import timedelta
 import dj_database_url
-# Load environment   variables from .env file
-load_dotenv()
-env = environ.Env()
-
-
-
-
-
 from django.contrib import messages
+from django.db import models
 
 # ---------------------------- Core ----------------------------
 BASE_DIR = Path(__file__).resolve().parent.parent
+env = environ.Env(DEBUG=(bool, False))
 
-def env_bool(key: str, default: bool = False) -> bool:
-    val = os.getenv(key)
-    if val is None:
-        return default
-    return str(val).lower() in {"1", "true", "yes", "on"}
+# On Render you don’t need .env; keep this harmless if present locally
+environ.Env.read_env(os.path.join(BASE_DIR, ".env"))
 
+DEBUG = env.bool("DEBUG", False)
 
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
-BASE_DIR = Path(__file__).resolve().parent.parent
-DEBUG = os.getenv("DEBUG", "0") == "1"
-
-DATABASES = {
-    "default": dj_database_url.config(
-        default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",  # local fallback
-        conn_max_age=600,
-        ssl_require=not DEBUG,  # require SSL in prod (Render)
-    )
-}
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.environ.get('SECRET_KEY')
-
-
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
-
-
-
-# Application definition
-
-DEBUG = env_bool("DEBUG", False)
-
-SECRET_KEY = os.getenv("SECRET_KEY")
+SECRET_KEY = env("SECRET_KEY", default=None)
 if not SECRET_KEY:
     raise RuntimeError("SECRET_KEY is not set in environment.")
 
-ALLOWED_HOSTS = os.getenv(
+ALLOWED_HOSTS = env.list(
     "ALLOWED_HOSTS",
-    "127.0.0.1,localhost,codealpa-online-clothesstore.onrender.com",
-).split(",")
+    default=["codealpa-online-clothesstore.onrender.com"]
+)
 
-CSRF_TRUSTED_ORIGINS = ["https://codealpa-online-clothesstore.onrender.com"]
+# Render dynamic hostname support
+RENDER_HOST = os.getenv("RENDER_EXTERNAL_HOSTNAME")
+if RENDER_HOST and RENDER_HOST not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(RENDER_HOST)
 
+# CSRF: scheme required
+CSRF_TRUSTED_ORIGINS = env.list(
+    "CSRF_TRUSTED_ORIGINS",
+    default=[f"https://{h}" for h in ALLOWED_HOSTS if not h.startswith("http")]
+)
 
 ROOT_URLCONF = "Rahim_Online_ClothesStore.urls"
 ASGI_APPLICATION = "Rahim_Online_ClothesStore.asgi.application"
-
 
 # ------------------------ Applications ------------------------
 INSTALLED_APPS = [
@@ -102,39 +69,8 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
-
-    'django.middleware.security.SecurityMiddleware',
-    'django.contrib.sessions.middleware.SessionMiddleware',
-    'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
-    'django.contrib.auth.middleware.AuthenticationMiddleware',
-    'django.contrib.messages.middleware.MessageMiddleware',
-    'django.middleware.clickjacking.XFrameOptionsMiddleware',
-
-    # Must remain last to ensure geolocation is always disabled
-    'core.middleware.PermissionsPolicyMiddleware',
-]
-AUTHENTICATION_BACKENDS = [
-    'users.backends.EmailOrUsernameModelBackend',
-    'django.contrib.auth.backends.ModelBackend',
-]
-REST_FRAMEWORK = {
-    'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
-        'rest_framework.authentication.SessionAuthentication',
-    ],
-}
-SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
-}
-
-
-CSRF_TRUSTED_ORIGINS = [
-    'https://codealpa-online-clothesstore.onrender.com',
-
     "django.middleware.security.SecurityMiddleware",
-    "whitenoise.middleware.WhiteNoiseMiddleware",  # static in prod
+    "whitenoise.middleware.WhiteNoiseMiddleware",  # ✅ required if using WhiteNoise storage
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -142,7 +78,11 @@ CSRF_TRUSTED_ORIGINS = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "core.middleware.PermissionsPolicyMiddleware",  # keep last
+]
 
+AUTHENTICATION_BACKENDS = [
+    "users.backends.EmailOrUsernameModelBackend",
+    "django.contrib.auth.backends.ModelBackend",
 ]
 
 # ------------------------- Templates --------------------------
@@ -162,118 +102,15 @@ TEMPLATES = [
         },
     },
 ]
-# okay   
+
 # -------------------------- Database --------------------------
-db_default = dj_database_url.config(
-    default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
-    conn_max_age=600,
-    ssl_require=False,  # don't force here; we'll add for Postgres only
-)
-
-
-ASGI_APPLICATION = "Rahim_Online_ClothesStore.asgi.application"
-ALLOWED_HOSTS = ["127.0.0.1", "localhost"]
-CHANNEL_LAYERS = {"default": {"BACKEND": "channels.layers.InMemoryChannelLayer"}}
-# The Mpesa environment to use
-# Possible values: sandbox, production
-
-engine = (db_default.get("ENGINE") or "").lower()
-
-
-if engine.endswith("postgresql") and not DEBUG:
-    opts = db_default.get("OPTIONS") or {}
-    opts.setdefault("sslmode", "require")
-    db_default["OPTIONS"] = opts
-else:
-    # SQLite or anything else: ensure no ssl-only options leak in
-    db_default.pop("OPTIONS", None)
-
-DATABASES = {"default": db_default}
-
-
-
-#Shortcode to use for transactions. For sandbox  use the Shortcode 1 provided on test credentials page
-
-MPESA_SHORTCODE = os.environ.get('MPESA_SHORTCODE')
-
-# Shortcode to use for Lipa na MPESA Online (MPESA Express) transactions
-# This is only used on sandbox, do not set this variable in production
-# For sandbox use the Lipa na MPESA Online Shorcode provided on test credentials page
-
-MPESA_EXPRESS_SHORTCODE = os.environ.get('MPESA_EXPRESS_SHORTCODE')
-
-# Type of shortcode
-# Possible values:
-# - paybill (For Paybill)
-# - till_number (For Buy Goods Till Number)
-
-MPESA_SHORTCODE_TYPE = 'paybill'
-
-# Lipa na MPESA Online passkey
-# Sandbox passkey is available on test credentials page
-# Production passkey is sent via email once you go live
-
-MPESA_PASSKEY = os.environ.get('MPESA_PASS_KEY')
-
-# Stripe configuration
-STRIPE_SECRET_KEY = os.environ.get('STRIPE_SECRET_KEY')
-STRIPE_PUBLISHABLE_KEY = os.environ.get('STRIPE_PUBLISHABLE_KEY')
-STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET")
-
-
-# PayPal configuration
-PAYPAL_CLIENT_ID = os.environ.get('PAYPAL_CLIENT_ID')
-PAYPAL_CLIENT_SECRET = os.environ.get('PAYPAL_CLIENT_SECRET')
-PAYPAL_MODE = os.environ.get('PAYPAL_MODE', 'sandbox')
-
-# Paystack configuration
-PAYSTACK_PUBLIC_KEY = os.environ.get('PAYSTACK_PUBLIC_KEY')
-PAYSTACK_SECRET_KEY = os.environ.get('PAYSTACK_SECRET_KEY')
-
-
-# Username for initiator (to be used in B2C, B2B, AccountBalance and TransactionStatusQuery Transactions)
-
-MPESA_INITIATOR_USERNAME = 'initiator_username'
-
-# Plaintext password for initiator (to be used in B2C, B2B, AccountBalance and TransactionStatusQuery Transactions)
-
-MPESA_INITIATOR_SECURITY_CREDENTIAL = 'initiator_security_credential'
-# Geopify settings
-# API key is read from the environment; never expose to templates
-GEOAPIFY_API_KEY = env("GEOAPIFY_API_KEY")
-GEOCODING_TIMEOUT = 6
-GEOCODING_USER_AGENT = 'RahimOnline/1.0 (contact: admin@example.com)'
-
-
-
-# Database
-# https://docs.djangoproject.com/en/5.1/ref/settings/#databases
-
 DATABASES = {
-    'default': {
-        'ENGINE': os.environ.get('ENGINE'),
-        'NAME': os.environ.get('NAME'),
-        'USER': os.environ.get('User'),
-        'PASSWORD': os.environ.get('PASSWORD'),
-        'HOST': os.environ.get('HOST'),
-        'PORT': os.environ.get('PORT'),
-        'OPTIONS': {
-            'charset': 'utf8mb4',
-            'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
-        } if os.environ.get('ENGINE') == 'django.db.backends.mysql' else {},
-    }
+    "default": dj_database_url.config(
+        default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",  # fallback if DATABASE_URL missing
+        conn_max_age=600,
+        ssl_require=not DEBUG,
+    )
 }
-
-CHANNEL_LAYERS = {
-    'default': (
-        {
-            'BACKEND': 'channels_redis.core.RedisChannelLayer',
-            'CONFIG': {
-                'hosts': [os.environ.get('REDIS_URL', 'redis://localhost:6379')]
-            },
-        }
-        if os.environ.get('REDIS_URL')
-        else {'BACKEND': 'channels.layers.InMemoryChannelLayer'})}
 
 # -------------------------- Channels --------------------------
 REDIS_URL = os.getenv("REDIS_URL")
@@ -285,16 +122,10 @@ CHANNEL_LAYERS = {
         }
         if REDIS_URL
         else {"BACKEND": "channels.layers.InMemoryChannelLayer"}
-
     )
 }
 
 # ------------------------- Auth / API -------------------------
-AUTHENTICATION_BACKENDS = [
-    "users.backends.EmailOrUsernameModelBackend",
-    "django.contrib.auth.backends.ModelBackend",
-]
-
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "rest_framework_simplejwt.authentication.JWTAuthentication",
@@ -306,14 +137,14 @@ SIMPLE_JWT = {
     "REFRESH_TOKEN_LIFETIME": timedelta(days=1),
 }
 
+AUTH_USER_MODEL = "users.CustomUser"
+
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
     {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
-
-AUTH_USER_MODEL = "users.CustomUser"
 
 # ------------------------ I18N / Time -------------------------
 LANGUAGE_CODE = "en-us"
@@ -325,22 +156,36 @@ USE_TZ = True
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 STATICFILES_DIRS = [BASE_DIR / "static"]
-
 STORAGES = {
-    "staticfiles": {"BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"}
+    # Used by File/ImageField → writes to MEDIA_ROOT
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    # Used for collectstatic / serving static via WhiteNoise
+    "staticfiles": {
+        "BACKEND": (
+            "whitenoise.storage.CompressedManifestStaticFilesStorage"
+            if not DEBUG
+            else "whitenoise.storage.CompressedStaticFilesStorage"
+        ),
+    },
 }
-
 MEDIA_URL = "media/"
 MEDIA_ROOT = BASE_DIR / "mediafiles"
 
 # -------------------------- Security --------------------------
 SECURE_SSL_REDIRECT = not DEBUG
-SESSION_COOKIE_SECURE = not DEBUG or True
-CSRF_COOKIE_SECURE = not DEBUG or True
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+USE_X_FORWARDED_HOST = True
+
 SECURE_HSTS_SECONDS = 60 * 60 * 24 * 14 if not DEBUG else 0
 SECURE_HSTS_INCLUDE_SUBDOMAINS = not DEBUG
 SECURE_HSTS_PRELOAD = not DEBUG
+
+SESSION_COOKIE_SECURE = True
+CSRF_COOKIE_SECURE = True
+SESSION_COOKIE_SAMESITE = "Lax"
+CSRF_COOKIE_SAMESITE = "Lax"
 
 # -------------------- Third-party / Payments -------------------
 GEOAPIFY_API_KEY = os.getenv("GEOAPIFY_API_KEY")
@@ -355,8 +200,6 @@ MPESA_EXPRESS_SHORTCODE = os.getenv("MPESA_EXPRESS_SHORTCODE")
 MPESA_SHORTCODE_TYPE = os.getenv("MPESA_SHORTCODE_TYPE", "paybill")
 MPESA_PASSKEY = os.getenv("MPESA_PASS_KEY")
 
-
-
 STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY")
 STRIPE_PUBLISHABLE_KEY = os.getenv("STRIPE_PUBLISHABLE_KEY")
 STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET")
@@ -369,11 +212,15 @@ PAYSTACK_PUBLIC_KEY = os.getenv("PAYSTACK_PUBLIC_KEY")
 PAYSTACK_SECRET_KEY = os.getenv("PAYSTACK_SECRET_KEY")
 
 # ---------------------------- Email ----------------------------
+def _env_bool(key: str, default: bool = False) -> bool:
+    v = os.getenv(key)
+    return default if v is None else str(v).lower() in {"1", "true", "yes", "on"}
+
 EMAIL_BACKEND = os.getenv("EMAIL_BACKEND", "django.core.mail.backends.smtp.EmailBackend")
 EMAIL_HOST = os.getenv("EMAIL_HOST", "")
 EMAIL_PORT = int(os.getenv("EMAIL_PORT", "587"))
-EMAIL_USE_TLS = env_bool("EMAIL_USE_TLS", True)
-EMAIL_USE_SSL = env_bool("EMAIL_USE_SSL", False)
+EMAIL_USE_TLS = _env_bool("EMAIL_USE_TLS", True)
+EMAIL_USE_SSL = _env_bool("EMAIL_USE_SSL", False)
 if EMAIL_USE_SSL:
     EMAIL_USE_TLS = False
 EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")
@@ -399,55 +246,19 @@ MESSAGE_TAGS = {
 }
 
 # --------------------------- Logging ---------------------------
-
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
     "handlers": {"console": {"class": "logging.StreamHandler"}},
-
-    "loggers": {
-
     "root": {"handlers": ["console"], "level": "INFO"},
     "loggers": {
-        "django": {"handlers": ["console"], "level": "INFO"},
-
-        "channels": {"handlers": ["console"], "level": "INFO"},
-        "orders": {"handlers": ["console"], "level": "DEBUG"},
+        "django": {"handlers": ["console"], "level": "INFO", "propagate": False},
+        "channels": {"handlers": ["console"], "level": "INFO", "propagate": False},
+        "orders": {"handlers": ["console"], "level": "DEBUG", "propagate": False},
     },
-}}
-
-
+}
 
 # ---------------------------- Misc -----------------------------
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
-CharField.register_lookup(models.functions.Length)
-
-
-# ---- Security / Proxy ----
-SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
-USE_X_FORWARDED_HOST = True
-
-# Explicit cookie policy
-SESSION_COOKIE_SECURE = True
-CSRF_COOKIE_SECURE = True
-SESSION_COOKIE_SAMESITE = "Lax"
-CSRF_COOKIE_SAMESITE = "Lax"
-# Do NOT set SESSION_COOKIE_DOMAIN/CSRF_COOKIE_DOMAIN unless on a custom apex domain.
-
-# Hosts/CSRF: include dynamic Render hostname
-RENDER_HOST = os.environ.get("RENDER_EXTERNAL_HOSTNAME")  # e.g. mysvc.onrender.com
-if RENDER_HOST and RENDER_HOST not in ALLOWED_HOSTS:
-    ALLOWED_HOSTS.append(RENDER_HOST)
-    # Django 4/5 require scheme in CSRF_TRUSTED_ORIGINS:
-    if f"https://{RENDER_HOST}" not in CSRF_TRUSTED_ORIGINS:
-        CSRF_TRUSTED_ORIGINS.append(f"https://{RENDER_HOST}")
-
-# ---- SECRET_KEY must be stable and present ----
-# Use the same name in env and here. Either:
-#   Render env: SECRET_KEY=... (keep your current code),
-# or change to:
-# SECRET_KEY = os.getenv("DJANGO_SECRET_KEY")
-# and set DJANGO_SECRET_KEY in Render.
-if not SECRET_KEY:
-    raise RuntimeError("SECRET_KEY is not set in environment.")
-
+from django.db.models.functions import Length
+models.CharField.register_lookup(Length)

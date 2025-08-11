@@ -78,7 +78,7 @@ class Migration(migrations.Migration):
                 ('verified', models.BooleanField(default=False)),
 
 
-                ('verified', models.BooleanField(default=False)),
+               
 
 
                 ('email_sent', models.BooleanField(default=False)),
