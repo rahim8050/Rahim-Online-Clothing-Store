@@ -3,24 +3,38 @@ from rest_framework import serializers
 from product_app.models import Product
 from orders.models import OrderItem
 
+
 class OrderItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = OrderItem
         fields = ["id", "order", "product", "price", "quantity", "delivery_status"]
 
+
 class ProductSerializer(serializers.ModelSerializer):
-    order_items = OrderItemSerializer(many=True, read_only=True)
+    # If your FK on OrderItem uses related_name="order_items", this is fine.
+    # If not, change `source` to the actual related name (e.g. "orderitem_set").
+    order_items = OrderItemSerializer(many=True, read_only=True, source="order_items")
 
     class Meta:
         model = Product
         fields = ["id", "name", "price", "available", "order_items"]
 
-# Delivery serializer is optional
-Delivery = apps.get_model('orders', 'Delivery')
-if Delivery:
+
+# ---- Optional Delivery serializer (won't explode if model is absent) ----
+class EmptySerializer(serializers.Serializer):
+    """Used when Delivery model doesn't exist."""
+    pass
+
+try:
+    DeliveryModel = apps.get_model("orders", "Delivery")  # raises LookupError if absent
+except LookupError:
+    DeliveryModel = None
+
+if DeliveryModel is not None:
     class DeliverySerializer(serializers.ModelSerializer):
         class Meta:
-            model = Delivery
+            model = DeliveryModel
             fields = "__all__"
 else:
-    DeliverySerializer = None
+    # Keep a symbol so `from .serializers import DeliverySerializer` never fails.
+    DeliverySerializer = EmptySerializer
