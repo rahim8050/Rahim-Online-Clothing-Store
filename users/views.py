@@ -38,17 +38,19 @@ def home(request):
 class CustomLoginView(LoginView):
     form_class = CustomLoginForm
     template_name = "users/accounts/login.html"
+    redirect_authenticated_user = True
+    success_url = reverse_lazy("index")   # fallback
 
     def form_valid(self, form):
-        # Backup cart_id before login clears session
-        cart_id = self.request.session.get('cart_id')
+        # (Optional) session is rotated on login, but data is retained.
+        cart_id = self.request.session.get("cart_id")
         if cart_id:
-            self.request.session['cart_id_backup'] = cart_id
-
+            self.request.session["cart_id_backup"] = cart_id
         return super().form_valid(form)
 
     def get_success_url(self):
-        return reverse('index')
+        # Respect ?next=... if present, else fallback to index
+        return self.get_redirect_url() or self.success_url
 
 
 class Logout(LogoutView):

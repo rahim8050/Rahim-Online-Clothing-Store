@@ -34,17 +34,21 @@ class RegisterUserForm(UserCreationForm):
 # =======================
 class CustomLoginForm(AuthenticationForm):
     username = forms.CharField(
-        label="Username or Email",
+        label="Email or Username",
         widget=forms.TextInput(attrs={
-            'autofocus': True,
-            'class': 'w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500'
-        })
+            "placeholder": "Email or Username",
+            "autocomplete": "username",
+            "autofocus": "autofocus",
+            "class": "w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500",
+        }),
     )
     password = forms.CharField(
         label="Password",
         strip=False,
         widget=forms.PasswordInput(attrs={
-            'class': 'w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500'
+            "placeholder": "Password",
+            "autocomplete": "current-password",
+            "class": "w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 pr-10",
         }),
     )
 
