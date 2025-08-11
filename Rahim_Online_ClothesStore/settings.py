@@ -422,3 +422,32 @@ LOGGING = {
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 CharField.register_lookup(models.functions.Length)
 
+
+# ---- Security / Proxy ----
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+USE_X_FORWARDED_HOST = True
+
+# Explicit cookie policy
+SESSION_COOKIE_SECURE = True
+CSRF_COOKIE_SECURE = True
+SESSION_COOKIE_SAMESITE = "Lax"
+CSRF_COOKIE_SAMESITE = "Lax"
+# Do NOT set SESSION_COOKIE_DOMAIN/CSRF_COOKIE_DOMAIN unless on a custom apex domain.
+
+# Hosts/CSRF: include dynamic Render hostname
+RENDER_HOST = os.environ.get("RENDER_EXTERNAL_HOSTNAME")  # e.g. mysvc.onrender.com
+if RENDER_HOST and RENDER_HOST not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(RENDER_HOST)
+    # Django 4/5 require scheme in CSRF_TRUSTED_ORIGINS:
+    if f"https://{RENDER_HOST}" not in CSRF_TRUSTED_ORIGINS:
+        CSRF_TRUSTED_ORIGINS.append(f"https://{RENDER_HOST}")
+
+# ---- SECRET_KEY must be stable and present ----
+# Use the same name in env and here. Either:
+#   Render env: SECRET_KEY=... (keep your current code),
+# or change to:
+# SECRET_KEY = os.getenv("DJANGO_SECRET_KEY")
+# and set DJANGO_SECRET_KEY in Render.
+if not SECRET_KEY:
+    raise RuntimeError("SECRET_KEY is not set in environment.")
+
