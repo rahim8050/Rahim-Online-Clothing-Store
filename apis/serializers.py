@@ -13,7 +13,7 @@ class OrderItemSerializer(serializers.ModelSerializer):
 class ProductSerializer(serializers.ModelSerializer):
     # If your FK on OrderItem uses related_name="order_items", this is fine.
     # If not, change `source` to the actual related name (e.g. "orderitem_set").
-    order_items = OrderItemSerializer(many=True, read_only=True, source="order_items")
+    order_items = OrderItemSerializer(many=True, read_only=True)
 
     class Meta:
         model = Product
