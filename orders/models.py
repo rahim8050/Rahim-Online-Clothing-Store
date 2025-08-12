@@ -120,39 +120,41 @@ class OrderItem(models.Model):
         return f"{self.quantity} x {self.product.name}"
 
 
+
+
+def channel_key_default():
+    return uuid4().hex  # 32 chars; adjust max_length if you want longer
+
 class Delivery(models.Model):
     class Status(models.TextChoices):
-        PENDING = "pending", "Pending"
-        ASSIGNED = "assigned", "Assigned"
+        PENDING   = "pending", "Pending"
+        ASSIGNED  = "assigned", "Assigned"
         PICKED_UP = "picked_up", "Picked up"
-        EN_ROUTE = "en_route", "En route"
+        EN_ROUTE  = "en_route", "En route"
         DELIVERED = "delivered", "Delivered"
         CANCELLED = "cancelled", "Cancelled"
 
     order = models.ForeignKey("orders.Order", related_name="deliveries", on_delete=models.CASCADE)
-    driver = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        null=True,
-        blank=True,
-        related_name="deliveries",
-        on_delete=models.SET_NULL,
-    )
+    driver = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True,
+                               related_name="deliveries", on_delete=models.SET_NULL)
 
-    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING, db_index=True)
-    assigned_at = models.DateTimeField(null=True, blank=True)
+    status = models.CharField(max_length=20, choices=Status.choices,
+                              default=Status.PENDING, db_index=True)
+    assigned_at  = models.DateTimeField(null=True, blank=True)
     picked_up_at = models.DateTimeField(null=True, blank=True)
     delivered_at = models.DateTimeField(null=True, blank=True)
 
     origin_lat = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     origin_lng = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
-    dest_lat = models.DecimalField(max_digits=9, decimal_places=6)
-    dest_lng = models.DecimalField(max_digits=9, decimal_places=6)
+    dest_lat   = models.DecimalField(max_digits=9, decimal_places=6)
+    dest_lng   = models.DecimalField(max_digits=9, decimal_places=6)
 
     last_lat = models.FloatField(null=True, blank=True)
     last_lng = models.FloatField(null=True, blank=True)
     last_ping_at = models.DateTimeField(null=True, blank=True)
 
-    channel_key = models.CharField(max_length=64, unique=True, default=lambda: uuid4().hex)
+    channel_key = models.CharField(max_length=32, unique=True,
+                                   default=channel_key_default, editable=False)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -161,7 +163,8 @@ class Delivery(models.Model):
         constraints = [
             CheckConstraint(
                 name="delivery_driver_required_when_moving",
-                check=Q(status__in=[Status.PENDING, Status.DELIVERED, Status.CANCELLED]) | Q(driver__isnull=False),
+                # Use string literals here to avoid NameError
+                check=Q(status__in=["pending", "delivered", "cancelled"]) | Q(driver__isnull=False),
             ),
             CheckConstraint(name="delivery_dest_lat_range", check=Q(dest_lat__gte=-90) & Q(dest_lat__lte=90)),
             CheckConstraint(name="delivery_dest_lng_range", check=Q(dest_lng__gte=-180) & Q(dest_lng__lte=180)),
@@ -174,7 +177,11 @@ class Delivery(models.Model):
                 check=Q(origin_lng__isnull=True) | (Q(origin_lng__gte=-180) & Q(origin_lng__lte=180)),
             ),
         ]
-        indexes = [Index(fields=["order", "status"]), Index(fields=["driver", "status"])]
+        indexes = [
+            Index(fields=["order", "status"]),
+            Index(fields=["driver", "status"]),
+            Index(fields=["last_ping_at"]),
+        ]
 
     @property
     def ws_group(self) -> str:
@@ -193,6 +200,7 @@ class Delivery(models.Model):
         self.driver = driver
         self.status = self.Status.ASSIGNED
         self.assigned_at = timezone.now()
+
 
 
 class Transaction(models.Model):

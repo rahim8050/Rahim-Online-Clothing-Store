@@ -6,6 +6,7 @@ from django.utils import timezone
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from .serializers import VendorProductCreateSerializer, VendorStaffInviteSerializer, VendorStaffRemoveSerializer, VendorApplySerializer
 
 from .permissions import InGroups
 from .serializers import (
@@ -130,3 +131,43 @@ class DeliveryStatusAPI(APIView):
             delivery.delivered_at = timezone.now()
         delivery.save(update_fields=["status", "picked_up_at", "delivered_at"])
         return Response(DeliverySerializer(delivery, context={"request": request}).data)
+class VendorProductCreateAPI(APIView):
+    permission_classes = [IsAuthenticated, InGroups]
+    required_groups = [ROLE_VENDOR, ROLE_VENDOR_STAFF]
+
+    def post(self, request):
+        ser = VendorProductCreateSerializer(data=request.data, context={"request": request})
+        ser.is_valid(raise_exception=True)
+        product = ser.save()
+        return Response({"ok": True, "id": product.id})
+    
+class VendorStaffInviteAPI(APIView):
+    permission_classes = [IsAuthenticated, InGroups]
+    required_groups = [ROLE_VENDOR, ROLE_VENDOR_STAFF]
+
+    def post(self, request):
+        ser = VendorStaffInviteSerializer(data=request.data, context={"request": request})
+        ser.is_valid(raise_exception=True)
+        vs = ser.save()
+        return Response({"ok": True, "owner": vs.owner_id, "staff": vs.staff_id})
+
+class VendorStaffRemoveAPI(APIView):
+    permission_classes = [IsAuthenticated, InGroups]
+    required_groups = [ROLE_VENDOR, ROLE_VENDOR_STAFF]
+
+    def post(self, request):
+        ser = VendorStaffRemoveSerializer(data=request.data, context={"request": request})
+        ser.is_valid(raise_exception=True)
+        data = ser.save()
+        return Response(data)
+class VendorApplyAPI(APIView):
+    permission_classes = [IsAuthenticated]
+    def post(self, request):
+        # Prevent duplicate pending apps
+        if apps.get_model("users","VendorApplication").objects.filter(user=request.user, status="pending").exists():
+            return Response({"detail":"You already have a pending application."}, status=400)
+        ser = VendorApplySerializer(data=request.data, context={"request": request})
+        ser.is_valid(raise_exception=True)
+        app = ser.save()
+        return Response({"ok": True, "application_id": app.id})
+    

@@ -23,12 +23,15 @@ from django.conf import settings
 from django.contrib.auth.views import LoginView
 from .forms import CustomLoginForm
 from .tokens import account_activation_token
+from django.db.models import Q, Count
+import re
 from .forms import (
     RegisterUserForm,
     UserUpdateForm,
     CustomPasswordChangeForm,
     ResendActivationEmailForm,
 )
+from product_app.utils import get_vendor_field
 from .roles import ROLE_VENDOR, ROLE_VENDOR_STAFF, ROLE_DRIVER
 
 User = get_user_model()
@@ -42,17 +45,37 @@ class CustomLoginView(LoginView):
     form_class = CustomLoginForm
     template_name = "users/accounts/login.html"
     redirect_authenticated_user = True
-    success_url = reverse_lazy("index")   # fallback
+    # fallback if no ?next= — send to role router
+    success_url = reverse_lazy("users:after_login")   # ← use your namespaced route
 
     def form_valid(self, form):
-        # (Optional) session is rotated on login, but data is retained.
+        # --- capture “how” the user logged in ---
+        ident = (form.cleaned_data.get("username") or "").strip()
+        # very simple heuristics; adjust if you allow phone, etc.
+        if "@" in ident and "." in ident:
+            ident_type = "email"
+        elif re.fullmatch(r"[A-Za-z0-9_.-]+", ident or ""):
+            ident_type = "username"
+        else:
+            ident_type = "unknown"
+
+        # store on session for later (e.g., show in vendor dashboard, logs)
+        self.request.session["auth_identifier"] = ident
+        self.request.session["auth_identifier_type"] = ident_type
+        # Django sets this automatically, but make it easy to read later:
+        # e.g. 'django.contrib.auth.backends.ModelBackend' or your custom backend
+        # available after login completes.
+        # self.request.session['_auth_user_backend'] is set by auth.login()
+
+        # --- your existing cart preservation ---
         cart_id = self.request.session.get("cart_id")
         if cart_id:
             self.request.session["cart_id_backup"] = cart_id
+
         return super().form_valid(form)
 
     def get_success_url(self):
-        # Respect ?next=... if present, else fallback to index
+        # Honor ?next= if present; otherwise go to role router
         return self.get_redirect_url() or self.success_url
 
 
@@ -219,27 +242,67 @@ def my_orders(request):
     )
 
 
+
+
 @login_required
 def vendor_dashboard(request):
-    if not request.user.groups.filter(name__in=[ROLE_VENDOR, ROLE_VENDOR_STAFF]).exists():
+    user = request.user
+    # allow vendor, vendor staff, or staff
+    if not (user.is_staff or user.groups.filter(name__in=[ROLE_VENDOR, ROLE_VENDOR_STAFF]).exists()):
         return HttpResponseForbidden()
-    Product = apps.get_model('product_app', 'Product')
-    from product_app.utils import get_vendor_field
+
+    Product  = apps.get_model("product_app", "Product")
+    Delivery = apps.get_model("orders", "Delivery")
+
+    # resolve vendor field on Product (e.g. "vendor")
     field = get_vendor_field(Product)
+
+    # products list for the left table (limited, but NOT used in a subquery)
     try:
-        products = Product.objects.filter(**{field: request.user})
+        products = (Product.objects
+                    .filter(**{field: user})
+                    .only("id", "name", "price", "available")
+                    .order_by("-id")[:100])
     except FieldError:
         logger.warning("Product model missing vendor field '%s'", field)
         products = Product.objects.none()
-    items = OrderItem.objects.filter(product__in=products).select_related('order', 'product')
+
+    # base deliveries for this vendor (JOIN filter – avoids IN+LIMIT)
+    vendor_filter = {f"order__items__product__{field}": user}
+    base_deliveries = (Delivery.objects
+                       .filter(**vendor_filter)
+                       .select_related("order", "driver")
+                       .distinct()
+                       .order_by("-id"))
+
+    # optional status filter
+    status = (request.GET.get("status") or "all").strip().lower()
+    allowed = {"all", "pending", "assigned", "picked_up", "en_route", "delivered", "cancelled"}
+    if status not in allowed:
+        status = "all"
+
+    deliveries = base_deliveries if status == "all" else base_deliveries.filter(status=status)
+
+    # header totals (computed on ALL vendor deliveries, not just filtered view)
+    totals = base_deliveries.aggregate(
+        all=Count("id"),
+        pending=Count("id", filter=Q(status="pending")),
+        assigned=Count("id", filter=Q(status="assigned")),
+        en_route=Count("id", filter=Q(status__in=["picked_up", "en_route"])),
+        delivered=Count("id", filter=Q(status="delivered")),
+    )
+
     return render(
         request,
-        'users/vendor_dashboard.html',
+        "users/vendor_dashboard.html",
         {
-            'products': products,
-            'order_items': items,
+            "products": products,
+            "deliveries": deliveries,
+            "status": status,
+            "totals": totals,
         },
     )
+
 
 
 @login_required
@@ -265,7 +328,7 @@ def geoapify_test(request):
 def after_login(request):
     u = request.user
     if u.is_staff or u.groups.filter(name__in=["Vendor", "Vendor Staff"]).exists():
-        return redirect("vendor_dashboard")
+        return redirect("users:vendor_dashboard")
     if u.groups.filter(name="Driver").exists():
-        return redirect("driver_dashboard")
+        return redirect("users:driver_dashboard")
     return redirect("index")
