@@ -18,6 +18,7 @@ from .views import (
     get_location_info,
     save_location,
     geo_autocomplete,
+    track_order,
 )
 
 app_name = "orders"
@@ -47,4 +48,5 @@ urlpatterns = [
     path('payment/success/<int:order_id>/', payment_success, name='payment_success'),
     path('payment/cancel/<int:order_id>/', payment_cancel, name='payment_cancel'),
     path('save-location/', save_location, name='save_location'),
+    path("orders/<int:order_id>/track/", track_order, name="order-track"),
 ]

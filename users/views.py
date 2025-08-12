@@ -260,3 +260,12 @@ def geoapify_test(request):
     return render(request, "users/accounts/dev.html", {
         "GEOAPIFY_API_KEY": settings.GEOAPIFY_API_KEY,
     })
+
+@login_required
+def after_login(request):
+    u = request.user
+    if u.is_staff or u.groups.filter(name__in=["Vendor", "Vendor Staff"]).exists():
+        return redirect("vendor_dashboard")
+    if u.groups.filter(name="Driver").exists():
+        return redirect("driver_dashboard")
+    return redirect("index")
