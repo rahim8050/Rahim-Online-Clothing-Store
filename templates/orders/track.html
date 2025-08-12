@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Order {{ order.id }} Tracking</h2>
+<div id="status">{% if delivery %}{{ delivery.status }}{% endif %}</div>
+<div id="map" style="height: 400px;"></div>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
+<script>
+const destLat = {{ order.dest_lat }};
+const destLng = {{ order.dest_lng }};
+const map = L.map('map').setView([destLat, destLng], 13);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom: 19}).addTo(map);
+const destMarker = L.marker([destLat, destLng]).addTo(map);
+{% if delivery and delivery.last_lat %}
+let marker = L.marker([{{ delivery.last_lat }}, {{ delivery.last_lng }}]).addTo(map);
+{% else %}
+let marker = L.marker([destLat, destLng]).addTo(map);
+{% endif %}
+const wsPath = "{{ ws_path|default:'' }}";
+if(wsPath){
+    const ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + wsPath);
+    ws.onmessage = function(event){
+        const data = JSON.parse(event.data);
+        if(data.event === 'position'){
+            marker.setLatLng([data.lat, data.lng]);
+        } else if(data.event === 'status'){
+            document.getElementById('status').innerText = data.status;
+        }
+    };
+}
+</script>
+{% endblock %}
