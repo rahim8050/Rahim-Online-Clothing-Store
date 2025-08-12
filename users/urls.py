@@ -11,6 +11,7 @@ from users.views import (
     geoapify_test,
     vendor_dashboard,
     driver_dashboard,
+    after_login,
 )
 from django.urls import reverse_lazy
 
@@ -26,6 +27,7 @@ path('resend-activation/', ResendActivationEmailView.as_view(), name='resend_act
 path('my-orders/', my_orders, name='my_orders'),
 path('vendor-dashboard/', vendor_dashboard, name='vendor_dashboard'),
 path('driver-dashboard/', driver_dashboard, name='driver_dashboard'),
+path('after-login/', after_login, name='after_login'),
 # Password reset URLs
     # These URLs are used for password reset functionality
     path('reset_password/', auth_views.PasswordResetView.as_view(

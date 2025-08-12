@@ -1,5 +1,6 @@
 from django.apps import apps
 from rest_framework import serializers
+
 from product_app.models import Product
 from orders.models import OrderItem
 
@@ -38,3 +39,15 @@ if DeliveryModel is not None:
 else:
     # Keep a symbol so `from .serializers import DeliverySerializer` never fails.
     DeliverySerializer = EmptySerializer
+
+
+class DeliveryAssignSerializer(serializers.Serializer):
+    driver_id = serializers.IntegerField()
+
+
+class DeliveryUnassignSerializer(serializers.Serializer):
+    pass
+
+
+class DeliveryStatusSerializer(serializers.Serializer):
+    status = serializers.ChoiceField(choices=[c[0] for c in DeliveryModel.Status.choices] if DeliveryModel else [])

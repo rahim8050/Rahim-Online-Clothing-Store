@@ -17,7 +17,7 @@ Including another URLconf
 
 
 from django.contrib import admin
-from django.urls import path,include
+from django.urls import include, path
 from product_app import views
 from django.conf import settings
 from django.conf.urls.static import static
@@ -27,21 +27,15 @@ urlpatterns = [
                   path('admin/', admin.site.urls),
                   path('utilities/', include('utilities.urls')), 
                   path('cart/', include('cart.urls')),
-                  path('orders/', include("orders.urls",namespace='orders')),
+                  path('orders/', include("orders.urls", namespace='orders')),
                   # path('mpesa/', include('Mpesa.urls')),  # [Inactive] Preserved for future testing
                   path('', views.product_list, name='index'),
-
+                  path('', include('users.urls')),
+                  path('accounts/', include('django.contrib.auth.urls')),
                   path('api/', include('apis.urls')),
-                  
-
-                  path('webhook/paystack/', paystack_webhook, name='paystack_webhook'),  # ✅ direct path, no include
-
+                  path('webhook/paystack/', paystack_webhook, name='paystack_webhook'),
                   path('<slug:category_slug>/', views.product_list, name='product_list_by_category'),
-                #   path('category/<slug:slug>/', views.product_list, name='product_list_by_category'),
                   path('products/search/', views.SearchProduct, name='product_search'),
-                  path('users/', include("users.urls")),
-                  path('accounts/', include('django.contrib.auth.urls')), 
-                  path('users/', include('django.contrib.auth.urls')), 
                   path('products/', include('product_app.urls', namespace='product_app')),  # Fixed syntax
                   path('accounts/profile/', views.profile, name='profile'),
                 

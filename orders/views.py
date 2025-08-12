@@ -11,13 +11,14 @@ from django.conf import settings
 from django.core.mail import send_mail
 from django.template.loader import render_to_string
 import logging
-from django.http import HttpResponse
+from django.http import HttpResponse, HttpResponseForbidden
 from django.views.decorators.csrf import csrf_exempt
 
 from django.http import JsonResponse
 from orders.utils import reverse_geocode
 from orders.services import assign_warehouses_and_update_stock
 from django.utils import timezone
+from django.apps import apps
 from .models import Transaction, EmailDispatchLog
 
 import stripe
@@ -771,3 +772,24 @@ def save_location(request):
 
     return JsonResponse({"status": "success"})
 
+
+
+@login_required
+def track_order(request, order_id: int):
+    Order = apps.get_model("orders", "Order")
+    Delivery = apps.get_model("orders", "Delivery")
+    order = get_object_or_404(Order.objects.select_related("user"), pk=order_id)
+    is_owner = order.user_id == request.user.id
+    is_vendorish = request.user.is_staff or request.user.groups.filter(name__in=["Vendor", "Vendor Staff"]).exists()
+    if not (is_owner or is_vendorish):
+        return HttpResponseForbidden("Not allowed")
+    delivery = Delivery.objects.filter(order=order).order_by("-id").first()
+    return render(
+        request,
+        "orders/track.html",
+        {
+            "order": order,
+            "delivery": delivery,
+            "ws_path": f"/ws/deliveries/{delivery.id}/" if delivery else None,
+        },
+    )
