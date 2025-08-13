@@ -19,7 +19,7 @@ from orders.utils import reverse_geocode
 from orders.services import assign_warehouses_and_update_stock
 from django.utils import timezone
 from django.apps import apps
-from .models import Transaction, EmailDispatchLog
+from .models import Transaction, EmailDispatchLog, PaymentEvent
 
 import stripe
 import paypalrestsdk
@@ -405,12 +405,9 @@ def stripe_webhook(request):
 @csrf_exempt
 @csrf_exempt
 def paystack_webhook(request):
+    """Handle Paystack payment notifications with idempotency."""
 
-    """Handle Paystack payment notifications."""
-
-    import logging
     logger = logging.getLogger("paystack")
-
 
     signature = request.META.get("HTTP_X_PAYSTACK_SIGNATURE", "")
     computed = hmac.new(
@@ -420,98 +417,105 @@ def paystack_webhook(request):
         logger.warning("Invalid Paystack signature")
         return HttpResponse(status=400)
 
-    event = json.loads(request.body)
-    event_type = event.get("event")
+    body = request.body
+    event = json.loads(body or b"{}")
     data = event.get("data", {})
     reference = data.get("reference")
-    order_id = data.get("metadata", {}).get("order_id")
-    customer_email = data.get("customer", {}).get("email")
-
     if not reference:
         return HttpResponse(status=400)
 
-    try:
-        transaction = Transaction.objects.get(reference=reference)
-
-    except Transaction.DoesNotExist:
-        logger.error(f"[Webhook] Unknown transaction: {reference}")
+    sha = hashlib.sha256(body).hexdigest()
+    pe, created = PaymentEvent.objects.get_or_create(
+        body_sha256=sha,
+        defaults={"provider": "paystack", "reference": reference, "body": event},
+    )
+    if not created:
         return HttpResponse(status=200)
 
-    transaction.callback_received = True
-    transaction.verified = True
-    if customer_email and not transaction.email:
-        transaction.email = customer_email
+    event_type = event.get("event")
+    order_id = data.get("metadata", {}).get("order_id")
+    customer_email = data.get("customer", {}).get("email")
 
-    if event_type == "charge.success":
-        transaction.status = "success"
-        transaction.save(update_fields=["callback_received", "verified", "status", "email"])
+    with transaction.atomic():
+        try:
+            tx = Transaction.objects.select_for_update().get(reference=reference)
+        except Transaction.DoesNotExist:
+            logger.error(f"[Webhook] Unknown transaction: {reference}")
+            return HttpResponse(status=200)
+
+        if tx.callback_received:
+            return HttpResponse(status=200)
+
+        tx.callback_received = True
+        tx.raw_event = event
+        tx.processed_at = timezone.now()
+        if customer_email and not tx.email:
+            tx.email = customer_email
 
         order = None
         if order_id:
             try:
-                order = Order.objects.get(id=order_id)
+                order = Order.objects.select_for_update().get(id=order_id)
             except Order.DoesNotExist:
                 order = None
 
-        if order:
-            order.paid = True
-            order.payment_status = "paid"
-            order.save(update_fields=["paid", "payment_status"])
-            assign_warehouses_and_update_stock(order)
-
-            send_payment_receipt_email(transaction, order)
-            transaction.email_sent = True
-            transaction.save(update_fields=["email_sent"])
-
-    elif event_type == "charge.failed":
-        transaction.status = "failed"
-        transaction.save(update_fields=["callback_received", "verified", "status", "email"])
-        if order_id:
-            Order.objects.filter(id=order_id).update(payment_status="failed")
-
-    elif event_type == "charge.cancelled":
-        transaction.status = "cancelled"
-        transaction.save(update_fields=["callback_received", "verified", "status", "email"])
-        if order_id:
-            Order.objects.filter(id=order_id).update(payment_status="cancelled")
-    else:
-        transaction.save(update_fields=["callback_received", "verified", "email"])
-
-        transaction.callback_received = True
-        transaction.verified = True  # ✅ Mark as secure source
-
-        if customer_email and not transaction.email:
-            transaction.email = customer_email
-
         if event_type == "charge.success":
-            transaction.status = "success"
-            transaction.save(update_fields=["status", "callback_received", "email", "verified"])
-
-            if order_id:
-                try:
-                    order = Order.objects.get(id=order_id)
-                    order.paid = True
-                    order.payment_status = "paid"
-                    order.save(update_fields=["paid", "payment_status"])
-
-                    assign_warehouses_and_update_stock(order)
-
-                    send_payment_receipt_email(transaction, order)
-                    transaction.email_sent = True
-                    transaction.save(update_fields=["email_sent"])
-                except Order.DoesNotExist:
-                    logger.warning(f"Order {order_id} not found for reference {reference}")
-
+            tx.status = "success"
+            tx.verified = True
+            tx.save(
+                update_fields=[
+                    "callback_received",
+                    "verified",
+                    "status",
+                    "email",
+                    "raw_event",
+                    "processed_at",
+                ]
+            )
+            if order:
+                order.paid = True
+                order.payment_status = "success"
+                order.save(update_fields=["paid", "payment_status"])
+                assign_warehouses_and_update_stock(order)
         elif event_type == "charge.failed":
-            transaction.status = "failed"
-            transaction.save(update_fields=["status", "callback_received", "verified"])
-
+            tx.status = "failed"
+            tx.save(
+                update_fields=[
+                    "callback_received",
+                    "status",
+                    "email",
+                    "raw_event",
+                    "processed_at",
+                ]
+            )
+            if order:
+                order.payment_status = "failed"
+                order.save(update_fields=["payment_status"])
         elif event_type == "charge.cancelled":
-            transaction.status = "cancelled"
-            transaction.save(update_fields=["status", "callback_received", "verified"])
-
+            tx.status = "cancelled"
+            tx.save(
+                update_fields=[
+                    "callback_received",
+                    "status",
+                    "email",
+                    "raw_event",
+                    "processed_at",
+                ]
+            )
+            if order:
+                order.payment_status = "cancelled"
+                order.save(update_fields=["payment_status"])
         else:
-            logger.warning(f"Unhandled event type: {event_type}")
+            tx.status = "pending"
+            tx.save(
+                update_fields=[
+                    "callback_received",
+                    "status",
+                    "email",
+                    "raw_event",
+                    "processed_at",
+                ]
+            )
 
     return HttpResponse(status=200)
 
@@ -784,12 +788,28 @@ def track_order(request, order_id: int):
     if not (is_owner or is_vendorish):
         return HttpResponseForbidden("Not allowed")
     delivery = Delivery.objects.filter(order=order).order_by("-id").first()
+    warehouse = None
+    if delivery and delivery.origin_lat is not None and delivery.origin_lng is not None:
+        warehouse = {"lat": float(delivery.origin_lat), "lng": float(delivery.origin_lng)}
+    else:
+        item = order.items.select_related("warehouse").first()
+        wh = getattr(item, "warehouse", None)
+        if wh and wh.latitude is not None and wh.longitude is not None:
+            warehouse = {"lat": wh.latitude, "lng": wh.longitude}
+    route_ctx = {
+        "apiKey": settings.GEOAPIFY_API_KEY,
+        "warehouse": warehouse,
+        "destination": {"lat": float(order.dest_lat), "lng": float(order.dest_lng)},
+        "wsUrl": f"/ws/deliveries/{delivery.id}/" if delivery else "",
+    }
+    route_ctx_json = json.dumps(route_ctx)
     return render(
         request,
         "orders/track.html",
         {
             "order": order,
             "delivery": delivery,
-            "ws_path": f"/ws/deliveries/{delivery.id}/" if delivery else None,
+            "ws_path": route_ctx["wsUrl"],
+            "route_ctx": route_ctx_json,
         },
     )

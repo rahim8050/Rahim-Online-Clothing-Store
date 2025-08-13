@@ -5,7 +5,8 @@ from django.http import JsonResponse
 from django.utils.safestring import mark_safe
 import json
 from product_app.models import Product
-from .models import Cart,CartItem
+from .models import Cart, CartItem
+from users.models import VendorStaff
 from django.contrib.auth.decorators import login_required, permission_required
 from django.contrib import messages
 import traceback
@@ -16,6 +17,19 @@ from orders.forms import OrderForm
 @require_POST
 def cart_add(request, product_id):
     try:
+        product = get_object_or_404(Product, id=product_id)
+
+        user = request.user
+        if user.is_authenticated:
+            owner_id = getattr(product, "owner_id", None)
+            if owner_id == user.id or VendorStaff.objects.filter(
+                owner_id=owner_id, staff=user, is_active=True
+            ).exists():
+                return JsonResponse(
+                    {"success": False, "message": "You cannot purchase your own listing."},
+                    status=403,
+                )
+
         cart_id = request.session.get('cart_id')
 
         if cart_id:
@@ -23,8 +37,6 @@ def cart_add(request, product_id):
         else:
             cart = Cart.objects.create()
             request.session['cart_id'] = cart.id
-
-        product = get_object_or_404(Product, id=product_id)
 
         cart_item, created = CartItem.objects.get_or_create(cart=cart, product=product)
         if not created:

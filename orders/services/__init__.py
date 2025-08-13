@@ -2,6 +2,9 @@
 
 from typing import Iterable, Tuple
 
+from django.db import transaction
+from django.db.models import F
+
 from product_app.models import ProductStock
 
 from ..assignment import pick_warehouse
@@ -36,20 +39,29 @@ def create_order_with_items(user, cart: Iterable[Tuple], coords=None):
 
 
 def assign_warehouses_and_update_stock(order):
-    """Assign nearest warehouse to each item and decrement stock once."""
+    """Assign nearest warehouse to each item and atomically decrement stock."""
     if order.latitude is None or order.longitude is None or order.stock_updated:
         return
-    for item in order.items.select_related("product"):
-        if item.warehouse_id:
-            continue
-        stock_entry = get_nearest_stock(item.product, order.latitude, order.longitude)
-        if stock_entry:
-            item.warehouse = stock_entry.warehouse
-            item.save(update_fields=["warehouse"])
-            stock_entry.quantity = max(0, stock_entry.quantity - item.quantity)
-            stock_entry.save(update_fields=["quantity"])
-    order.stock_updated = True
-    order.save(update_fields=["stock_updated"])
+    with transaction.atomic():
+        items = order.items.select_for_update().select_related("product")
+        for item in items:
+            if not item.warehouse_id:
+                stock_entry = get_nearest_stock(
+                    item.product, order.latitude, order.longitude
+                )
+                if not stock_entry:
+                    raise ValueError("No stock available")
+                item.warehouse = stock_entry.warehouse
+                item.save(update_fields=["warehouse"])
+            updated = ProductStock.objects.filter(
+                product=item.product,
+                warehouse=item.warehouse,
+                quantity__gte=item.quantity,
+            ).update(quantity=F("quantity") - item.quantity)
+            if updated == 0:
+                raise ValueError("Insufficient stock")
+        order.stock_updated = True
+        order.save(update_fields=["stock_updated"])
 
 
 def get_nearest_stock(product, latitude, longitude):
