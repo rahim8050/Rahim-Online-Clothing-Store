@@ -60,11 +60,8 @@ tzdata==2025.2
 urllib3==2.4.0
 wheel==0.45.1
 
-whitenoise==6.9.0
-zope.interface==7.2
 
 zope.interface==7.2
-dj-database-url==3.0.1
 psycopg[binary]==3.2.9
 whitenoise==6.7.0
 
