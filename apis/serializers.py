@@ -25,6 +25,26 @@ class ProductSerializer(serializers.ModelSerializer):
         fields = ["id", "name", "price", "available", "order_items"]
 
 
+class ProductListSerializer(serializers.ModelSerializer):
+    owned_by_me = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Product
+        fields = ["id", "name", "price", "available", "slug", "owned_by_me"]
+
+    def get_owned_by_me(self, obj):
+        user = self.context["request"].user
+        if not user.is_authenticated:
+            return False
+        for name in ("owner", "vendor", "seller", "created_by", "user"):
+            try:
+                obj._meta.get_field(name)
+                return getattr(obj, f"{name}_id", None) == user.id
+            except Exception:
+                continue
+        return False
+
+
 # ---- Optional Delivery serializer (won't explode if model is absent) ----
 class EmptySerializer(serializers.Serializer):
     """Used when Delivery model doesn't exist."""

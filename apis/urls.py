@@ -9,11 +9,15 @@ from .views import (
     DeliveryStatusAPI,
     VendorProductCreateAPI,
     VendorApplyAPI,
+    ShopableProductsAPI,
+    DriverLocationAPI,
 )
 
 urlpatterns = [
     path('vendor/products/', VendorProductsAPI.as_view(), name='vendor-products'),
+    path('vendor/shopable-products/', ShopableProductsAPI.as_view(), name='shopable-products'),
     path('driver/deliveries/', DriverDeliveriesAPI.as_view(), name='driver-deliveries'),
+    path('driver/location/', DriverLocationAPI.as_view(), name='driver-location'),
     path('auth/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('auth/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     # Delivery management endpoints

@@ -1,21 +1,27 @@
 # apis/views.py
 from django.contrib.auth import get_user_model
-from django.db.models import Prefetch
+from django.db.models import Prefetch, Q
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.generics import ListAPIView
+from rest_framework.pagination import PageNumberPagination
+from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from .serializers import VendorProductCreateSerializer, VendorStaffInviteSerializer, VendorStaffRemoveSerializer, VendorApplySerializer
-
-from .permissions import InGroups
 from .serializers import (
     ProductSerializer,
     DeliverySerializer,
     DeliveryAssignSerializer,
     DeliveryUnassignSerializer,
     DeliveryStatusSerializer,
+    ProductListSerializer,
+    VendorProductCreateSerializer,
+    VendorStaffInviteSerializer,
+    VendorStaffRemoveSerializer,
+    VendorApplySerializer,
 )
+from .permissions import InGroups
+from .utils import shopable_products_q
 from product_app.models import Product
 from product_app.utils import get_vendor_field
 from orders.models import Delivery, OrderItem
@@ -39,6 +45,28 @@ def orderitem_reverse_name() -> str:
 
 
 # ---------- APIs ----------
+
+
+class ShopablePagination(PageNumberPagination):
+    page_size = 12
+    page_size_query_param = "page_size"
+    max_page_size = 50
+
+
+class ShopableProductsAPI(ListAPIView):
+    serializer_class = ProductListSerializer
+    permission_classes = [IsAuthenticatedOrReadOnly]
+    pagination_class = ShopablePagination
+
+    def get_queryset(self):
+        qs = Product.objects.filter(available=True)
+        u = self.request.user
+        if u.is_authenticated:
+            qs = qs.filter(shopable_products_q(u, Product))
+        q = self.request.query_params.get("q")
+        if q:
+            qs = qs.filter(Q(name__icontains=q) | Q(description__icontains=q))
+        return qs
 class VendorProductsAPI(APIView):
     permission_classes = [IsAuthenticated, InGroups]
     required_groups = [ROLE_VENDOR, ROLE_VENDOR_STAFF]
@@ -131,6 +159,17 @@ class DeliveryStatusAPI(APIView):
             delivery.delivered_at = timezone.now()
         delivery.save(update_fields=["status", "picked_up_at", "delivered_at"])
         return Response(DeliverySerializer(delivery, context={"request": request}).data)
+
+
+class DriverLocationAPI(APIView):
+    permission_classes = [IsAuthenticated, InGroups]
+    required_groups = [ROLE_DRIVER]
+
+    def post(self, request):
+        lat = request.data.get("lat")
+        lng = request.data.get("lng")
+        logger.info("Driver %s location lat=%s lng=%s", request.user.pk, lat, lng)
+        return Response({"ok": True})
 class VendorProductCreateAPI(APIView):
     permission_classes = [IsAuthenticated, InGroups]
     required_groups = [ROLE_VENDOR, ROLE_VENDOR_STAFF]

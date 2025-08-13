@@ -19,6 +19,7 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import include, path
 from product_app import views
+from users.views import after_login
 from django.conf import settings
 from django.conf.urls.static import static
 from orders.views import paystack_webhook
@@ -32,10 +33,11 @@ urlpatterns = [
                   path('', views.product_list, name='index'),
                   path('', include('dashboards.urls')),
                   path('', include('users.urls')),
+                  path('dashboard/', after_login, name='dashboard'),
                   path('accounts/', include('django.contrib.auth.urls')),
                   path('api/', include('apis.urls')),
                   path('webhook/paystack/', paystack_webhook, name='paystack_webhook'),
-                  path('<slug:category_slug>/', views.product_list, name='product_list_by_category'),
+                  path('category/<slug:category_slug>/', views.product_list, name='product_list_by_category'),
                   path('products/search/', views.SearchProduct, name='product_search'),
                   path('products/', include('product_app.urls', namespace='product_app')),  # Fixed syntax
                   path('accounts/profile/', views.profile, name='profile'),
