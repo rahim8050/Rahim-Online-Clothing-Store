@@ -1,57 +1,73 @@
+# users/views.py
+from __future__ import annotations
+
+import logging
+import re
+from django.apps import apps
+from django.conf import settings
 from django.contrib import messages
-from django.contrib.auth import login, get_user_model, update_session_auth_hash
-from django.contrib.auth.models import User
+from django.contrib.auth import get_user_model, login, update_session_auth_hash
+from django.contrib.auth.decorators import login_required
 from django.contrib.auth.views import LoginView, LogoutView
 from django.contrib.sites.shortcuts import get_current_site
+from django.core.exceptions import FieldError
 from django.core.mail import EmailMessage
+from django.db.models import Q, Count
+from django.http import HttpResponse, HttpResponseForbidden
 from django.shortcuts import render, redirect
 from django.template.loader import render_to_string
+from django.urls import reverse, reverse_lazy
 from django.utils.encoding import force_bytes, force_str
-from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
+from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from django.views.generic import FormView, View
-from django.views.decorators.csrf import csrf_protect
-from django.utils.decorators import method_decorator
-from django.urls import reverse_lazy
-from django.urls import reverse
-import logging
-from django.contrib.auth.decorators import login_required
-from django.http import HttpResponse, HttpResponseForbidden
-from django.apps import apps
-from django.core.exceptions import FieldError
-from orders.models import Order, OrderItem
-from django.conf import settings
-from django.contrib.auth.views import LoginView
-from .forms import CustomLoginForm
-from .tokens import account_activation_token
-from django.db.models import Q, Count
-import re
+
+from orders.models import Order
+from product_app.utils import get_vendor_field
 from .forms import (
+    CustomLoginForm,
     RegisterUserForm,
     UserUpdateForm,
     CustomPasswordChangeForm,
     ResendActivationEmailForm,
 )
-from product_app.utils import get_vendor_field
 from .roles import ROLE_VENDOR, ROLE_VENDOR_STAFF, ROLE_DRIVER
+from .tokens import account_activation_token
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
-def home(request):
-    pass
+from orders.models import Order
+@login_required
+def geoapify_test(request):
+    # Show the key if set; don't crash if missing
+    api_key = getattr(settings, "GEOAPIFY_API_KEY", "")
+    return render(request, "users/accounts/dev.html", {
+        "GEOAPIFY_API_KEY": api_key,
+    })
+@login_required
+def my_orders(request):
+    orders = Order.objects.filter(user=request.user).order_by('-created_at')
+
+    # Attach last transaction per order (optional, keeps your template simple)
+    for o in orders:
+        o.last_tx = o.transaction_set.order_by('-id').first()
+
+    return render(
+        request,
+        'users/accounts/my_orders.html',
+        {'orders': orders},
+    )
 
 
+# -------------------- Auth Views --------------------
 
 class CustomLoginView(LoginView):
     form_class = CustomLoginForm
     template_name = "users/accounts/login.html"
     redirect_authenticated_user = True
-    # fallback if no ?next= — send to role router
     success_url = reverse_lazy("dashboard")
 
     def form_valid(self, form):
-        # --- capture “how” the user logged in ---
         ident = (form.cleaned_data.get("username") or "").strip()
-        # very simple heuristics; adjust if you allow phone, etc.
         if "@" in ident and "." in ident:
             ident_type = "email"
         elif re.fullmatch(r"[A-Za-z0-9_.-]+", ident or ""):
@@ -59,15 +75,10 @@ class CustomLoginView(LoginView):
         else:
             ident_type = "unknown"
 
-        # store on session for later (e.g., show in vendor dashboard, logs)
         self.request.session["auth_identifier"] = ident
         self.request.session["auth_identifier_type"] = ident_type
-        # Django sets this automatically, but make it easy to read later:
-        # e.g. 'django.contrib.auth.backends.ModelBackend' or your custom backend
-        # available after login completes.
-        # self.request.session['_auth_user_backend'] is set by auth.login()
 
-        # --- your existing cart preservation ---
+        # Preserve guest cart id
         cart_id = self.request.session.get("cart_id")
         if cart_id:
             self.request.session["cart_id_backup"] = cart_id
@@ -75,16 +86,14 @@ class CustomLoginView(LoginView):
         return super().form_valid(form)
 
     def get_success_url(self):
-        # Honor ?next= if present; otherwise go to role router
         return self.get_redirect_url() or self.success_url
 
 
 class Logout(LogoutView):
     next_page = "/"
 
-@method_decorator(csrf_protect)
-def post(self, request, *args, **kwargs):
-    return super().post(request, *args, **kwargs)
+
+# -------------------- Registration / Profile --------------------
 
 class RegisterUser(FormView):
     template_name = "users/accounts/register.html"
@@ -125,48 +134,6 @@ class RegisterUser(FormView):
                 messages.error(self.request, f"{field}: {error}")
         return super().form_invalid(form)
 
-#  UPDATED profile_view
-def profile_view(request):
-    if request.method == "POST":
-        if "update_profile" in request.POST:
-            profile_form = UserUpdateForm(
-                request.POST, request.FILES, instance=request.user
-            )
-            password_form = CustomPasswordChangeForm(user=request.user)
-            if profile_form.is_valid():
-                profile_form.save()
-                messages.success(request, "Your profile has been updated successfully.")
-                return redirect("users:profile")
-            else:
-                messages.error(
-                    request, "Please correct the errors in your profile form."
-                )
-        elif "change_password" in request.POST:
-            password_form = CustomPasswordChangeForm(
-                user=request.user, data=request.POST
-            )
-            profile_form = UserUpdateForm(instance=request.user)
-            if password_form.is_valid():
-                user = password_form.save()
-                update_session_auth_hash(request, user)
-                messages.success(request, "Your password was updated successfully.")
-                return redirect("users:profile")
-            else:
-                messages.error(
-                    request, "Please correct the errors in your password form."
-                )
-    else:
-        profile_form = UserUpdateForm(instance=request.user)
-        password_form = CustomPasswordChangeForm(user=request.user)
-
-    return render(
-        request,
-        "users/accounts/profile.html",
-        {
-            "profile_form": profile_form,
-            "password_form": password_form,
-        },
-    )
 
 def activate(request, uidb64, token):
     try:
@@ -180,16 +147,14 @@ def activate(request, uidb64, token):
         user.save()
         login(request, user, backend="django.contrib.auth.backends.ModelBackend")
         return render(request, "users/accounts/activation_success.html")
-    else:
-        return render(request, "users/accounts/activation_failed.html")
+    return render(request, "users/accounts/activation_failed.html")
 
 
 class ResendActivationEmailView(View):
     template_name = "users/accounts/resend_activation.html"
 
     def get(self, request):
-        form = ResendActivationEmailForm()
-        return render(request, self.template_name, {"form": form})
+        return render(request, self.template_name, {"form": ResendActivationEmailForm()})
 
     def post(self, request):
         form = ResendActivationEmailForm(request.POST)
@@ -211,14 +176,8 @@ class ResendActivationEmailView(View):
                             "token": account_activation_token.make_token(user),
                         },
                     )
-                    email_message = EmailMessage(
-                        mail_subject, message, to=[user.email]
-                    )
-                    email_message.send()
-                    messages.success(
-                        request,
-                        "A new activation link has been sent to your email.",
-                    )
+                    EmailMessage(mail_subject, message, to=[user.email]).send()
+                    messages.success(request, "A new activation link has been sent to your email.")
             except User.DoesNotExist:
                 messages.error(request, "No account found with that email.")
             return redirect("users:resend_activation")
@@ -226,109 +185,120 @@ class ResendActivationEmailView(View):
 
 
 @login_required
-def my_orders(request):
-    orders = Order.objects.filter(user=request.user).order_by('-created_at')
-
-    # Attach last transaction to each order
-    for order in orders:
-        order.last_tx = order.transaction_set.order_by('-id').first()
-
-    return render(
-        request,
-        'users/accounts/my_orders.html',
-        {
-            'orders': orders,
-        },
-    )
-
-
-
-
-@login_required
-def vendor_dashboard(request):
-    user = request.user
-    # allow vendor, vendor staff, or staff
-    if not (user.is_staff or user.groups.filter(name__in=[ROLE_VENDOR, ROLE_VENDOR_STAFF]).exists()):
-        return HttpResponseForbidden()
-
-    Product  = apps.get_model("product_app", "Product")
-    Delivery = apps.get_model("orders", "Delivery")
-
-    # resolve vendor field on Product (e.g. "vendor")
-    field = get_vendor_field(Product)
-
-    # products list for the left table (limited, but NOT used in a subquery)
-    try:
-        products = (Product.objects
-                    .filter(**{field: user})
-                    .only("id", "name", "price", "available")
-                    .order_by("-id")[:100])
-    except FieldError:
-        logger.warning("Product model missing vendor field '%s'", field)
-        products = Product.objects.none()
-
-    # base deliveries for this vendor (JOIN filter – avoids IN+LIMIT)
-    vendor_filter = {f"order__items__product__{field}": user}
-    base_deliveries = (Delivery.objects
-                       .filter(**vendor_filter)
-                       .select_related("order", "driver")
-                       .distinct()
-                       .order_by("-id"))
-
-    # optional status filter
-    status = (request.GET.get("status") or "all").strip().lower()
-    allowed = {"all", "pending", "assigned", "picked_up", "en_route", "delivered", "cancelled"}
-    if status not in allowed:
-        status = "all"
-
-    deliveries = base_deliveries if status == "all" else base_deliveries.filter(status=status)
-
-    # header totals (computed on ALL vendor deliveries, not just filtered view)
-    totals = base_deliveries.aggregate(
-        all=Count("id"),
-        pending=Count("id", filter=Q(status="pending")),
-        assigned=Count("id", filter=Q(status="assigned")),
-        en_route=Count("id", filter=Q(status__in=["picked_up", "en_route"])),
-        delivered=Count("id", filter=Q(status="delivered")),
-    )
+def profile_view(request):
+    if request.method == "POST":
+        if "update_profile" in request.POST:
+            profile_form = UserUpdateForm(request.POST, request.FILES, instance=request.user)
+            password_form = CustomPasswordChangeForm(user=request.user)
+            if profile_form.is_valid():
+                profile_form.save()
+                messages.success(request, "Your profile has been updated successfully.")
+                return redirect("users:profile")
+            messages.error(request, "Please correct the errors in your profile form.")
+        elif "change_password" in request.POST:
+            password_form = CustomPasswordChangeForm(user=request.user, data=request.POST)
+            profile_form = UserUpdateForm(instance=request.user)
+            if password_form.is_valid():
+                user = password_form.save()
+                update_session_auth_hash(request, user)
+                messages.success(request, "Your password was updated successfully.")
+                return redirect("users:profile")
+            messages.error(request, "Please correct the errors in your password form.")
+    else:
+        profile_form = UserUpdateForm(instance=request.user)
+        password_form = CustomPasswordChangeForm(user=request.user)
 
     return render(
         request,
-        "users/vendor_dashboard.html",
-        {
-            "products": products,
-            "deliveries": deliveries,
-            "status": status,
-            "totals": totals,
-        },
+        "users/accounts/profile.html",
+        {"profile_form": profile_form, "password_form": password_form},
     )
 
 
+# -------------------- Dashboards --------------------
 
-@login_required
-def driver_dashboard(request):
-    if not request.user.groups.filter(name=ROLE_DRIVER).exists():
-        return HttpResponseForbidden()
-    Delivery = apps.get_model('orders', 'Delivery')
-    deliveries = []
-    if Delivery:
-        deliveries = Delivery.objects.filter(driver=request.user)
-    return render(
-        request,
-        'users/driver_dashboard.html',
-        {'deliveries': deliveries},
-    )
+def _is_vendor(u):  # small helpers for readability
+    return u.groups.filter(name__in=[ROLE_VENDOR, ROLE_VENDOR_STAFF]).exists() or u.is_staff
 
-def geoapify_test(request):
-    return render(request, "users/accounts/dev.html", {
-        "GEOAPIFY_API_KEY": settings.GEOAPIFY_API_KEY,
-    })
+def _is_driver(u):
+    return u.groups.filter(name=ROLE_DRIVER).exists()
 
 @login_required
 def after_login(request):
     u = request.user
-    if u.is_staff or u.groups.filter(name__in=["Vendor", "Vendor Staff"]).exists():
-        return render(request, "dash/vendor.html")
-    if u.groups.filter(name="Driver").exists():
-        return render(request, "dash/driver.html")
+    if _is_vendor(u):
+        return redirect("vendor_dashboard")
+    if _is_driver(u):
+        return redirect("driver_dashboard")
     return render(request, "dash/customer.html")
+
+
+@login_required
+def vendor_dashboard(request):
+    u = request.user
+    if not _is_vendor(u):
+        return HttpResponseForbidden()
+
+    Product = apps.get_model("product_app", "Product")
+    Delivery = apps.get_model("orders", "Delivery")  # may be None
+
+    # Resolve vendor/owner field on Product
+    try:
+        field = get_vendor_field(Product)
+    except Exception as e:
+        logger.warning("Could not resolve vendor field on Product: %s", e)
+        field = None
+
+    # Vendor's own products (safe even if field is None)
+    if field:
+        try:
+            products = (Product.objects
+                        .filter(**{field: u})
+                        .only("id", "name", "price", "available")
+                        .order_by("-id")[:100])
+        except FieldError:
+            logger.warning("Product model missing vendor field '%s'", field)
+            products = Product.objects.none()
+    else:
+        products = Product.objects.none()
+
+    # Vendor deliveries (guard if Delivery model missing)
+    deliveries = []
+    totals = {"all": 0, "pending": 0, "assigned": 0, "en_route": 0, "delivered": 0}
+    if Delivery:
+        vendor_filter = {f"order__items__product__{field}": u} if field else {}
+        base_qs = (Delivery.objects
+                   .filter(**vendor_filter)
+                   .select_related("order", "driver")
+                   .distinct()
+                   .order_by("-id"))
+        status = (request.GET.get("status") or "all").strip().lower()
+        allowed = {"all", "pending", "assigned", "picked_up", "en_route", "delivered", "cancelled"}
+        if status not in allowed:
+            status = "all"
+        deliveries = base_qs if status == "all" else base_qs.filter(status=status)
+        totals = base_qs.aggregate(
+            all=Count("id"),
+            pending=Count("id", filter=Q(status="pending")),
+            assigned=Count("id", filter=Q(status="assigned")),
+            en_route=Count("id", filter=Q(status__in=["picked_up", "en_route"])),
+            delivered=Count("id", filter=Q(status="delivered")),
+        )
+
+    return render(
+        request,
+        "dash/vendor.html",   # ✅ use your templates/dash/vendor.html
+        {"products": products, "deliveries": deliveries, "status": request.GET.get("status", "all"), "totals": totals},
+    )
+
+
+@login_required
+def driver_dashboard(request):
+    u = request.user
+    if not _is_driver(u):
+        return HttpResponseForbidden()
+
+    Delivery = apps.get_model("orders", "Delivery")
+    deliveries = Delivery.objects.filter(driver=u).select_related("order") if Delivery else []
+
+    return render(request, "dash/driver.html", {"deliveries": deliveries})
