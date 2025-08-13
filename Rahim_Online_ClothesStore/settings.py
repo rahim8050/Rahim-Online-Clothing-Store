@@ -68,6 +68,7 @@ INSTALLED_APPS = [
     "utilities",
     "rest_framework",
     "apis.apps.ApisConfig",
+    "dashboards",
     "django_extensions",
 ]
 INSTALLED_APPS += ["corsheaders"]

@@ -30,6 +30,7 @@ urlpatterns = [
                   path('orders/', include("orders.urls", namespace='orders')),
                   # path('mpesa/', include('Mpesa.urls')),  # [Inactive] Preserved for future testing
                   path('', views.product_list, name='index'),
+                  path('', include('dashboards.urls')),
                   path('', include('users.urls')),
                   path('accounts/', include('django.contrib.auth.urls')),
                   path('api/', include('apis.urls')),
