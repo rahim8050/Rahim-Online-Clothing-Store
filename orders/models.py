@@ -217,7 +217,8 @@ class Transaction(models.Model):
     )
 
     STATUS_CHOICES = (
-        ("unknown", "Unknown"),     
+        ("initialized", "Initialized"),
+        ("pending", "Pending"),
         ("success", "Success"),
         ("failed", "Failed"),
         ("cancelled", "Cancelled"),
@@ -230,12 +231,14 @@ class Transaction(models.Model):
     method = models.CharField(max_length=10, choices=METHOD_CHOICES)
     gateway = models.CharField(max_length=10, choices=GATEWAY_CHOICES)
     status = models.CharField(
-        max_length=20, choices=STATUS_CHOICES, default="unknown"
+        max_length=20, choices=STATUS_CHOICES, default="initialized"
     )
     callback_received = models.BooleanField(default=False)
     verified = models.BooleanField(default=False)
     email_sent = models.BooleanField(default=False)
     reference = models.CharField(max_length=100, unique=True)
+    raw_event = models.JSONField(blank=True, null=True)
+    processed_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
@@ -246,3 +249,14 @@ class EmailDispatchLog(models.Model):
     status = models.CharField(max_length=10)
     timestamp = models.DateTimeField(auto_now_add=True)
     note = models.TextField(blank=True)
+
+
+class PaymentEvent(models.Model):
+    provider = models.CharField(max_length=20)
+    reference = models.CharField(max_length=100)
+    body = models.JSONField()
+    body_sha256 = models.CharField(max_length=64, unique=True)
+    received_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [models.Index(fields=["provider", "reference"])]

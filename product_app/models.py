@@ -97,6 +97,9 @@ class ProductStock(models.Model):
 
     class Meta:
         unique_together = ("product", "warehouse")
+        constraints = [
+            CheckConstraint(check=Q(quantity__gte=0), name="productstock_quantity_gte_0")
+        ]
 
     def __str__(self) -> str:
         return f"{self.product.name} - {self.warehouse.name}"
