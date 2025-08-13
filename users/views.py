@@ -46,7 +46,7 @@ class CustomLoginView(LoginView):
     template_name = "users/accounts/login.html"
     redirect_authenticated_user = True
     # fallback if no ?next= — send to role router
-    success_url = reverse_lazy("users:after_login")   # ← use your namespaced route
+    success_url = reverse_lazy("dashboard")
 
     def form_valid(self, form):
         # --- capture “how” the user logged in ---
@@ -328,7 +328,7 @@ def geoapify_test(request):
 def after_login(request):
     u = request.user
     if u.is_staff or u.groups.filter(name__in=["Vendor", "Vendor Staff"]).exists():
-        return redirect("users:vendor_dashboard")
+        return render(request, "dash/vendor.html")
     if u.groups.filter(name="Driver").exists():
-        return redirect("users:driver_dashboard")
-    return redirect("index")
+        return render(request, "dash/driver.html")
+    return render(request, "dash/customer.html")

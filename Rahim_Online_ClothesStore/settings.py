@@ -71,11 +71,9 @@ INSTALLED_APPS = [
     "dashboards",
     "django_extensions",
 ]
-INSTALLED_APPS += ["corsheaders"]
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
-    "corsheaders.middleware.CorsMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -85,6 +83,15 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "core.middleware.PermissionsPolicyMiddleware",  # keep last
 ]
+
+try:
+    import corsheaders  # noqa
+except ImportError:  # pragma: no cover
+    corsheaders = None
+
+if corsheaders:
+    INSTALLED_APPS += ["corsheaders"]
+    MIDDLEWARE.insert(1, "corsheaders.middleware.CorsMiddleware")
 
 AUTHENTICATION_BACKENDS = [
     "users.backends.EmailOrUsernameModelBackend",
@@ -146,7 +153,7 @@ SIMPLE_JWT = {
 
 AUTH_USER_MODEL = "users.CustomUser"
 
-LOGIN_REDIRECT_URL = "/after-login/"
+LOGIN_REDIRECT_URL = "/dashboard/"
 LOGOUT_REDIRECT_URL = "/accounts/login/"
 
 AUTH_PASSWORD_VALIDATORS = [

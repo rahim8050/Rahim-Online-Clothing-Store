@@ -40,20 +40,11 @@
           class="text-indigo-600 hover:text-indigo-800 transition-colors duration-300">
           <i class="fas fa-user-circle text-xl mr-1"></i> Profile
         </a>
-        {% if user|has_group:"Vendor" or user|has_group:"Vendor Staff" %}
         <a
-          href="{% url 'users:vendor_dashboard' %}"
+          href="{% url 'dashboard' %}"
           class="text-indigo-600 hover:text-indigo-800 transition-colors duration-300">
-          Vendor Dashboard
+          Dashboard
         </a>
-        {% endif %}
-        {% if user|has_group:"Driver" %}
-        <a
-          href="{% url 'users:driver_dashboard' %}"
-          class="text-indigo-600 hover:text-indigo-800 transition-colors duration-300">
-          Driver Dashboard
-        </a>
-        {% endif %}
         {% endif %}
 
         <div class="flex items-center space-x-6">
@@ -134,16 +125,9 @@
           class="px-4 py-2 text-indigo-600 hover:text-indigo-800">
           <i class="fas fa-user-circle mr-2"></i> Profile
         </a>
-        {% if user|has_group:"Vendor" or user|has_group:"Vendor Staff" %}
         <a
-          href="{% url 'users:vendor_dashboard' %}"
-          class="px-4 py-2 text-indigo-600 hover:text-indigo-800">Vendor Dashboard</a>
-        {% endif %}
-        {% if user|has_group:"Driver" %}
-        <a
-          href="{% url 'users:driver_dashboard' %}"
-          class="px-4 py-2 text-indigo-600 hover:text-indigo-800">Driver Dashboard</a>
-        {% endif %}
+          href="{% url 'dashboard' %}"
+          class="px-4 py-2 text-indigo-600 hover:text-indigo-800">Dashboard</a>
         <form method="post" action="{% url 'users:logout' %}" class="px-4 py-2">
           {% csrf_token %}
           <button
