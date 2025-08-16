@@ -1,17 +1,55 @@
+# apis/serializers.py
 from django.apps import apps
-from rest_framework import serializers
-from users.models import VendorStaff
-from product_app.models import Product
-from orders.models import OrderItem
+from django.db import transaction
+from django.utils.text import slugify
 from django.contrib.auth import get_user_model
-from users.utils import resolve_vendor_owner_for
-from users.models import VendorApplication
-from users.services import deactivate_vendor_staff
 from django.contrib.auth.models import Group
+from rest_framework import serializers
+
+# Your models
+from product_app.models import Product, ProductStock, Warehouse
+from orders.models import OrderItem
+from users.models import VendorStaff, VendorApplication
+from users.services import deactivate_vendor_staff
 from users.constants import VENDOR_STAFF
+
 User = get_user_model()
 
+# ----------------------------------------
+# Helpers
+# ----------------------------------------
+def _resolve_vendor_owner_for(user, owner_hint=None):
+    """
+    Decide which owner the current user is acting for.
+    - If owner_hint is provided: require that user == owner_hint OR user is active staff of that owner.
+    - If no hint: if user is a Vendor (owner) use their own id.
+      Else if staff of exactly one owner, use that owner.
+      Else ask for owner_id.
+    """
+    if owner_hint is not None:
+        owner_hint = int(owner_hint)
+        if owner_hint == user.id:
+            return owner_hint
+        if VendorStaff.objects.filter(owner_id=owner_hint, staff=user, is_active=True).exists():
+            return owner_hint
+        raise serializers.ValidationError({"owner_id": "You cannot act for that owner."})
 
+    if user.groups.filter(name="Vendor").exists():
+        return user.id
+
+    owners = (
+        VendorStaff.objects.filter(staff=user, is_active=True)
+        .values_list("owner_id", flat=True)
+        .distinct()
+    )
+    if owners.count() == 1:
+        return owners.first()
+    raise serializers.ValidationError({"owner_id": "Provide owner_id (ambiguous or none)."})
+
+
+# ----------------------------------------
+# Order / Product basic serializers
+# ----------------------------------------
 class OrderItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = OrderItem
@@ -19,8 +57,7 @@ class OrderItemSerializer(serializers.ModelSerializer):
 
 
 class ProductSerializer(serializers.ModelSerializer):
-    # If your FK on OrderItem uses related_name="order_items", this is fine.
-    # If not, change `source` to the actual related name (e.g. "orderitem_set").
+    # If related_name differs, adjust "order_items" -> your related_name or "orderitem_set"
     order_items = OrderItemSerializer(many=True, read_only=True)
 
     class Meta:
@@ -48,13 +85,14 @@ class ProductListSerializer(serializers.ModelSerializer):
         return False
 
 
-# ---- Optional Delivery serializer (won't explode if model is absent) ----
-class EmptySerializer(serializers.Serializer):
-    """Used when Delivery model doesn't exist."""
+# ----------------------------------------
+# Optional Delivery support (model may not exist)
+# ----------------------------------------
+class _EmptySerializer(serializers.Serializer):
     pass
 
 try:
-    DeliveryModel = apps.get_model("orders", "Delivery")  # raises LookupError if absent
+    DeliveryModel = apps.get_model("orders", "Delivery")  # may raise LookupError
 except LookupError:
     DeliveryModel = None
 
@@ -64,8 +102,7 @@ if DeliveryModel is not None:
             model = DeliveryModel
             fields = "__all__"
 else:
-    # Keep a symbol so `from .serializers import DeliverySerializer` never fails.
-    DeliverySerializer = EmptySerializer
+    DeliverySerializer = _EmptySerializer
 
 
 class DeliveryAssignSerializer(serializers.Serializer):
@@ -77,39 +114,134 @@ class DeliveryUnassignSerializer(serializers.Serializer):
 
 
 class DeliveryStatusSerializer(serializers.Serializer):
-    status = serializers.ChoiceField(choices=[c[0] for c in DeliveryModel.Status.choices] if DeliveryModel else [])
+    # Build choices dynamically if Delivery model exists; otherwise behave like CharField
+    status = serializers.CharField()
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        choices = []
+        if DeliveryModel is not None:
+            # Prefer model field choices if present
+            try:
+                field = DeliveryModel._meta.get_field("status")
+                if getattr(field, "choices", None):
+                    choices = [c[0] for c in field.choices]
+            except Exception:
+                pass
+            # Or enum-style `Status.choices`
+            if not choices and hasattr(DeliveryModel, "Status") and getattr(DeliveryModel.Status, "choices", None):
+                choices = [c[0] for c in DeliveryModel.Status.choices]
+        if choices:
+            self.fields["status"] = serializers.ChoiceField(choices=choices)
 
 
+# ----------------------------------------
+# Vendor product creation (single, consolidated version)
+# Supports:
+#   - owner_id (acts for an owner if vendor-staff)
+#   - optional sku/stock/warehouse_id OR stock_allocations = [{warehouse, quantity}, ...]
+# ----------------------------------------
+class _StockAllocationInput(serializers.Serializer):
+    warehouse = serializers.IntegerField()
+    quantity = serializers.IntegerField(min_value=0)
 
 
 class VendorProductCreateSerializer(serializers.ModelSerializer):
-    # Optional: staff can choose which owner if they belong to multiple
     owner_id = serializers.IntegerField(required=False, write_only=True)
+    sku = serializers.CharField(required=False, write_only=True, allow_blank=True)
+    stock = serializers.IntegerField(required=False, write_only=True, min_value=0)
+    warehouse_id = serializers.IntegerField(required=False, write_only=True)
+    stock_allocations = _StockAllocationInput(many=True, required=False, write_only=True)
+    slug = serializers.SlugField(required=False, allow_blank=True)
 
     class Meta:
         model = Product
-        fields = ["id", "name", "price", "available", "owner_id"]  # include other fields your Product has (image, category, etc.)
+        fields = [
+            "id", "name", "slug", "description", "price", "available",
+            "category", "image",
+            "owner_id", "sku", "stock", "warehouse_id", "stock_allocations",
+        ]
         read_only_fields = ["id"]
 
-    def create(self, validated):
-        request = self.context["request"]
-        owner_id = validated.pop("owner_id", None)
-        try:
-            vendor_owner_id = resolve_vendor_owner_for(request.user, owner_id)
-        except ValueError as e:
-            raise serializers.ValidationError({"owner_id": str(e)})
+    # --- helpers ---
+    def _normalize_slug(self, provided_slug, provided_sku, provided_name):
+        if provided_slug:
+            return slugify(provided_slug)
+        if provided_sku:
+            return slugify(provided_sku)
+        return slugify(provided_name or "")
 
-        # Your Product must have vendor/user/owner FK field. Adjust to your actual field.
-        # If your field is named 'vendor':
-        validated["vendor_id"] = vendor_owner_id
-        return Product.objects.create(**validated)
+    def validate(self, attrs):
+        request = self.context["request"]
+
+        # resolve acting owner
+        owner_hint = attrs.pop("owner_id", None)
+        attrs["_acting_owner_id"] = _resolve_vendor_owner_for(request.user, owner_hint)
+
+        # slug
+        slug_in = attrs.get("slug", "").strip()
+        sku_in = attrs.pop("sku", "").strip()
+        name_in = attrs.get("name", "").strip()
+        slug_final = self._normalize_slug(slug_in, sku_in, name_in)
+        if not slug_final:
+            raise serializers.ValidationError({"slug": "Slug (or sku/name to derive it) is required."})
+        if Product.objects.filter(slug=slug_final).exists():
+            raise serializers.ValidationError({"slug": "A product with this slug already exists."})
+        attrs["slug"] = slug_final
+
+        # stock inputs
+        stock = attrs.pop("stock", None)
+        wh_id = attrs.pop("warehouse_id", None)
+        allocations = self.initial_data.get("stock_allocations")
+
+        if allocations and (stock is not None or wh_id is not None):
+            raise serializers.ValidationError(
+                {"stock_allocations": "Use either stock_allocations OR (stock + warehouse_id), not both."}
+            )
+
+        if allocations:
+            cleaned = []
+            for item in allocations:
+                wid = int(item.get("warehouse"))
+                qty = int(item.get("quantity"))
+                if not Warehouse.objects.filter(id=wid).exists():
+                    raise serializers.ValidationError({"stock_allocations": f"Warehouse {wid} not found."})
+                cleaned.append({"warehouse": wid, "quantity": qty})
+            attrs["_allocations"] = cleaned
+        elif stock is not None:
+            if wh_id is None:
+                raise serializers.ValidationError({"warehouse_id": "Required when providing 'stock'."})
+            if not Warehouse.objects.filter(id=wh_id).exists():
+                raise serializers.ValidationError({"warehouse_id": f"Warehouse {wh_id} not found."})
+            attrs["_allocations"] = [{"warehouse": int(wh_id), "quantity": int(stock)}]
+        else:
+            attrs["_allocations"] = []
+
+        return attrs
+
+    @transaction.atomic
+    def create(self, validated_data):
+        acting_owner_id = validated_data.pop("_acting_owner_id")
+        allocations = validated_data.pop("_allocations", [])
+        product = Product.objects.create(owner_id=acting_owner_id, **validated_data)
+        for alloc in allocations:
+            ProductStock.objects.update_or_create(
+                product=product, warehouse_id=alloc["warehouse"],
+                defaults={"quantity": alloc["quantity"]},
+            )
+        return product
+
+
+# ----------------------------------------
+# Vendor staff management
+# ----------------------------------------
 class VendorStaffInviteSerializer(serializers.Serializer):
     staff_id = serializers.IntegerField()
     owner_id = serializers.IntegerField(required=False)
 
     def validate(self, attrs):
         request = self.context["request"]
-        owner_id = attrs.get("owner_id") or resolve_vendor_owner_for(request.user)  # infer owner if unique
+        owner_id = _resolve_vendor_owner_for(request.user, attrs.get("owner_id"))
         try:
             staff = User.objects.get(pk=attrs["staff_id"])
         except User.DoesNotExist:
@@ -135,20 +267,73 @@ class VendorStaffRemoveSerializer(serializers.Serializer):
 
     def save(self, **kwargs):
         request = self.context["request"]
-        owner_id = self.validated_data.get("owner_id") or resolve_vendor_owner_for(request.user)
+        owner_id = _resolve_vendor_owner_for(request.user, self.validated_data.get("owner_id"))
         try:
             membership = VendorStaff.objects.get(owner_id=owner_id, staff_id=self.validated_data["staff_id"])
         except VendorStaff.DoesNotExist:
             return {"ok": True}
         deactivate_vendor_staff(membership)
         return {"ok": True}
-    
-    
+
+
+# ----------------------------------------
+# Vendor application (matches your JSON)
+# JSON body:
+# {
+#   "business_name": "Rahim Traders",
+#   "kra_pin": "A123456789B",
+#   "contact_phone": "+254700000000",
+#   "company_name": "rahims",
+#   "contact_email": "owner@example.com"
+# }
+# ----------------------------------------
+import re
+
 class VendorApplySerializer(serializers.ModelSerializer):
+    business_name = serializers.CharField()
+    kra_pin = serializers.CharField()
+    contact_phone = serializers.CharField()
+    company_name = serializers.CharField()
+    contact_email = serializers.EmailField()
+
     class Meta:
         model = VendorApplication
-        fields = ["company_name", "phone", "note"]
+        fields = ["business_name", "kra_pin", "contact_phone", "company_name", "contact_email"]
+
+    def validate_kra_pin(self, v):
+        v = v.strip().upper()
+        if not re.match(r"^[A-Z]\d{9}[A-Z]$", v):
+            raise serializers.ValidationError("Invalid KRA PIN format (e.g. A123456789B).")
+        return v
+
+    def validate_contact_phone(self, v):
+        s = v.replace(" ", "")
+        if s.startswith("07") and len(s) == 10:
+            s = "+254" + s[1:]
+        if not re.match(r"^\+2547\d{8}$", s):
+            raise serializers.ValidationError("Phone must be like +2547XXXXXXXX.")
+        return s
 
     def create(self, validated):
         user = self.context["request"].user
-        return VendorApplication.objects.create(user=user, **validated)    
+        # Your VendorApplication should have fields named as above + user + status
+        return VendorApplication.objects.create(user=user, status="pending", **validated)
+
+
+# ----------------------------------------
+# Product read-out with stocks (safe even if related_name differs)
+# ----------------------------------------
+class ProductOutSerializer(serializers.ModelSerializer):
+    stocks = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Product
+        fields = [
+            "id", "name", "slug", "description", "price", "available",
+            "category", "owner", "image", "created", "updated", "stocks"
+        ]
+
+    def get_stocks(self, obj):
+        return list(
+            ProductStock.objects.filter(product=obj).values("warehouse_id", "quantity")
+        )

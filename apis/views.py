@@ -8,6 +8,15 @@ from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework.generics import CreateAPIView
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework import status
+from django.urls import reverse
+from django.apps import apps  
+
+from .serializers import VendorProductCreateSerializer, ProductOutSerializer
+from users.permissions import IsVendorOrVendorStaff
 from .serializers import (
     ProductSerializer,
     DeliverySerializer,
@@ -68,7 +77,7 @@ class ShopableProductsAPI(ListAPIView):
             qs = qs.filter(Q(name__icontains=q) | Q(description__icontains=q))
         return qs
 class VendorProductsAPI(APIView):
-    permission_classes = [IsAuthenticated, InGroups]
+    permission_classes = [IsAuthenticated, IsVendorOrVendorStaff]
     required_groups = [VENDOR, VENDOR_STAFF]
 
     def get(self, request):
@@ -170,15 +179,23 @@ class DriverLocationAPI(APIView):
         lng = request.data.get("lng")
         logger.info("Driver %s location lat=%s lng=%s", request.user.pk, lat, lng)
         return Response({"ok": True})
-class VendorProductCreateAPI(APIView):
-    permission_classes = [IsAuthenticated, InGroups]
-    required_groups = [VENDOR, VENDOR_STAFF]
+class VendorProductCreateAPI(CreateAPIView):
+    permission_classes = [IsAuthenticated, IsVendorOrVendorStaff]
+    serializer_class = VendorProductCreateSerializer
 
-    def post(self, request):
-        ser = VendorProductCreateSerializer(data=request.data, context={"request": request})
-        ser.is_valid(raise_exception=True)
-        product = ser.save()
-        return Response({"ok": True, "id": product.id})
+    def create(self, request, *args, **kwargs):
+        in_ser = self.get_serializer(data=request.data)
+        in_ser.is_valid(raise_exception=True)
+        product = in_ser.save()  # returns the Product instance
+
+        out_ser = ProductOutSerializer(product, context={"request": request})
+        headers = {
+            "Location": reverse(
+                "product_app:product_detail",
+                kwargs={"id": product.id, "slug": product.slug}
+            )
+        }
+        return Response(out_ser.data, status=status.HTTP_201_CREATED, headers=headers)
     
 class VendorStaffInviteAPI(APIView):
     permission_classes = [IsAuthenticated, InGroups]

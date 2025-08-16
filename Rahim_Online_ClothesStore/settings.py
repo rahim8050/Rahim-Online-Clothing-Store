@@ -81,7 +81,8 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
-    "core.middleware.PermissionsPolicyMiddleware",  # keep last
+    "core.middleware.PermissionsPolicyMiddleware",
+    "core.middleware.RequestIDMiddleware",
 ]
 
 try:
