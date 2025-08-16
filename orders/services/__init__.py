@@ -5,10 +5,47 @@ from typing import Iterable, Tuple
 from django.db import transaction
 from django.db.models import F
 
-from product_app.models import ProductStock
+from product_app.models import Product, ProductStock
+
+from core.permissions import NotBuyingOwnListing
 
 from ..assignment import pick_warehouse
 from ..models import Order, OrderItem
+
+
+def create_order_from_cart(user, cart):
+    perm = NotBuyingOwnListing()
+    with transaction.atomic():
+        order = Order.objects.create(
+            user=user,
+            full_name="F",
+            email="e@e.com",
+            address="A",
+            dest_address_text="A",
+            dest_lat=0,
+            dest_lng=0,
+        )
+        product_ids = [i.product_id for i in cart.items.select_related("product")]
+        products = {
+            p.id: p for p in Product.objects.select_for_update().filter(id__in=product_ids)
+        }
+
+        for item in cart.items.all():
+            product = products.get(item.product_id)
+            if product is None:
+                continue
+            if perm._is_forbidden(user, product):
+                raise PermissionError("Attempted self-purchase in order creation")
+            OrderItem.objects.create(
+                order=order,
+                product=product,
+                price=product.price,
+                quantity=item.quantity,
+            )
+
+        if not order.items.exists():
+            raise ValueError("No valid items to order")
+        return order
 
 
 def create_order_with_items(user, cart: Iterable[Tuple], coords=None):

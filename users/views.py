@@ -1,6 +1,6 @@
 # users/views.py
 from __future__ import annotations
-from .utils import send_activation_email
+from .utils import send_activation_email, is_vendor_or_staff, in_groups
 import logging
 import re
 from django.core.cache import cache
@@ -24,6 +24,10 @@ from django.urls import reverse, reverse_lazy
 from django.utils.encoding import force_bytes, force_str
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from django.views.generic import FormView, View
+from rest_framework import generics, permissions
+from django.utils.timezone import now
+from django.contrib.auth.models import Group
+from rest_framework.exceptions import ValidationError
 
 from orders.models import Order
 from product_app.utils import get_vendor_field
@@ -34,8 +38,10 @@ from .forms import (
     CustomPasswordChangeForm,
     ResendActivationEmailForm,
 )
-from .roles import ROLE_VENDOR, ROLE_VENDOR_STAFF, ROLE_DRIVER
+from .constants import VENDOR, VENDOR_STAFF, DRIVER
 from .tokens import account_activation_token
+from .models import VendorApplication, VendorStaff
+from .serializers import VendorApplicationCreateSerializer, VendorApplicationSerializer
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
@@ -228,10 +234,10 @@ def profile_view(request):
 # -------------------- Dashboards --------------------
 
 def _is_vendor(u):  # small helpers for readability
-    return u.groups.filter(name__in=[ROLE_VENDOR, ROLE_VENDOR_STAFF]).exists() or u.is_staff
+    return is_vendor_or_staff(u)
 
 def _is_driver(u):
-    return u.groups.filter(name=ROLE_DRIVER).exists()
+    return in_groups(u, DRIVER)
 
 @login_required
 def after_login(request):
@@ -241,6 +247,35 @@ def after_login(request):
     if _is_driver(u):
         return redirect("driver_dashboard")
     return render(request, "dash/customer.html")
+
+
+class VendorApplyAPI(generics.CreateAPIView):
+    serializer_class = VendorApplicationCreateSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+
+class VendorApplicationApproveAPI(generics.UpdateAPIView):
+    """
+    PATCH /users/vendor-applications/{id}/approve/
+    body: {"status": "approved" | "rejected"}
+    """
+
+    serializer_class = VendorApplicationSerializer
+    permission_classes = [permissions.IsAdminUser]
+    queryset = VendorApplication.objects.all()
+
+    def perform_update(self, serializer):
+        status_new = self.request.data.get("status")
+        if status_new not in (VendorApplication.APPROVED, VendorApplication.REJECTED):
+            raise ValidationError({"status": "Must be approved or rejected"})
+        app = serializer.save(status=status_new, decided_by=self.request.user, decided_at=now())
+        if status_new == VendorApplication.APPROVED:
+            g_vendor, _ = Group.objects.get_or_create(name=VENDOR)
+            app.user.groups.add(g_vendor)
+            VendorStaff.objects.get_or_create(owner=app.user, staff=app.user, defaults={"is_active": True})
 
 
 @login_required

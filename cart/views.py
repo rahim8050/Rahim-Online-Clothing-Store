@@ -6,29 +6,22 @@ from django.utils.safestring import mark_safe
 import json
 from product_app.models import Product
 from .models import Cart, CartItem
-from users.models import VendorStaff
-from django.contrib.auth.decorators import login_required, permission_required
+from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 import traceback
 from orders.forms import OrderForm
+from core.permissions import NotBuyingOwnListing
 
 
 
 @require_POST
+@login_required
 def cart_add(request, product_id):
     try:
         product = get_object_or_404(Product, id=product_id)
-
-        user = request.user
-        if user.is_authenticated:
-            owner_id = getattr(product, "owner_id", None)
-            if owner_id == user.id or VendorStaff.objects.filter(
-                owner_id=owner_id, staff=user, is_active=True
-            ).exists():
-                return JsonResponse(
-                    {"success": False, "message": "You cannot purchase your own listing."},
-                    status=403,
-                )
+        perm = NotBuyingOwnListing()
+        if not perm.has_object_permission(request, None, product):
+            return JsonResponse({"success": False, "message": perm.message}, status=403)
 
         cart_id = request.session.get('cart_id')
 
