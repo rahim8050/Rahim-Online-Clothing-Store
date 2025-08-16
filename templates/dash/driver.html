@@ -1,0 +1,23 @@
+{% extends 'base.html' %}
+{% block content %}
+<div id="driver-app" class="p-4"></div>
+<script src="https://cdn.jsdelivr.net/npm/vue@2/dist/vue.js"></script>
+<script>
+new Vue({
+  el: '#driver-app',
+  data: { deliveries: [] },
+  mounted() {
+    fetch('/api/driver/deliveries/')
+      .then(r => r.json())
+      .then(d => { this.deliveries = d; });
+  },
+  template: `
+    <div>
+      <h2 class="text-xl mb-4">My Deliveries</h2>
+      <ul class="list-disc pl-5">
+        <li v-for="d in deliveries" :key="d.id">Delivery #{{ d.id }}</li>
+      </ul>
+    </div>`
+});
+</script>
+{% endblock %}

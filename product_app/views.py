@@ -4,6 +4,7 @@ from django.db.models import Q
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.shortcuts import render, get_object_or_404
 from product_app.models import Product
+from product_app.queries import shopable_products_q
 from django.utils.safestring import mark_safe
 import json
 app_name = 'product_app'
@@ -18,8 +19,12 @@ def product_list(request, category_slug=None):
     if category_slug:
         category = get_object_or_404(Category, slug=category_slug)
         products = Product.objects.filter(category=category)
+        if request.user.is_authenticated:
+            products = products.filter(shopable_products_q(request.user))
     else:
         products = Product.objects.all()
+        if request.user.is_authenticated:
+            products = products.filter(shopable_products_q(request.user))
 
     # Serialize products
     product_list = []
