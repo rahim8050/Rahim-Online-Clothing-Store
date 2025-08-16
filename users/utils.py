@@ -7,42 +7,43 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.sites.shortcuts import get_current_site
 from django.core.mail import EmailMultiAlternatives
-from django.db.models import Q, Exists, OuterRef
+from django.db.models import Q
 from django.template.loader import render_to_string
 from django.utils.encoding import force_bytes
 from django.utils.html import strip_tags
 from django.utils.http import urlsafe_base64_encode
 
-from .models import VendorStaff
+from .constants import VENDOR, VENDOR_STAFF
 from .tokens import account_activation_token
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
 
 
+def in_groups(user, *groups: str) -> bool:
+    if not getattr(user, "is_authenticated", False):
+        return False
+    return user.groups.filter(name__in=groups).exists() or user.is_superuser
+
+
+def is_vendor_or_staff(user) -> bool:
+    return in_groups(user, VENDOR, VENDOR_STAFF) or getattr(user, "is_staff", False)
+
+
 def vendor_owner_ids_for(user):
     """
-    Return a queryset of *owner user ids* this user may act for:
-      - self, if the user is in the Vendor group
-      - any owners where the user has an active VendorStaff membership
-    Uses EXISTS so we never return the staff's own id unless they are the owner.
+    Returns the set of owner User IDs that this user acts for:
+    - self if in Vendor group
+    - any owners where user is active staff
     """
-    # self as vendor owner
-    self_is_vendor = Q(pk=user.pk, groups__name="Vendor")
-
-    # active membership for this user against the candidate owner (OuterRef("pk"))
-    active_staff_for_owner = VendorStaff.objects.filter(
-        owner=OuterRef("pk"),  # candidate owner (User row)
-        staff=user,
-        is_active=True,
-    )
-
-    return (
-        User.objects
-        .filter(self_is_vendor | Exists(active_staff_for_owner))
-        .values_list("pk", flat=True)
-        .distinct()
-    )
+    return User.objects.filter(
+        Q(pk=user.pk, groups__name=VENDOR)
+        | Q(vendor_staff_owned__staff=user, vendor_staff_owned__is_active=True)
+        | Q(
+            vendor_staff_memberships__owner__groups__name=VENDOR,
+            vendor_staff_memberships__is_active=True,
+        )
+    ).values_list("id", flat=True).distinct()
 
 
 def resolve_vendor_owner_for(user, owner_id: Optional[int] = None) -> int:

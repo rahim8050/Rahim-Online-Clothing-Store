@@ -6,6 +6,9 @@ from orders.models import OrderItem
 from django.contrib.auth import get_user_model
 from users.utils import resolve_vendor_owner_for
 from users.models import VendorApplication
+from users.services import deactivate_vendor_staff
+from django.contrib.auth.models import Group
+from users.constants import VENDOR_STAFF
 User = get_user_model()
 
 
@@ -122,9 +125,7 @@ class VendorStaffInviteSerializer(serializers.Serializer):
             owner_id=owner_id, staff=staff,
             defaults={"role": VendorStaff.Role.STAFF, "is_active": True},
         )
-        # ensure group
-        from django.contrib.auth.models import Group
-        Group.objects.get_or_create(name="Vendor Staff")[0].user_set.add(staff)
+        Group.objects.get_or_create(name=VENDOR_STAFF)[0].user_set.add(staff)
         return vs
 
 
@@ -135,7 +136,11 @@ class VendorStaffRemoveSerializer(serializers.Serializer):
     def save(self, **kwargs):
         request = self.context["request"]
         owner_id = self.validated_data.get("owner_id") or resolve_vendor_owner_for(request.user)
-        VendorStaff.objects.filter(owner_id=owner_id, staff_id=self.validated_data["staff_id"]).update(is_active=False)
+        try:
+            membership = VendorStaff.objects.get(owner_id=owner_id, staff_id=self.validated_data["staff_id"])
+        except VendorStaff.DoesNotExist:
+            return {"ok": True}
+        deactivate_vendor_staff(membership)
         return {"ok": True}
     
     

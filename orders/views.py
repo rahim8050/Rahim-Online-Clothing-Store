@@ -15,6 +15,7 @@ from django.http import HttpResponse, HttpResponseForbidden
 from django.views.decorators.csrf import csrf_exempt
 
 from django.http import JsonResponse
+from users.utils import is_vendor_or_staff
 from orders.utils import reverse_geocode
 from orders.services import assign_warehouses_and_update_stock
 from django.utils import timezone
@@ -784,8 +785,7 @@ def track_order(request, order_id: int):
     Delivery = apps.get_model("orders", "Delivery")
     order = get_object_or_404(Order.objects.select_related("user"), pk=order_id)
     is_owner = order.user_id == request.user.id
-    is_vendorish = request.user.is_staff or request.user.groups.filter(name__in=["Vendor", "Vendor Staff"]).exists()
-    if not (is_owner or is_vendorish):
+    if not (is_owner or is_vendor_or_staff(request.user)):
         return HttpResponseForbidden("Not allowed")
     delivery = Delivery.objects.filter(order=order).order_by("-id").first()
     warehouse = None

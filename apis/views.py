@@ -20,12 +20,12 @@ from .serializers import (
     VendorStaffRemoveSerializer,
     VendorApplySerializer,
 )
-from .permissions import InGroups
-from .utils import shopable_products_q
+from core.permissions import InGroups
+from product_app.queries import shopable_products_q
 from product_app.models import Product
 from product_app.utils import get_vendor_field
 from orders.models import Delivery, OrderItem
-from users.roles import ROLE_VENDOR, ROLE_VENDOR_STAFF, ROLE_DRIVER
+from users.constants import VENDOR, VENDOR_STAFF, DRIVER
 
 import logging
 logger = logging.getLogger(__name__)
@@ -62,14 +62,14 @@ class ShopableProductsAPI(ListAPIView):
         qs = Product.objects.filter(available=True)
         u = self.request.user
         if u.is_authenticated:
-            qs = qs.filter(shopable_products_q(u, Product))
+            qs = qs.filter(shopable_products_q(u))
         q = self.request.query_params.get("q")
         if q:
             qs = qs.filter(Q(name__icontains=q) | Q(description__icontains=q))
         return qs
 class VendorProductsAPI(APIView):
     permission_classes = [IsAuthenticated, InGroups]
-    required_groups = [ROLE_VENDOR, ROLE_VENDOR_STAFF]
+    required_groups = [VENDOR, VENDOR_STAFF]
 
     def get(self, request):
         field = get_vendor_field(Product)
@@ -97,7 +97,7 @@ class VendorProductsAPI(APIView):
 
 class DriverDeliveriesAPI(APIView):
     permission_classes = [IsAuthenticated, InGroups]
-    required_groups = [ROLE_DRIVER]
+    required_groups = [DRIVER]
 
     def get(self, request):
         qs = Delivery.objects.filter(driver=request.user).select_related("order").order_by("-id")
@@ -107,7 +107,7 @@ class DriverDeliveriesAPI(APIView):
 
 class DeliveryAssignAPI(APIView):
     permission_classes = [IsAuthenticated, InGroups]
-    required_groups = [ROLE_VENDOR, ROLE_VENDOR_STAFF]
+    required_groups = [VENDOR, VENDOR_STAFF]
 
     def post(self, request, pk):
         delivery = get_object_or_404(Delivery, pk=pk)
@@ -121,7 +121,7 @@ class DeliveryAssignAPI(APIView):
 
 class DeliveryUnassignAPI(APIView):
     permission_classes = [IsAuthenticated, InGroups]
-    required_groups = [ROLE_VENDOR, ROLE_VENDOR_STAFF]
+    required_groups = [VENDOR, VENDOR_STAFF]
 
     def post(self, request, pk):
         delivery = get_object_or_404(Delivery, pk=pk)
@@ -134,7 +134,7 @@ class DeliveryUnassignAPI(APIView):
 
 class DeliveryAcceptAPI(APIView):
     permission_classes = [IsAuthenticated, InGroups]
-    required_groups = [ROLE_DRIVER]
+    required_groups = [DRIVER]
 
     def post(self, request, pk):
         delivery = get_object_or_404(Delivery, pk=pk, driver__isnull=True)
@@ -145,7 +145,7 @@ class DeliveryAcceptAPI(APIView):
 
 class DeliveryStatusAPI(APIView):
     permission_classes = [IsAuthenticated, InGroups]
-    required_groups = [ROLE_DRIVER]
+    required_groups = [DRIVER]
 
     def post(self, request, pk):
         delivery = get_object_or_404(Delivery, pk=pk, driver=request.user)
@@ -163,7 +163,7 @@ class DeliveryStatusAPI(APIView):
 
 class DriverLocationAPI(APIView):
     permission_classes = [IsAuthenticated, InGroups]
-    required_groups = [ROLE_DRIVER]
+    required_groups = [DRIVER]
 
     def post(self, request):
         lat = request.data.get("lat")
@@ -172,7 +172,7 @@ class DriverLocationAPI(APIView):
         return Response({"ok": True})
 class VendorProductCreateAPI(APIView):
     permission_classes = [IsAuthenticated, InGroups]
-    required_groups = [ROLE_VENDOR, ROLE_VENDOR_STAFF]
+    required_groups = [VENDOR, VENDOR_STAFF]
 
     def post(self, request):
         ser = VendorProductCreateSerializer(data=request.data, context={"request": request})
@@ -182,7 +182,7 @@ class VendorProductCreateAPI(APIView):
     
 class VendorStaffInviteAPI(APIView):
     permission_classes = [IsAuthenticated, InGroups]
-    required_groups = [ROLE_VENDOR, ROLE_VENDOR_STAFF]
+    required_groups = [VENDOR, VENDOR_STAFF]
 
     def post(self, request):
         ser = VendorStaffInviteSerializer(data=request.data, context={"request": request})
@@ -192,7 +192,7 @@ class VendorStaffInviteAPI(APIView):
 
 class VendorStaffRemoveAPI(APIView):
     permission_classes = [IsAuthenticated, InGroups]
-    required_groups = [ROLE_VENDOR, ROLE_VENDOR_STAFF]
+    required_groups = [VENDOR, VENDOR_STAFF]
 
     def post(self, request):
         ser = VendorStaffRemoveSerializer(data=request.data, context={"request": request})
