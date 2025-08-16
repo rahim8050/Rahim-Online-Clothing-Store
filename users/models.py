@@ -4,9 +4,9 @@ from django.core.exceptions import ValidationError
 from django.utils import timezone
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from .constants import VENDOR
 
 User = settings.AUTH_USER_MODEL
-
 
 
 # Create your models here.
@@ -20,33 +20,34 @@ class CustomUser(AbstractUser):
 
 
 class VendorApplication(models.Model):
-    class Status(models.TextChoices):
-        PENDING = "pending", "Pending"
-        APPROVED = "approved", "Approved"
-        REJECTED = "rejected", "Rejected"
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    STATUS_CHOICES = [(PENDING, "Pending"), (APPROVED, "Approved"), (REJECTED, "Rejected")]
 
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="vendor_applications")
     company_name = models.CharField(max_length=120)
     phone = models.CharField(max_length=32, blank=True)
     note = models.TextField(blank=True)
-    status = models.CharField(max_length=16, choices=Status.choices, default=Status.PENDING, db_index=True)
+    kra_pin = models.CharField(max_length=32, blank=True)
+    national_id = models.CharField(max_length=32, blank=True)
+    document = models.FileField(upload_to="kyc/", blank=True)
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default=PENDING, db_index=True)
     decided_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
     decided_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def approve(self, staff_user):
         from django.contrib.auth.models import Group
-        self.status = self.Status.APPROVED
+        self.status = self.APPROVED
         self.decided_by = staff_user
         self.decided_at = timezone.now()
         self.save(update_fields=["status", "decided_by", "decided_at"])
-        # Put the applicant in the Vendor group
-        Group.objects.get_or_create(name="Vendor")[0].user_set.add(self.user)
-        # Ensure an owner membership exists
+        Group.objects.get_or_create(name=VENDOR)[0].user_set.add(self.user)
         VendorStaff.objects.get_or_create(owner=self.user, staff=self.user, defaults={"role": VendorStaff.Role.OWNER})
 
     def reject(self, staff_user, note=""):
-        self.status = self.Status.REJECTED
+        self.status = self.REJECTED
         self.note = note or self.note
         self.decided_by = staff_user
         self.decided_at = timezone.now()

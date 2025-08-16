@@ -7,6 +7,7 @@ from django.contrib.auth.admin import UserAdmin
 from django.core.mail import send_mail
 
 from .models import CustomUser, VendorApplication, VendorStaff
+from .services import deactivate_vendor_staff
 
 
 admin.site.register(CustomUser, UserAdmin)
@@ -91,3 +92,7 @@ class VendorStaffAdmin(admin.ModelAdmin):
     search_fields = ("owner__username", "owner__email", "staff__username", "staff__email")
     autocomplete_fields = ("owner", "staff")
 
+    def save_model(self, request, obj, form, change):
+        super().save_model(request, obj, form, change)
+        if not obj.is_active:
+            deactivate_vendor_staff(obj)

@@ -2,12 +2,12 @@ from django.contrib.auth.models import Group
 from django.core.management import call_command
 from django.test import TestCase
 
-from .roles import (
-    ROLE_ADMIN,
-    ROLE_CUSTOMER,
-    ROLE_DRIVER,
-    ROLE_VENDOR,
-    ROLE_VENDOR_STAFF,
+from users.constants import (
+    ADMIN as ROLE_ADMIN,
+    CUSTOMER as ROLE_CUSTOMER,
+    DRIVER as ROLE_DRIVER,
+    VENDOR as ROLE_VENDOR,
+    VENDOR_STAFF as ROLE_VENDOR_STAFF,
 )
 
 
