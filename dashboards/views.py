@@ -3,14 +3,15 @@ from django.shortcuts import render
 from django.apps import apps
 from django.http import HttpResponseForbidden
 
-ALLOWED_GROUPS = {"Vendor", "VendorStaff"}
+from users.constants import VENDOR
+from users.utils import is_vendor_or_staff
 
 def _vendor_id_for(user):
     """Return vendor_id for a Vendor or VendorStaff user; else None."""
     vid = getattr(user, "vendor_id", None)
     if vid:
         return vid
-    if user.groups.filter(name="Vendor").exists():
+    if user.groups.filter(name=VENDOR).exists():
         return user.id
     try:
         VendorStaff = apps.get_model("users", "VendorStaff")
@@ -26,9 +27,7 @@ def _vendor_id_for(user):
 @login_required
 def vendor_dashboard(request):
     u = request.user
-    # RBAC: staff OR in allowed groups
-    in_group = u.groups.filter(name__in=ALLOWED_GROUPS).exists()
-    if not (u.is_staff or in_group):
+    if not is_vendor_or_staff(u):
         return HttpResponseForbidden("Insufficient role")
 
     Product   = apps.get_model("product_app", "Product")

@@ -1,8 +1,12 @@
 # users/views.py
 from __future__ import annotations
-
+from .utils import send_activation_email, is_vendor_or_staff, in_groups
 import logging
 import re
+from django.core.cache import cache
+from django.db import transaction
+from django.core.exceptions import ImproperlyConfigured
+from django.views.generic import FormView
 from django.apps import apps
 from django.conf import settings
 from django.contrib import messages
@@ -20,6 +24,10 @@ from django.urls import reverse, reverse_lazy
 from django.utils.encoding import force_bytes, force_str
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from django.views.generic import FormView, View
+from rest_framework import generics, permissions
+from django.utils.timezone import now
+from django.contrib.auth.models import Group
+from rest_framework.exceptions import ValidationError
 
 from orders.models import Order
 from product_app.utils import get_vendor_field
@@ -30,8 +38,10 @@ from .forms import (
     CustomPasswordChangeForm,
     ResendActivationEmailForm,
 )
-from .roles import ROLE_VENDOR, ROLE_VENDOR_STAFF, ROLE_DRIVER
+from .constants import VENDOR, VENDOR_STAFF, DRIVER
 from .tokens import account_activation_token
+from .models import VendorApplication, VendorStaff
+from .serializers import VendorApplicationCreateSerializer, VendorApplicationSerializer
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
@@ -95,93 +105,99 @@ class Logout(LogoutView):
 
 # -------------------- Registration / Profile --------------------
 
+
 class RegisterUser(FormView):
     template_name = "users/accounts/register.html"
-    form_class = RegisterUserForm
     success_url = reverse_lazy("index")
+
+    # ✅ avoids circular import / NoneType in FormView.get_form()
+    def get_form_class(self):
+        try:
+            return RegisterUserForm
+        except Exception as e:
+            raise ImproperlyConfigured(f"Cannot import RegisterUserForm: {e}")
 
     def form_valid(self, form):
         user = form.save(commit=False)
         user.is_active = False
         user.save()
-
-        current_site = get_current_site(self.request)
-        mail_subject = "Activate your account"
-        message = render_to_string(
-            "users/accounts/acc_activate_email.html",
-            {
-                "user": user,
-                "domain": current_site.domain,
-                "uid": urlsafe_base64_encode(force_bytes(user.pk)),
-                "token": account_activation_token.make_token(user),
-                "protocol": "https" if self.request.is_secure() else "http",
-            },
-        )
-
-        email = EmailMessage(mail_subject, message, to=[user.email])
-        email.content_subtype = "html"
-        email.send()
-
-        messages.success(
-            self.request,
-            "Account created successfully. Please check your email to activate your account.",
-        )
+        send_activation_email(self.request, user)  # HTML + text, raises on failure
+        messages.success(self.request, "Account created successfully. Check your email to activate your account.")
         return redirect(self.get_success_url())
 
-    def form_invalid(self, form):
-        for field, errors in form.errors.items():
-            for error in errors:
-                messages.error(self.request, f"{field}: {error}")
-        return super().form_invalid(form)
+
 
 
 def activate(request, uidb64, token):
+    # Resolve user or fail cleanly
     try:
         uid = force_str(urlsafe_base64_decode(uidb64))
         user = User.objects.get(pk=uid)
-    except (TypeError, ValueError, OverflowError, User.DoesNotExist):
-        user = None
+    except Exception:
+        messages.error(request, "Invalid activation link.")
+        return render(request, "users/accounts/activation_failed.html", status=400)
 
-    if user is not None and account_activation_token.check_token(user, token):
+    if user.is_active:
+        messages.info(request, "Your account is already active. Please sign in.")
+        return redirect("users:login")
+
+    if not account_activation_token.check_token(user, token):
+        messages.error(request, "This activation link is invalid or has expired. You can request a new one.")
+        return render(request, "users/accounts/activation_failed.html", {"email": user.email}, status=400)
+
+    with transaction.atomic():                               # ✅ atomic activate
         user.is_active = True
-        user.save()
-        login(request, user, backend="django.contrib.auth.backends.ModelBackend")
-        return render(request, "users/accounts/activation_success.html")
-    return render(request, "users/accounts/activation_failed.html")
+        user.save(update_fields=["is_active"])
+
+    backend = (getattr(settings, "AUTHENTICATION_BACKENDS", None) or
+               ["django.contrib.auth.backends.ModelBackend"])[0]
+    login(request, user, backend=backend)
+    messages.success(request, "Your account has been activated. Welcome!")
+    return redirect("dashboard")
+
+
+
 
 
 class ResendActivationEmailView(View):
     template_name = "users/accounts/resend_activation.html"
+    COOLDOWN_SECONDS = 300  # 5 minutes
 
     def get(self, request):
         return render(request, self.template_name, {"form": ResendActivationEmailForm()})
 
     def post(self, request):
         form = ResendActivationEmailForm(request.POST)
-        if form.is_valid():
-            email = form.cleaned_data["email"]
-            try:
-                user = User.objects.get(email=email)
-                if user.is_active:
-                    messages.info(request, "This account is already active.")
-                else:
-                    current_site = get_current_site(request)
-                    mail_subject = "Activate your account"
-                    message = render_to_string(
-                        "users/accounts/acc_activate_email.html",
-                        {
-                            "user": user,
-                            "domain": current_site.domain,
-                            "uid": urlsafe_base64_encode(force_bytes(user.pk)),
-                            "token": account_activation_token.make_token(user),
-                        },
-                    )
-                    EmailMessage(mail_subject, message, to=[user.email]).send()
-                    messages.success(request, "A new activation link has been sent to your email.")
-            except User.DoesNotExist:
-                messages.error(request, "No account found with that email.")
+        if not form.is_valid():
+            return render(request, self.template_name, {"form": form})
+
+        email = (form.cleaned_data["email"] or "").strip()
+        cache_key = f"resend_activation:{email.lower()}"
+
+        if cache.get(cache_key):
+            messages.info(request, "We recently sent a link. Check your inbox (and spam) or try again in a few minutes.")
             return redirect("users:resend_activation")
-        return render(request, self.template_name, {"form": form})
+
+        try:
+            user = User.objects.get(email__iexact=email)
+        except User.DoesNotExist:
+            messages.error(request, "No account found with that email.")
+            return redirect("users:resend_activation")
+
+        if user.is_active:
+            messages.info(request, "This account is already active.")
+            return redirect("users:resend_activation")
+
+        try:
+            send_activation_email(request, user)
+        except Exception:
+            messages.error(request, "We couldn’t send the email right now. Please try again shortly.")
+            return redirect("users:resend_activation")
+
+        cache.set(cache_key, True, timeout=self.COOLDOWN_SECONDS)
+        messages.success(request, "A new activation link has been sent to your email.")
+        return redirect("users:resend_activation")
+
 
 
 @login_required
@@ -218,10 +234,10 @@ def profile_view(request):
 # -------------------- Dashboards --------------------
 
 def _is_vendor(u):  # small helpers for readability
-    return u.groups.filter(name__in=[ROLE_VENDOR, ROLE_VENDOR_STAFF]).exists() or u.is_staff
+    return is_vendor_or_staff(u)
 
 def _is_driver(u):
-    return u.groups.filter(name=ROLE_DRIVER).exists()
+    return in_groups(u, DRIVER)
 
 @login_required
 def after_login(request):
@@ -231,6 +247,35 @@ def after_login(request):
     if _is_driver(u):
         return redirect("driver_dashboard")
     return render(request, "dash/customer.html")
+
+
+class VendorApplyAPI(generics.CreateAPIView):
+    serializer_class = VendorApplicationCreateSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+
+class VendorApplicationApproveAPI(generics.UpdateAPIView):
+    """
+    PATCH /users/vendor-applications/{id}/approve/
+    body: {"status": "approved" | "rejected"}
+    """
+
+    serializer_class = VendorApplicationSerializer
+    permission_classes = [permissions.IsAdminUser]
+    queryset = VendorApplication.objects.all()
+
+    def perform_update(self, serializer):
+        status_new = self.request.data.get("status")
+        if status_new not in (VendorApplication.APPROVED, VendorApplication.REJECTED):
+            raise ValidationError({"status": "Must be approved or rejected"})
+        app = serializer.save(status=status_new, decided_by=self.request.user, decided_at=now())
+        if status_new == VendorApplication.APPROVED:
+            g_vendor, _ = Group.objects.get_or_create(name=VENDOR)
+            app.user.groups.add(g_vendor)
+            VendorStaff.objects.get_or_create(owner=app.user, staff=app.user, defaults={"is_active": True})
 
 
 @login_required

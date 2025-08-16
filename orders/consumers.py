@@ -5,6 +5,8 @@ from channels.generic.websocket import AsyncJsonWebsocketConsumer
 from django.apps import apps
 from django.utils import timezone
 
+from users.utils import is_vendor_or_staff
+
 Delivery = apps.get_model("orders", "Delivery")
 _last_write = {}
 _lock = asyncio.Lock()
@@ -25,10 +27,8 @@ class DeliveryConsumer(AsyncJsonWebsocketConsumer):
             return
         is_driver = self.delivery.driver_id == getattr(user, "id", None)
         is_owner = self.delivery.order.user_id == getattr(user, "id", None)
-        in_vendor = await database_sync_to_async(
-            user.groups.filter(name__in=["Vendor", "Vendor Staff"]).exists
-        )()
-        if not (is_driver or is_owner or in_vendor or user.is_staff):
+        in_vendor = await database_sync_to_async(is_vendor_or_staff)(user)
+        if not (is_driver or is_owner or in_vendor):
             await self.close(code=4003)
             return
         self.group = self.delivery.ws_group
