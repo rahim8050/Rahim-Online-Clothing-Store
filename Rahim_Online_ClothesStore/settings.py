@@ -253,23 +253,43 @@ def _env_bool(key: str, default: bool = False) -> bool:
     v = os.getenv(key)
     return default if v is None else str(v).lower() in {"1", "true", "yes", "on"}
 
-EMAIL_BACKEND = env("EMAIL_BACKEND", default="django.core.mail.backends.smtp.EmailBackend")
-EMAIL_HOST = env("EMAIL_HOST", default="")
-EMAIL_PORT = int(env("EMAIL_PORT", default="587"))
+def _env_str(key: str, default: str = "") -> str:
+    # Strip whitespace and surrounding quotes copied from dashboards
+    v = os.getenv(key, default)
+    return (v or "").strip().strip('"').strip("'")
+
+EMAIL_BACKEND = _env_str("EMAIL_BACKEND", "django.core.mail.backends.smtp.EmailBackend")
+EMAIL_HOST = _env_str("EMAIL_HOST", "smtp.gmail.com")
+EMAIL_PORT = int(os.getenv("EMAIL_PORT", "587"))
 EMAIL_USE_TLS = _env_bool("EMAIL_USE_TLS", True)
 EMAIL_USE_SSL = _env_bool("EMAIL_USE_SSL", False)
 if EMAIL_USE_SSL:
-    EMAIL_USE_TLS = False
-EMAIL_HOST_USER = env("EMAIL_HOST_USER", default="")
-EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD", default="")
-EMAIL_TIMEOUT = int(env("EMAIL_TIMEOUT", default="10"))
-DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default=EMAIL_HOST_USER or "no-reply@codealpa.shop")
-SERVER_EMAIL = env("SERVER_EMAIL", default=DEFAULT_FROM_EMAIL)
-EMAIL_SUBJECT_PREFIX = env("EMAIL_SUBJECT_PREFIX", default="[CodeAlpa] ")
-_admins = env("DJANGO_ADMINS", default="")
-ADMINS = [tuple(item.split(":", 1)) for item in _admins.split(",") if ":" in item]
+    EMAIL_USE_TLS = False  # never both
+
+EMAIL_HOST_USER = _env_str("EMAIL_HOST_USER")
+EMAIL_HOST_PASSWORD = _env_str("EMAIL_HOST_PASSWORD")
+EMAIL_TIMEOUT = int(os.getenv("EMAIL_TIMEOUT", "10"))
+
+# Prefer a branded From that matches the authenticated account
+_default_from = _env_str("DEFAULT_FROM_EMAIL") or EMAIL_HOST_USER or "no-reply@codealpa.shop"
+DEFAULT_FROM_EMAIL = _default_from
+SERVER_EMAIL = _env_str("SERVER_EMAIL") or DEFAULT_FROM_EMAIL
+EMAIL_SUBJECT_PREFIX = _env_str("EMAIL_SUBJECT_PREFIX", "[CodeAlpa] ")
+
+# In dev with no SMTP host, fall back to console backend
 if DEBUG and not EMAIL_HOST:
     EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+
+# Fail fast in production if using SMTP without proper creds
+if not DEBUG and EMAIL_BACKEND.endswith("smtp.EmailBackend"):
+    missing = []
+    if not EMAIL_HOST_USER:
+        missing.append("EMAIL_HOST_USER")
+    if not EMAIL_HOST_PASSWORD:
+        missing.append("EMAIL_HOST_PASSWORD")
+    if missing:
+        raise RuntimeError(f"Missing required email envs: {', '.join(missing)}")
+
 
 # --------------------------- UI bits ---------------------------
 CRISPY_ALLOWED_TEMPLATE_PACKS = "bootstrap5"

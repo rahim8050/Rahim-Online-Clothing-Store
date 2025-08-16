@@ -1,8 +1,12 @@
 # users/views.py
 from __future__ import annotations
-
+from .utils import send_activation_email
 import logging
 import re
+from django.core.cache import cache
+from django.db import transaction
+from django.core.exceptions import ImproperlyConfigured
+from django.views.generic import FormView
 from django.apps import apps
 from django.conf import settings
 from django.contrib import messages
@@ -95,93 +99,99 @@ class Logout(LogoutView):
 
 # -------------------- Registration / Profile --------------------
 
+
 class RegisterUser(FormView):
     template_name = "users/accounts/register.html"
-    form_class = RegisterUserForm
     success_url = reverse_lazy("index")
+
+    # ✅ avoids circular import / NoneType in FormView.get_form()
+    def get_form_class(self):
+        try:
+            return RegisterUserForm
+        except Exception as e:
+            raise ImproperlyConfigured(f"Cannot import RegisterUserForm: {e}")
 
     def form_valid(self, form):
         user = form.save(commit=False)
         user.is_active = False
         user.save()
-
-        current_site = get_current_site(self.request)
-        mail_subject = "Activate your account"
-        message = render_to_string(
-            "users/accounts/acc_activate_email.html",
-            {
-                "user": user,
-                "domain": current_site.domain,
-                "uid": urlsafe_base64_encode(force_bytes(user.pk)),
-                "token": account_activation_token.make_token(user),
-                "protocol": "https" if self.request.is_secure() else "http",
-            },
-        )
-
-        email = EmailMessage(mail_subject, message, to=[user.email])
-        email.content_subtype = "html"
-        email.send()
-
-        messages.success(
-            self.request,
-            "Account created successfully. Please check your email to activate your account.",
-        )
+        send_activation_email(self.request, user)  # HTML + text, raises on failure
+        messages.success(self.request, "Account created successfully. Check your email to activate your account.")
         return redirect(self.get_success_url())
 
-    def form_invalid(self, form):
-        for field, errors in form.errors.items():
-            for error in errors:
-                messages.error(self.request, f"{field}: {error}")
-        return super().form_invalid(form)
+
 
 
 def activate(request, uidb64, token):
+    # Resolve user or fail cleanly
     try:
         uid = force_str(urlsafe_base64_decode(uidb64))
         user = User.objects.get(pk=uid)
-    except (TypeError, ValueError, OverflowError, User.DoesNotExist):
-        user = None
+    except Exception:
+        messages.error(request, "Invalid activation link.")
+        return render(request, "users/accounts/activation_failed.html", status=400)
 
-    if user is not None and account_activation_token.check_token(user, token):
+    if user.is_active:
+        messages.info(request, "Your account is already active. Please sign in.")
+        return redirect("users:login")
+
+    if not account_activation_token.check_token(user, token):
+        messages.error(request, "This activation link is invalid or has expired. You can request a new one.")
+        return render(request, "users/accounts/activation_failed.html", {"email": user.email}, status=400)
+
+    with transaction.atomic():                               # ✅ atomic activate
         user.is_active = True
-        user.save()
-        login(request, user, backend="django.contrib.auth.backends.ModelBackend")
-        return render(request, "users/accounts/activation_success.html")
-    return render(request, "users/accounts/activation_failed.html")
+        user.save(update_fields=["is_active"])
+
+    backend = (getattr(settings, "AUTHENTICATION_BACKENDS", None) or
+               ["django.contrib.auth.backends.ModelBackend"])[0]
+    login(request, user, backend=backend)
+    messages.success(request, "Your account has been activated. Welcome!")
+    return redirect("dashboard")
+
+
+
 
 
 class ResendActivationEmailView(View):
     template_name = "users/accounts/resend_activation.html"
+    COOLDOWN_SECONDS = 300  # 5 minutes
 
     def get(self, request):
         return render(request, self.template_name, {"form": ResendActivationEmailForm()})
 
     def post(self, request):
         form = ResendActivationEmailForm(request.POST)
-        if form.is_valid():
-            email = form.cleaned_data["email"]
-            try:
-                user = User.objects.get(email=email)
-                if user.is_active:
-                    messages.info(request, "This account is already active.")
-                else:
-                    current_site = get_current_site(request)
-                    mail_subject = "Activate your account"
-                    message = render_to_string(
-                        "users/accounts/acc_activate_email.html",
-                        {
-                            "user": user,
-                            "domain": current_site.domain,
-                            "uid": urlsafe_base64_encode(force_bytes(user.pk)),
-                            "token": account_activation_token.make_token(user),
-                        },
-                    )
-                    EmailMessage(mail_subject, message, to=[user.email]).send()
-                    messages.success(request, "A new activation link has been sent to your email.")
-            except User.DoesNotExist:
-                messages.error(request, "No account found with that email.")
+        if not form.is_valid():
+            return render(request, self.template_name, {"form": form})
+
+        email = (form.cleaned_data["email"] or "").strip()
+        cache_key = f"resend_activation:{email.lower()}"
+
+        if cache.get(cache_key):
+            messages.info(request, "We recently sent a link. Check your inbox (and spam) or try again in a few minutes.")
             return redirect("users:resend_activation")
-        return render(request, self.template_name, {"form": form})
+
+        try:
+            user = User.objects.get(email__iexact=email)
+        except User.DoesNotExist:
+            messages.error(request, "No account found with that email.")
+            return redirect("users:resend_activation")
+
+        if user.is_active:
+            messages.info(request, "This account is already active.")
+            return redirect("users:resend_activation")
+
+        try:
+            send_activation_email(request, user)
+        except Exception:
+            messages.error(request, "We couldn’t send the email right now. Please try again shortly.")
+            return redirect("users:resend_activation")
+
+        cache.set(cache_key, True, timeout=self.COOLDOWN_SECONDS)
+        messages.success(request, "A new activation link has been sent to your email.")
+        return redirect("users:resend_activation")
+
 
 
 @login_required
