@@ -13,12 +13,12 @@ from product_app.models import Category, Product, Warehouse
 class DeliveryConsumerTests(TestCase):
     def setUp(self):
         User = get_user_model()
-        self.owner = User.objects.create_user(username="owner", password="p")
-        self.driver = User.objects.create_user(username="driver", password="p")
-        self.other = User.objects.create_user(username="other", password="p")
+        self.owner = User.objects.create_user(username="owner", email="owner@example.com", password="p")
+        self.driver = User.objects.create_user(username="driver", email="driver@example.com", password="p")
+        self.other = User.objects.create_user(username="other", email="other@example.com", password="p")
         cat = Category.objects.create(name="c", slug="c")
         prod = Product.objects.create(category=cat, name="p", slug="p", price=10)
-        wh = Warehouse.objects.create(name="w", latitude=0, longitude=0)
+        wh = Warehouse.objects.create(name="w", latitude=1, longitude=37)
         order = Order.objects.create(
             user=self.owner,
             full_name="F",
@@ -48,9 +48,7 @@ class DeliveryConsumerTests(TestCase):
             connected, _ = await comm.connect()
             if connected:
                 await comm.receive_nothing()
-                code = await comm.wait_closed()
-            else:
-                code = comm.close_code
+            code = await comm.wait_closed()
             return code
         code = async_to_sync(flow)()
         self.assertEqual(code, 4003)
