@@ -1,23 +1,20 @@
 # users/vendor_utils.py
-from django.apps import apps
+from django.contrib.auth import get_user_model
+from .utils import resolve_vendor_owner_for
+
 
 def get_vendor_for_user(user):
+    """Return the acting vendor owner User instance for this user.
+    Uses resolve_vendor_owner_for for a single source of truth.
+    If the user cannot be resolved unambiguously, returns None."""
     if not getattr(user, "is_authenticated", False):
         return None
-
-    # direct links on user (adjust names to your schema)
-    for attr in ("vendor", "vendor_profile", "owned_vendor"):
-        v = getattr(user, attr, None)
-        if v:
-            return v
-
-    # fallback to VendorStaff relation
     try:
-        VendorStaff = apps.get_model("users", "VendorStaff")
-        vs = VendorStaff.objects.select_related("vendor").filter(user=user).first()
-        if vs and getattr(vs, "vendor", None):
-            return vs.vendor
+        owner_id = resolve_vendor_owner_for(user)
     except Exception:
-        pass
-
-    return None
+        return None
+    User = get_user_model()
+    try:
+        return User.objects.get(pk=owner_id)
+    except User.DoesNotExist:
+        return None
