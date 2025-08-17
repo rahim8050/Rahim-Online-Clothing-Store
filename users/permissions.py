@@ -65,3 +65,10 @@ class NotBuyingOwnListing(BasePermission):
             pass
 
         return True
+
+
+
+class IsDriver(BasePermission):
+    def has_permission(self, request, view):
+        u = getattr(request, "user", None)
+        return bool(u and u.is_authenticated and u.groups.filter(name="Driver").exists())

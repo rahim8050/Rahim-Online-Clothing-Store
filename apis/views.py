@@ -16,7 +16,7 @@ from django.urls import reverse
 from django.apps import apps  
 
 from .serializers import VendorProductCreateSerializer, ProductOutSerializer
-from users.permissions import IsVendorOrVendorStaff
+from users.permissions import IsVendorOrVendorStaff, IsDriver
 from .serializers import (
     ProductSerializer,
     DeliverySerializer,
@@ -105,7 +105,7 @@ class VendorProductsAPI(APIView):
 
 
 class DriverDeliveriesAPI(APIView):
-    permission_classes = [IsAuthenticated, InGroups]
+    permission_classes = [IsAuthenticated, IsDriver]
     required_groups = [DRIVER]
 
     def get(self, request):
