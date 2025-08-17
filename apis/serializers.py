@@ -12,41 +12,13 @@ from orders.models import OrderItem
 from users.models import VendorStaff, VendorApplication
 from users.services import deactivate_vendor_staff
 from users.constants import VENDOR_STAFF
+from users.utils import resolve_vendor_owner_for
 
 User = get_user_model()
 
 # ----------------------------------------
 # Helpers
 # ----------------------------------------
-def _resolve_vendor_owner_for(user, owner_hint=None):
-    """
-    Decide which owner the current user is acting for.
-    - If owner_hint is provided: require that user == owner_hint OR user is active staff of that owner.
-    - If no hint: if user is a Vendor (owner) use their own id.
-      Else if staff of exactly one owner, use that owner.
-      Else ask for owner_id.
-    """
-    if owner_hint is not None:
-        owner_hint = int(owner_hint)
-        if owner_hint == user.id:
-            return owner_hint
-        if VendorStaff.objects.filter(owner_id=owner_hint, staff=user, is_active=True).exists():
-            return owner_hint
-        raise serializers.ValidationError({"owner_id": "You cannot act for that owner."})
-
-    if user.groups.filter(name="Vendor").exists():
-        return user.id
-
-    owners = (
-        VendorStaff.objects.filter(staff=user, is_active=True)
-        .values_list("owner_id", flat=True)
-        .distinct()
-    )
-    if owners.count() == 1:
-        return owners.first()
-    raise serializers.ValidationError({"owner_id": "Provide owner_id (ambiguous or none)."})
-
-
 # ----------------------------------------
 # Order / Product basic serializers
 # ----------------------------------------
@@ -176,7 +148,10 @@ class VendorProductCreateSerializer(serializers.ModelSerializer):
 
         # resolve acting owner
         owner_hint = attrs.pop("owner_id", None)
-        attrs["_acting_owner_id"] = _resolve_vendor_owner_for(request.user, owner_hint)
+        try:
+            attrs["_acting_owner_id"] = resolve_vendor_owner_for(request.user, owner_hint)
+        except ValueError as e:
+            raise serializers.ValidationError({"owner_id": str(e)})
 
         # slug
         slug_in = attrs.get("slug", "").strip()
@@ -241,7 +216,10 @@ class VendorStaffInviteSerializer(serializers.Serializer):
 
     def validate(self, attrs):
         request = self.context["request"]
-        owner_id = _resolve_vendor_owner_for(request.user, attrs.get("owner_id"))
+        try:
+            owner_id = resolve_vendor_owner_for(request.user, attrs.get("owner_id"))
+        except ValueError as e:
+            raise serializers.ValidationError({"owner_id": str(e)})
         try:
             staff = User.objects.get(pk=attrs["staff_id"])
         except User.DoesNotExist:
@@ -267,7 +245,10 @@ class VendorStaffRemoveSerializer(serializers.Serializer):
 
     def save(self, **kwargs):
         request = self.context["request"]
-        owner_id = _resolve_vendor_owner_for(request.user, self.validated_data.get("owner_id"))
+        try:
+            owner_id = resolve_vendor_owner_for(request.user, self.validated_data.get("owner_id"))
+        except ValueError as e:
+            raise serializers.ValidationError({"owner_id": str(e)})
         try:
             membership = VendorStaff.objects.get(owner_id=owner_id, staff_id=self.validated_data["staff_id"])
         except VendorStaff.DoesNotExist:
