@@ -26,42 +26,37 @@ except Exception:
     BasePermission = object  # fallback so it also works in plain Django views
 
 class NotBuyingOwnListing(BasePermission):
-    """
-    Deny when the requester is the product owner OR active vendor staff for that owner.
-    Works in both DRF and regular Django views:
-      perm = NotBuyingOwnListing()
-      if not perm.has_object_permission(request, None, product): ...
-    """
-    message = "You cannot purchase your own product."
+    """Deny when the requester is the product owner OR active vendor staff for that owner."""
+    message = 'You cannot purchase your own product.'
 
-    def has_object_permission(self, request, view, obj):
-        user = getattr(request, "user", None)
-        if not user or not getattr(user, "is_authenticated", False):
-            self.message = "Authentication required."
+    def _is_forbidden(self, user, product):
+        if not user or not getattr(user, 'is_authenticated', False):
             return False
-
-        # Support different FK names just in case
         owner_id = (
-            getattr(obj, "owner_id", None)
-            or getattr(obj, "vendor_id", None)
-            or getattr(obj, "user_id", None)
+            getattr(product, 'owner_id', None)
+            or getattr(product, 'vendor_id', None)
+            or getattr(product, 'user_id', None)
         )
         if owner_id is None:
-            # If the model has no owner concept, allow by default
-            return True
-
-        if owner_id == user.id:
-            self.message = "You cannot purchase your own product."
             return False
-
-        # If you have VendorStaff, block purchases for vendors you work for
+        if owner_id == getattr(user, 'id', None):
+            return True
         try:
             from users.models import VendorStaff
-            if VendorStaff.objects.filter(owner_id=owner_id, staff_id=user.id, is_active=True).exists():
-                self.message = "You cannot purchase products for a vendor you work for."
-                return False
+            return VendorStaff.objects.filter(owner_id=owner_id, staff_id=user.id, is_active=True).exists()
         except Exception:
-            # If model doesn't exist or query fails, just ignore staff check
-            pass
+            return False
 
+    def has_object_permission(self, request, view, obj):
+        user = getattr(request, 'user', None)
+        if not user or not getattr(user, 'is_authenticated', False):
+            self.message = 'Authentication required.'
+            return False
+        if self._is_forbidden(user, obj):
+            if getattr(obj, 'owner_id', None) == user.id:
+                self.message = 'You cannot purchase your own product.'
+            else:
+                self.message = 'You cannot purchase products for a vendor you work for.'
+            return False
         return True
+

@@ -7,7 +7,7 @@ from django.db.models import F
 
 from product_app.models import Product, ProductStock
 
-from core.permissions import NotBuyingOwnListing
+from users.permissions import NotBuyingOwnListing
 
 from ..assignment import pick_warehouse
 from ..models import Order, OrderItem

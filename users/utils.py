@@ -30,6 +30,11 @@ def is_vendor_or_staff(user) -> bool:
     return in_groups(user, VENDOR, VENDOR_STAFF) or getattr(user, "is_staff", False)
 
 
+def get_active_vendor_staff(user):
+    from .models import VendorStaff
+    return VendorStaff.objects.filter(staff=user, is_active=True)
+
+
 def vendor_owner_ids_for(user):
     """
     Returns the set of owner User IDs that this user acts for:
