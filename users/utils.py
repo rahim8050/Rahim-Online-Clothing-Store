@@ -1,17 +1,18 @@
 # users/utils.py
 from __future__ import annotations
+
 import logging
-from typing import Optional
+from typing import Optional, Set
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.sites.shortcuts import get_current_site
 from django.core.mail import EmailMultiAlternatives
-from django.db.models import Q
 from django.template.loader import render_to_string
 from django.utils.encoding import force_bytes
 from django.utils.html import strip_tags
 from django.utils.http import urlsafe_base64_encode
+from rest_framework.exceptions import PermissionDenied
 
 from .constants import VENDOR, VENDOR_STAFF
 from .tokens import account_activation_token
@@ -20,10 +21,13 @@ logger = logging.getLogger(__name__)
 User = get_user_model()
 
 
+# ----------------------------
+# Group / role helpers
+# ----------------------------
 def in_groups(user, *groups: str) -> bool:
     if not getattr(user, "is_authenticated", False):
         return False
-    return user.groups.filter(name__in=groups).exists() or user.is_superuser
+    return user.is_superuser or user.groups.filter(name__in=groups).exists()
 
 
 def is_vendor_or_staff(user) -> bool:
@@ -31,51 +35,83 @@ def is_vendor_or_staff(user) -> bool:
 
 
 def get_active_vendor_staff(user):
+    """Return active VendorStaff rows where this user is staff."""
     from .models import VendorStaff
     return VendorStaff.objects.filter(staff=user, is_active=True)
 
 
-def vendor_owner_ids_for(user):
+# ----------------------------
+# Owner resolution (fixed)
+# ----------------------------
+def vendor_owner_ids_for(user) -> Set[int]:
     """
-    Returns the set of owner User IDs that this user acts for:
-    - self if in Vendor group
-    - any owners where user is active staff
+    Return a *set* of owner User IDs that this user can act for:
+      - the user's own id if they are in the Vendor group
+      - any owners where the user is active staff (VendorStaff.is_active=True)
     """
-    return User.objects.filter(
-        Q(pk=user.pk, groups__name=VENDOR)
-        | Q(vendor_staff_owned__staff=user, vendor_staff_owned__is_active=True)
-        | Q(
-            vendor_staff_memberships__owner__groups__name=VENDOR,
-            vendor_staff_memberships__is_active=True,
-        )
-    ).values_list("id", flat=True).distinct()
+    owner_ids: Set[int] = set()
+
+    # If the user is a Vendor owner, they can act as themselves.
+    if user.groups.filter(name=VENDOR).exists() or user.is_superuser:
+        owner_ids.add(user.id)
+
+    # If the user is active staff, include those owners.
+    from .models import VendorStaff
+    staff_owner_ids = VendorStaff.objects.filter(
+        staff=user, is_active=True
+    ).values_list("owner_id", flat=True)
+
+    owner_ids.update(staff_owner_ids)
+    return owner_ids
 
 
-def resolve_vendor_owner_for(user, owner_id: Optional[int] = None) -> int:
+def resolve_vendor_owner_for(
+    user,
+    owner_id: Optional[int] = None,
+    *,
+    require_explicit_if_multiple: bool = True,
+) -> int:
     """
-    Decide the vendor owner id to use when creating a Product.
-    - If owner_id is provided, verify authorization and return it.
-    - If not:
-        * return self if user is vendor and has no other owners
-        * return the single owner if staff of exactly one owner
-        * else raise for explicit selection
+    Decide which vendor owner id to act for.
+
+    Behavior:
+    - If owner_id is provided:
+        * must be int and inside allowed set -> return it
+        * else -> raise PermissionDenied (403)
+    - If owner_id is None:
+        * 0 allowed -> PermissionDenied (403)
+        * 1 allowed -> auto-pick that id
+        * >1 allowed -> ValueError (400 at serializer) unless you set require_explicit_if_multiple=False
     """
-    ids_qs = vendor_owner_ids_for(user)
+    allowed = vendor_owner_ids_for(user)
 
     if owner_id is not None:
-        if ids_qs.filter(pk=owner_id).exists():
-            return owner_id
-        raise ValueError("Not authorized to act for that vendor owner.")
+        # Validate type
+        try:
+            oid = int(owner_id)
+        except (TypeError, ValueError):
+            # Malformed input -> your serializer should convert this to a 400 field error
+            raise ValueError("owner_id must be an integer or null.")
+        # Authorization
+        if oid in allowed:
+            return oid
+        raise PermissionDenied("Not authorized to act for that vendor owner.")
 
-    count = ids_qs.count()
-    if count == 0:
-        raise ValueError("You are not a vendor or vendor staff.")
-    if count == 1:
-        return ids_qs.first()
+    # owner_id omitted/null -> infer
+    if not allowed:
+        raise PermissionDenied("You do not have any vendor owner context.")
+    if len(allowed) == 1:
+        return next(iter(allowed))
+    if require_explicit_if_multiple:
+        # Ambiguous but valid -> serializer should surface as 400 on owner_id field
+        raise ValueError("Multiple vendor owners found; specify owner_id.")
+    # Deterministic fallback if you ever want auto-pick:
+    return sorted(allowed)[0]
 
-    raise ValueError("Multiple vendor owners found; specify owner_id.")
 
-
+# ----------------------------
+# Email (unchanged)
+# ----------------------------
 def send_activation_email(request, user) -> None:
     """
     Renders and sends the activation email (HTML + text).
@@ -100,12 +136,17 @@ def send_activation_email(request, user) -> None:
         msg = EmailMultiAlternatives(
             subject=subject,
             body=text_body,
-            from_email=settings.DEFAULT_FROM_EMAIL,  # ✅ explicit
+            from_email=settings.DEFAULT_FROM_EMAIL,
             to=[user.email],
             headers={"X-Transactional": "account-activation"},
         )
         msg.attach_alternative(html_body, "text/html")
         msg.send(fail_silently=False)
     except Exception as e:
-        logger.error("Failed to send activation email to %s: %s", user.email, e, exc_info=True)
+        logger.error(
+            "Failed to send activation email to %s: %s",
+            user.email,
+            e,
+            exc_info=True,
+        )
         raise

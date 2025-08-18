@@ -212,32 +212,34 @@ class VendorProductCreateSerializer(serializers.ModelSerializer):
 # ----------------------------------------
 class VendorStaffInviteSerializer(serializers.Serializer):
     staff_id = serializers.IntegerField()
-    owner_id = serializers.IntegerField(required=False)
+    owner_id = serializers.IntegerField(required=False, allow_null=True)  # optional
 
     def validate(self, attrs):
         request = self.context["request"]
+
+        # Resolve owner safely (handles None, multiple owners, and 403 internally)
         try:
-            owner_id = resolve_vendor_owner_for(request.user, attrs.get("owner_id"))
+            owner_id = resolve_vendor_owner_for(
+                request.user,
+                attrs.get("owner_id"),
+                require_explicit_if_multiple=True,  # set False to auto-pick if >1
+            )
         except ValueError as e:
+            # client input/ambiguity -> 400 on owner_id
             raise serializers.ValidationError({"owner_id": str(e)})
+
+        # Ensure staff exists
         try:
             staff = User.objects.get(pk=attrs["staff_id"])
         except User.DoesNotExist:
             raise serializers.ValidationError({"staff_id": "User not found."})
+
+        if staff.id == owner_id:
+            raise serializers.ValidationError({"owner_id": "You cannot invite yourself."})
+
         attrs["owner_id"] = owner_id
         attrs["staff"] = staff
         return attrs
-
-    def create(self, validated):
-        owner_id = validated["owner_id"]
-        staff = validated["staff"]
-        vs, _ = VendorStaff.objects.update_or_create(
-            owner_id=owner_id, staff=staff,
-            defaults={"role": VendorStaff.Role.STAFF, "is_active": True},
-        )
-        Group.objects.get_or_create(name=VENDOR_STAFF)[0].user_set.add(staff)
-        return vs
-
 
 class VendorStaffRemoveSerializer(serializers.Serializer):
     staff_id = serializers.IntegerField()
