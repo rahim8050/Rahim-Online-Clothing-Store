@@ -6,8 +6,23 @@ from django.utils import timezone
 from django.urls import reverse
 from django.apps import apps
 import logging
+from django.conf import settings
 # apis/views.py (top)
 from users.utils import resolve_vendor_owner_for
+
+
+
+
+from django.core.mail import EmailMultiAlternatives
+from django.core.signing import TimestampSigner, dumps as sign, BadSignature, SignatureExpired
+from django.db import transaction
+
+
+from .serializers import VendorStaffInviteSerializer
+from users.models import VendorStaff
+from django.core.signing import loads as unsign
+
+signer = TimestampSigner()
 
 from rest_framework import status
 from rest_framework.generics import ListAPIView, CreateAPIView
@@ -25,7 +40,7 @@ from product_app.utils import get_vendor_field
 from orders.models import Delivery, OrderItem
 from users.constants import VENDOR, VENDOR_STAFF, DRIVER
 from users.models import VendorStaff  # <-- FIX: was missing
-
+from rest_framework import permissions
 from users.permissions import IsVendorOrVendorStaff, IsDriver
 
 # If your vendor staff serializers live in apis.serializers, keep this.
@@ -235,64 +250,90 @@ class VendorProductCreateAPI(CreateAPIView):
 
 
 
+
+
+class IsVendorOwner(permissions.BasePermission):
+    """
+    Example permission: only users allowed to act as vendor owners may invite.
+    Adjust logic to your RBAC/groups (e.g., user.groups.filter(name="Vendor").exists()).
+    """
+    message = "Only vendor owners can invite staff."
+    def has_permission(self, request, view):
+        return request.user.is_authenticated and request.user.groups.filter(name="Vendor").exists()
+
 class VendorStaffInviteAPI(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, IsVendorOwner]
 
     def post(self, request):
         ser = VendorStaffInviteSerializer(data=request.data, context={"request": request})
-        if not ser.is_valid():
-            return Response(ser.errors, status=status.HTTP_400_BAD_REQUEST)
+        ser.is_valid(raise_exception=True)
 
         owner_id = ser.validated_data["owner_id"]
         staff = ser.validated_data["staff"]
 
-        vs, created = VendorStaff.objects.get_or_create(
-            owner_id=owner_id,
-            staff=staff,
-            defaults={"status": "pending", "is_active": False},
-        )
-
-        # Staff already active for this vendor
-        if vs.is_active:
-            return Response(
-                {"detail": "Staff is already active for this owner."},
-                status=status.HTTP_409_CONFLICT,
+        # Ensure you have a DB-level unique constraint on (owner, staff)
+        # e.g. class Meta: constraints = [models.UniqueConstraint(fields=["owner","staff"], name="uniq_owner_staff")]
+        with transaction.atomic():
+            vs, created = VendorStaff.objects.select_for_update().get_or_create(
+                owner_id=owner_id,
+                staff=staff,
+                defaults={"status": "pending", "is_active": False},
             )
 
-        # If it's an old invite, reset status
-        if not created and vs.status != "pending":
-            vs.status = "pending"
-            vs.is_active = False
-            vs.save(update_fields=["status", "is_active"])
+            # Already active → conflict
+            if vs.is_active:
+                return Response(
+                    {"detail": "Staff is already active for this owner."},
+                    status=status.HTTP_409_CONFLICT,
+                )
 
-        # ✅ Only send email if new invite
-        if created:
-            domain = get_current_site(request).domain
-            invite_link = f"https://{domain}/vendor/staff/accept/{vs.id}/"
+            # Normalize any stale state back to "pending"
+            if not created and vs.status != "pending":
+                vs.status = "pending"
+                vs.is_active = False
+                vs.save(update_fields=["status", "is_active"])
 
-            subject = f"You're invited to join {domain}"
-            html_content = render_to_string("emails/vendor_staff_invite.html", {
-                "staff": staff,
-                "owner": request.user,
-                "invite_link": invite_link,
-                "site_name": domain,
-            })
-            text_content = f"You're invited to join as staff. Accept your invite here: {invite_link}"
+            # Build a signed, expiring token so the invite link isn't a raw ID
+            payload = {"vs_id": vs.id, "staff_id": staff.id}
+            token = sign(payload)  # default salt+signer; can pass salt="vendor-staff"
+            # e.g. path("vendor/staff/accept/<str:token>/", AcceptInviteAPI.as_view(), name="vendor-staff-accept")
+            path = reverse("vendor-staff-accept", args=[token])
 
-            email = EmailMultiAlternatives(
-                subject=subject,
-                body=text_content,
-                from_email=None,  # uses DEFAULT_FROM_EMAIL in settings.py
-                to=[staff.email],
-            )
-            email.attach_alternative(html_content, "text/html")
-            print("About to send email to:", staff.email)
-            try:
-               email.send(fail_silently=False)
-               logger.info("Invite email sent to %s", staff.email)
-            except Exception as e:
-             logger.error("Email sending failed: %s", str(e))
+            # Prefer absolute URI so emails work off any domain/proxy
+            invite_link = request.build_absolute_uri(path)
 
+            if created:
+                subject = f"You're invited to join {get_current_site(request).domain}"
+                html_content = render_to_string(
+                    "emails/vendor_staff_invite.html",
+                    {
+                        "staff": staff,
+                        "owner": request.user,
+                        "invite_link": invite_link,
+                        "site_name": get_current_site(request).domain,
+                    },
+                )
+                text_content = (
+                    "You've been invited as vendor staff.\n\n"
+                    f"Accept your invite: {invite_link}"
+                )
+
+                # Send only after commit so we don't email on a rolled-back txn
+                def _send():
+                    try:
+                        email = EmailMultiAlternatives(
+                            subject=subject,
+                            body=text_content,
+                            from_email=getattr(settings, "DEFAULT_FROM_EMAIL", None),
+                            to=[staff.email],
+                        )
+                        email.attach_alternative(html_content, "text/html")
+                        email.send(fail_silently=False)
+                        logger.info("Invite email sent to %s (vs=%s)", staff.email, vs.id)
+                    except Exception as e:
+                        logger.exception("Invite email failed for vs=%s: %s", vs.id, e)
+
+                transaction.on_commit(_send)
 
         return Response(
             {
@@ -304,11 +345,40 @@ class VendorStaffInviteAPI(APIView):
                     "staff_id": vs.staff_id,
                     "status": vs.status,
                     "is_active": vs.is_active,
+                    "invite_link_preview": invite_link if created else None,  # helpful for Postman/manual testing
                 },
             },
-            status=status.HTTP_200_OK,
+            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
         )
 
+
+
+
+class VendorStaffAcceptAPI(APIView):
+    permission_classes = [permissions.IsAuthenticated]  # or AllowAny if you will log in later
+
+    TOKEN_MAX_AGE = 60 * 60 * 24 * 7  # 7 days
+
+    def post(self, request, token: str):
+        try:
+            payload = unsign(token, max_age=self.TOKEN_MAX_AGE)
+        except SignatureExpired:
+            return Response({"detail": "Invite link expired."}, status=410)
+        except BadSignature:
+            return Response({"detail": "Invalid invite link."}, status=400)
+
+        vs_id = payload.get("vs_id")
+        staff_id = payload.get("staff_id")
+
+        with transaction.atomic():
+            vs = VendorStaff.objects.select_for_update().get(pk=vs_id, staff_id=staff_id)
+            if vs.is_active:
+                return Response({"detail": "Already accepted."}, status=200)
+            vs.status = "accepted"
+            vs.is_active = True
+            vs.save(update_fields=["status", "is_active"])
+
+        return Response({"ok": True, "message": "Invite accepted."}, status=200)
 
 
 class VendorStaffRemoveAPI(APIView):

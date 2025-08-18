@@ -12,12 +12,14 @@ from .views import (
     ShopableProductsAPI,  # or ShoppableProductsAPI if you rename
     DriverLocationAPI,
     WhoAmI,
+    VendorStaffAcceptAPI,  # Ensure this is imported correctly
 )
 from users.views_vendor_staff import (
     VendorStaffListAPI,
     VendorStaffInviteAPI,
     VendorStaffRemoveAPI,
     VendorStaffToggleActiveAPI,
+    
 )
 
 urlpatterns = [
@@ -50,4 +52,5 @@ urlpatterns = [
     path("vendor/staff/invite/", VendorStaffInviteAPI.as_view(), name="vendor-staff-invite"),
     path("vendor/staff/<int:staff_id>/remove/", VendorStaffRemoveAPI.as_view(), name="vendor-staff-remove"),
     path("vendor/staff/<int:staff_id>/toggle/", VendorStaffToggleActiveAPI.as_view(), name="vendor-staff-toggle"),
+    path("vendor/staff/accept/<str:token>/", VendorStaffAcceptAPI.as_view(), name="vendor-staff-accept"),
 ]
