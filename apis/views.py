@@ -15,7 +15,9 @@ from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly
 from rest_framework.response import Response
 from rest_framework.views import APIView
-
+from django.template.loader import render_to_string
+from django.core.mail import EmailMultiAlternatives
+from django.contrib.sites.shortcuts import get_current_site
 from core.permissions import InGroups
 from product_app.queries import shopable_products_q
 from product_app.models import Product
@@ -231,6 +233,8 @@ class VendorProductCreateAPI(CreateAPIView):
         return Response(out_ser.data, status=status.HTTP_201_CREATED, headers=headers)
 
 
+
+
 class VendorStaffInviteAPI(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -248,16 +252,47 @@ class VendorStaffInviteAPI(APIView):
             defaults={"status": "pending", "is_active": False},
         )
 
+        # Staff already active for this vendor
         if vs.is_active:
             return Response(
                 {"detail": "Staff is already active for this owner."},
                 status=status.HTTP_409_CONFLICT,
             )
 
+        # If it's an old invite, reset status
         if not created and vs.status != "pending":
             vs.status = "pending"
             vs.is_active = False
             vs.save(update_fields=["status", "is_active"])
+
+        # ✅ Only send email if new invite
+        if created:
+            domain = get_current_site(request).domain
+            invite_link = f"https://{domain}/vendor/staff/accept/{vs.id}/"
+
+            subject = f"You're invited to join {domain}"
+            html_content = render_to_string("emails/vendor_staff_invite.html", {
+                "staff": staff,
+                "owner": request.user,
+                "invite_link": invite_link,
+                "site_name": domain,
+            })
+            text_content = f"You're invited to join as staff. Accept your invite here: {invite_link}"
+
+            email = EmailMultiAlternatives(
+                subject=subject,
+                body=text_content,
+                from_email=None,  # uses DEFAULT_FROM_EMAIL in settings.py
+                to=[staff.email],
+            )
+            email.attach_alternative(html_content, "text/html")
+            print("About to send email to:", staff.email)
+            try:
+               email.send(fail_silently=False)
+               logger.info("Invite email sent to %s", staff.email)
+            except Exception as e:
+             logger.error("Email sending failed: %s", str(e))
+
 
         return Response(
             {
@@ -273,6 +308,7 @@ class VendorStaffInviteAPI(APIView):
             },
             status=status.HTTP_200_OK,
         )
+
 
 
 class VendorStaffRemoveAPI(APIView):
