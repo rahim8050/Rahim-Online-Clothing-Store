@@ -5,7 +5,13 @@ from django.conf.urls.static import static
 
 from product_app import views as product_views
 from users import views as user_views
-from orders.views import paystack_webhook
+from payments.views import (
+    CheckoutView,
+    StripeWebhookView,
+    PaystackWebhookView,
+    MPesaWebhookView,
+)
+from core.views import healthz
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -29,7 +35,12 @@ urlpatterns = [
     # API prefix (align with your frontend: use /apis/... in fetch)
     path('apis/', include('apis.urls')),
 
-    path('webhook/paystack/', paystack_webhook, name='paystack_webhook'),
+
+    path('payments/checkout/', CheckoutView.as_view(), name='payments_checkout'),
+    path('webhook/stripe/', StripeWebhookView.as_view(), name='stripe_webhook'),
+    path('webhook/paystack/', PaystackWebhookView.as_view(), name='paystack_webhook'),
+    path('webhook/mpesa/', MPesaWebhookView.as_view(), name='mpesa_webhook'),
+    path('healthz', healthz, name='healthz'),
 
     # Product routes — keep AFTER dashboards so they don't shadow them
     path('products/search/', product_views.SearchProduct, name='product_search'),

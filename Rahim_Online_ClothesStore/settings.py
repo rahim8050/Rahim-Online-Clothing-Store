@@ -35,6 +35,10 @@ RENDER_HOST = os.getenv("RENDER_EXTERNAL_HOSTNAME")
 if RENDER_HOST and RENDER_HOST not in ALLOWED_HOSTS:
     ALLOWED_HOSTS.append(RENDER_HOST)
 
+STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "")
+PAYSTACK_SECRET_KEY = os.getenv("PAYSTACK_SECRET_KEY", "")
+SENTRY_DSN = os.getenv("SENTRY_DSN", "")
+
 # CSRF needs absolute origins with scheme
 CSRF_TRUSTED_ORIGINS = env.list(
     "CSRF_TRUSTED_ORIGINS",
@@ -70,6 +74,7 @@ INSTALLED_APPS = [
     "apis.apps.ApisConfig",
     "dashboards",
     "django_extensions",
+    "payments",
 ]
 
 MIDDLEWARE = [
