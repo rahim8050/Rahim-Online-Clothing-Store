@@ -58,6 +58,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "django.contrib.humanize",
 
     "channels",
     "product_app",
@@ -195,19 +196,28 @@ MEDIA_URL = "media/"
 MEDIA_ROOT = BASE_DIR / "mediafiles"
 
 # -------------------------- Security --------------------------
-SECURE_SSL_REDIRECT = not DEBUG
-SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
-USE_X_FORWARDED_HOST = True
+ENV = os.getenv("ENV", "dev").lower()     # dev | staging | prod
+DEBUG = os.getenv("DEBUG", "1") == "1"
+IS_PROD = ENV == "prod"
 
-SECURE_HSTS_SECONDS = 60 * 60 * 24 * 14 if not DEBUG else 0
-SECURE_HSTS_INCLUDE_SUBDOMAINS = not DEBUG
-SECURE_HSTS_PRELOAD = not DEBUG
-SECURE_REFERRER_POLICY = "strict-origin"
+# --- Redirects / proxy trust ---
+SECURE_SSL_REDIRECT = IS_PROD                # only force HTTPS in prod
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https') if IS_PROD else None
+USE_X_FORWARDED_HOST = IS_PROD
 
-SESSION_COOKIE_SECURE = True
-CSRF_COOKIE_SECURE = True
+# --- HSTS (never in dev) ---
+SECURE_HSTS_SECONDS = 60 * 60 * 24 * 14 if IS_PROD else 0
+SECURE_HSTS_INCLUDE_SUBDOMAINS = IS_PROD
+SECURE_HSTS_PRELOAD = IS_PROD
+
+# --- Cookies (secure only when using HTTPS) ---
+SESSION_COOKIE_SECURE = IS_PROD
+CSRF_COOKIE_SECURE = IS_PROD
 SESSION_COOKIE_SAMESITE = "Lax"
 CSRF_COOKIE_SAMESITE = "Lax"
+
+# Optional: set a canonical host in prod to avoid odd redirects
+ALLOWED_HOSTS = ["127.0.0.1", "localhost"] if not IS_PROD else ["yourdomain.com"]
 
 CORS_ALLOWED_ORIGINS = env.list("CORS_ALLOWED_ORIGINS", default=[])
 

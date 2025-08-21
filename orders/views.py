@@ -10,6 +10,8 @@ from django.db import transaction
 from django.conf import settings
 from django.core.mail import send_mail
 from django.template.loader import render_to_string
+from payments.notify import emit_once, send_refund_email, send_payment_email
+from payments.gateways import maybe_refund_duplicate_success
 import logging
 from django.http import HttpResponse, HttpResponseForbidden
 from django.views.decorators.csrf import csrf_exempt
@@ -403,13 +405,23 @@ def stripe_webhook(request):
     return HttpResponse(status=200)
 
 
-@csrf_exempt
+
+
+
+
 @csrf_exempt
 def paystack_webhook(request):
-    """Handle Paystack payment notifications with idempotency."""
-
+    """
+    Paystack webhook with:
+      - signature verification
+      - replay dedupe via PaymentEvent(body_sha256)
+      - idempotent state updates
+      - customer notifications (emit-once, after commit)
+      - auto-refund of duplicate successes for the same order
+    """
     logger = logging.getLogger("paystack")
 
+    # 1) Verify signature
     signature = request.META.get("HTTP_X_PAYSTACK_SIGNATURE", "")
     computed = hmac.new(
         settings.PAYSTACK_SECRET_KEY.encode(), request.body, hashlib.sha512
@@ -418,9 +430,14 @@ def paystack_webhook(request):
         logger.warning("Invalid Paystack signature")
         return HttpResponse(status=400)
 
+    # 2) Parse + replay-dedupe (by body hash)
     body = request.body
-    event = json.loads(body or b"{}")
-    data = event.get("data", {})
+    try:
+        event = json.loads(body or b"{}")
+    except Exception:
+        return HttpResponse(status=400)
+
+    data = event.get("data", {}) or {}
     reference = data.get("reference")
     if not reference:
         return HttpResponse(status=400)
@@ -431,12 +448,14 @@ def paystack_webhook(request):
         defaults={"provider": "paystack", "reference": reference, "body": event},
     )
     if not created:
+        # exact same payload seen before -> acknowledge without reprocessing
         return HttpResponse(status=200)
 
     event_type = event.get("event")
-    order_id = data.get("metadata", {}).get("order_id")
-    customer_email = data.get("customer", {}).get("email")
+    order_id = (data.get("metadata") or {}).get("order_id")
+    customer_email = (data.get("customer") or {}).get("email")
 
+    # 3) Single-source-of-truth update
     with transaction.atomic():
         try:
             tx = Transaction.objects.select_for_update().get(reference=reference)
@@ -444,15 +463,17 @@ def paystack_webhook(request):
             logger.error(f"[Webhook] Unknown transaction: {reference}")
             return HttpResponse(status=200)
 
+        # If we've already processed a callback for this tx, do nothing (idempotent)
         if tx.callback_received:
             return HttpResponse(status=200)
 
         tx.callback_received = True
         tx.raw_event = event
         tx.processed_at = timezone.now()
-        if customer_email and not tx.email:
+        if customer_email and not getattr(tx, "email", None):
             tx.email = customer_email
 
+        # Try to load the Order (optional)
         order = None
         if order_id:
             try:
@@ -460,63 +481,87 @@ def paystack_webhook(request):
             except Order.DoesNotExist:
                 order = None
 
+        # 4) Map Paystack event -> internal state, notify, and maybe auto-refund
         if event_type == "charge.success":
-            tx.status = "success"
+            tx.status = "success"          # keep your schema’s label
             tx.verified = True
-            tx.save(
-                update_fields=[
-                    "callback_received",
-                    "verified",
-                    "status",
-                    "email",
-                    "raw_event",
-                    "processed_at",
-                ]
-            )
+            tx.save(update_fields=[
+                "callback_received", "verified", "status", "email", "raw_event", "processed_at"
+            ])
+
             if order:
                 order.paid = True
                 order.payment_status = "success"
                 order.save(update_fields=["paid", "payment_status"])
                 assign_warehouses_and_update_stock(order)
+
+            # ---- notify payment success (emit-once, after commit) ----
+            if getattr(tx, "email", None):
+                emit_once(
+                    event_key=f"payment_success:{tx.reference}",
+                    user=getattr(tx, "user", None),
+                    channel="email",
+                    payload={"order_id": order_id, "amount": str(tx.amount)},
+                    send_fn=lambda: send_payment_email(tx.email, order_id, tx.amount, tx.reference, "received"),
+                )
+
+            # ---- auto-refund later duplicate successes for same order ----
+            # (only if we have an order_id to group by)
+            if order_id:
+                refunded_refs = maybe_refund_duplicate_success(tx)  # returns list[str] of refunded references
+                # notify for each refunded duplicate
+                if refunded_refs and getattr(tx, "email", None):
+                    for ref in refunded_refs:
+                        emit_once(
+                            event_key=f"refund_completed:{ref}",
+                            user=getattr(tx, "user", None),
+                            channel="email",
+                            payload={"order_id": order_id, "amount": str(tx.amount)},
+                            send_fn=lambda ref=ref: send_refund_email(tx.email, order_id, tx.amount, ref, "completed"),
+                        )
+
         elif event_type == "charge.failed":
             tx.status = "failed"
-            tx.save(
-                update_fields=[
-                    "callback_received",
-                    "status",
-                    "email",
-                    "raw_event",
-                    "processed_at",
-                ]
-            )
+            tx.save(update_fields=[
+                "callback_received", "status", "email", "raw_event", "processed_at"
+            ])
             if order:
                 order.payment_status = "failed"
                 order.save(update_fields=["payment_status"])
+
+            if getattr(tx, "email", None):
+                emit_once(
+                    event_key=f"payment_failed:{tx.reference}",
+                    user=getattr(tx, "user", None),
+                    channel="email",
+                    payload={"order_id": order_id, "amount": str(tx.amount)},
+                    send_fn=lambda: send_payment_email(tx.email, order_id, tx.amount, tx.reference, "failed"),
+                )
+
         elif event_type == "charge.cancelled":
             tx.status = "cancelled"
-            tx.save(
-                update_fields=[
-                    "callback_received",
-                    "status",
-                    "email",
-                    "raw_event",
-                    "processed_at",
-                ]
-            )
+            tx.save(update_fields=[
+                "callback_received", "status", "email", "raw_event", "processed_at"
+            ])
             if order:
                 order.payment_status = "cancelled"
                 order.save(update_fields=["payment_status"])
+
+            if getattr(tx, "email", None):
+                emit_once(
+                    event_key=f"payment_cancelled:{tx.reference}",
+                    user=getattr(tx, "user", None),
+                    channel="email",
+                    payload={"order_id": order_id, "amount": str(tx.amount)},
+                    send_fn=lambda: send_payment_email(tx.email, order_id, tx.amount, tx.reference, "cancelled"),
+                )
+
         else:
+            # Unknown or pending-ish event → mark pending but still idempotent
             tx.status = "pending"
-            tx.save(
-                update_fields=[
-                    "callback_received",
-                    "status",
-                    "email",
-                    "raw_event",
-                    "processed_at",
-                ]
-            )
+            tx.save(update_fields=[
+                "callback_received", "status", "email", "raw_event", "processed_at"
+            ])
 
     return HttpResponse(status=200)
 

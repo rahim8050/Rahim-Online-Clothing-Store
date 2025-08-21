@@ -1,0 +1,12 @@
+Payment Confirmation — Order #{{ order_no }}
+
+{% if customer_name %}Hello {{ customer_name }},{% else %}Hello,{% endif %} your payment was {{ status|default:stage|title }}.
+
+Amount: {{ currency }} {{ amount|floatformat:2 }}
+Method: {{ method|default:"" }}
+Gateway: {{ gateway|default:"" }}
+Reference: {{ reference }}
+Timestamp: {{ processed_at }}
+{% if order_url %}View your order: {{ order_url }}{% endif %}
+
+If you have any questions, contact our support{% if support_email %} at {{ support_email }}{% endif %}.
