@@ -91,3 +91,44 @@ class AuditLog(models.Model):
             message=message,
             meta=meta or {},
         )
+
+
+class NotificationEvent(models.Model):
+    event_key = models.CharField(max_length=128, unique=True, db_index=True)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="payment_notifications")
+    channel = models.CharField(max_length=24, default="email")  # e.g. email | sms | both
+    payload = models.JSONField(null=True, blank=True)
+    sent_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "payments_notification_event"
+        verbose_name = "Notification event"
+        verbose_name_plural = "Notification events"
+
+    def __str__(self):
+        return self.event_key
+    
+
+
+class Refund(models.Model):
+    class Status(models.TextChoices):
+        PENDING   = "pending",   "Pending"
+        SUCCEEDED = "succeeded", "Succeeded"
+        FAILED    = "failed",    "Failed"
+
+    transaction       = models.ForeignKey("payments.Transaction", on_delete=models.CASCADE, related_name="refunds")
+    amount            = models.DecimalField(max_digits=12, decimal_places=2)
+    gateway           = models.CharField(max_length=32)                  # "paystack" | "stripe" | "mpesa"
+    reason            = models.CharField(max_length=64, default="duplicate")
+    refund_reference  = models.CharField(max_length=128, null=True, blank=True)  # provider refund id
+    raw_response      = models.JSONField(null=True, blank=True)
+    status            = models.CharField(max_length=16, choices=Status.choices, default=Status.PENDING)
+    created_at        = models.DateTimeField(auto_now_add=True)
+    updated_at        = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "payments_refund"
+
+    def __str__(self):
+        return f"{self.transaction.reference} -> {self.status}"
+    
