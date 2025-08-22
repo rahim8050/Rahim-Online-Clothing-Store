@@ -7,7 +7,7 @@ from django.contrib.auth.admin import UserAdmin
 from django.core.mail import send_mail
 
 from .models import CustomUser, VendorApplication, VendorStaff
-from .services import deactivate_vendor_staff
+from users.services import deactivate_staff as deactivate_vendor_staff
 
 
 admin.site.register(CustomUser, UserAdmin)

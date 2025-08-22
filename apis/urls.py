@@ -1,33 +1,33 @@
 from django.urls import path
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
-from .views import (
+
+from apis.views import (
+    # general
+    WhoAmI,
+    ShopableProductsAPI,
     VendorProductsAPI,
+    VendorProductCreateAPI,
+    DriverLocationAPI,
     DriverDeliveriesAPI,
     DeliveryAssignAPI,
     DeliveryUnassignAPI,
     DeliveryAcceptAPI,
     DeliveryStatusAPI,
-    VendorProductCreateAPI,
     VendorApplyAPI,
-    ShopableProductsAPI,  # or ShoppableProductsAPI if you rename
-    DriverLocationAPI,
-    WhoAmI,
-    VendorStaffAcceptAPI,  # Ensure this is imported correctly
-)
-from users.views_vendor_staff import (
-    VendorStaffListAPI,
+
+    # vendor staff (all from apis.views)
+    VendorStaffListCreateView,
     VendorStaffInviteAPI,
+    VendorStaffAcceptAPI,
     VendorStaffRemoveAPI,
-    VendorStaffToggleActiveAPI,
-    
+    # VendorStaffToggleActiveAPI,  # uncomment if you implemented it in apis.views
 )
 
 urlpatterns = [
     # Auth
     path("auth/token/", TokenObtainPairView.as_view(), name="token_obtain_pair"),
     path("auth/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
-    # Optional smoke test:
-    # path("auth/whoami/", WhoAmI.as_view(), name="whoami"),
+    path("auth/whoami/", WhoAmI.as_view(), name="whoami"),
 
     # Vendor products
     path("vendor/products/", VendorProductsAPI.as_view(), name="vendor-products"),
@@ -43,14 +43,11 @@ urlpatterns = [
     path("deliveries/<int:pk>/unassign/", DeliveryUnassignAPI.as_view(), name="delivery-unassign"),
     path("deliveries/<int:pk>/accept/", DeliveryAcceptAPI.as_view(), name="delivery-accept"),
     path("deliveries/<int:pk>/status/", DeliveryStatusAPI.as_view(), name="delivery-status"),
-     path("auth/whoami/", WhoAmI.as_view(), name="whoami"),
-    # Vendor application
-    path("vendor/apply/", VendorApplyAPI.as_view(), name="vendor-apply"),
 
-    # Vendor staff
-    path("vendor/staff/", VendorStaffListAPI.as_view(), name="vendor-staff-list"),
+    # Vendor staff (consistent module)
+    path("vendor/staff/", VendorStaffListCreateView.as_view(), name="vendor-staff-list"),
     path("vendor/staff/invite/", VendorStaffInviteAPI.as_view(), name="vendor-staff-invite"),
-    path("vendor/staff/<int:staff_id>/remove/", VendorStaffRemoveAPI.as_view(), name="vendor-staff-remove"),
-    path("vendor/staff/<int:staff_id>/toggle/", VendorStaffToggleActiveAPI.as_view(), name="vendor-staff-toggle"),
     path("vendor/staff/accept/<str:token>/", VendorStaffAcceptAPI.as_view(), name="vendor-staff-accept"),
+    path("vendor/staff/<int:staff_id>/remove/", VendorStaffRemoveAPI.as_view(), name="vendor-staff-remove"),
+    # path("vendor/staff/<int:staff_id>/toggle/", VendorStaffToggleActiveAPI.as_view(), name="vendor-staff-toggle"),
 ]

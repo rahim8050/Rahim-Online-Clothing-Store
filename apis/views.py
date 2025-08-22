@@ -18,7 +18,7 @@ from django.core.signing import TimestampSigner, dumps as sign, BadSignature, Si
 from django.db import transaction
 
 
-from .serializers import VendorStaffInviteSerializer
+# from .serializers import VendorStaffInviteSerializer
 from users.models import VendorStaff
 from django.core.signing import loads as unsign
 
@@ -53,10 +53,15 @@ from .serializers import (
     DeliveryStatusSerializer,
     ProductListSerializer,
     VendorProductCreateSerializer,
-    VendorStaffInviteSerializer,
-    VendorStaffRemoveSerializer,
+    ProductOutSerializer,            # <-- needed by VendorProductCreateAPI
     VendorApplySerializer,
+    # vendor staff
+    VendorStaffCreateSerializer,     # <-- used in VendorStaffListCreateView.post
+    VendorStaffOutSerializer,        # <-- used in VendorStaffListCreateView.get/response
+    VendorStaffInviteSerializer,     # <-- now defined in apis/serializers.py
+    VendorStaffRemoveSerializer,     # <-- now defined in apis/serializers.py
 )
+
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -271,13 +276,11 @@ class VendorStaffInviteAPI(APIView):
         owner_id = ser.validated_data["owner_id"]
         staff = ser.validated_data["staff"]
 
-        # Ensure you have a DB-level unique constraint on (owner, staff)
-        # e.g. class Meta: constraints = [models.UniqueConstraint(fields=["owner","staff"], name="uniq_owner_staff")]
         with transaction.atomic():
             vs, created = VendorStaff.objects.select_for_update().get_or_create(
                 owner_id=owner_id,
                 staff=staff,
-                defaults={"status": "pending", "is_active": False},
+                defaults={"is_active": False},
             )
 
             # Already active → conflict
@@ -287,38 +290,22 @@ class VendorStaffInviteAPI(APIView):
                     status=status.HTTP_409_CONFLICT,
                 )
 
-            # Normalize any stale state back to "pending"
-            if not created and vs.status != "pending":
-                vs.status = "pending"
-                vs.is_active = False
-                vs.save(update_fields=["status", "is_active"])
-
-            # Build a signed, expiring token so the invite link isn't a raw ID
+            # If it existed but was inactive, keep it inactive (pending) and (optionally) resend email
+            invite_link = None
             payload = {"vs_id": vs.id, "staff_id": staff.id}
-            token = sign(payload)  # default salt+signer; can pass salt="vendor-staff"
-            # e.g. path("vendor/staff/accept/<str:token>/", AcceptInviteAPI.as_view(), name="vendor-staff-accept")
+            token = sign(payload)
             path = reverse("vendor-staff-accept", args=[token])
-
-            # Prefer absolute URI so emails work off any domain/proxy
             invite_link = request.build_absolute_uri(path)
 
             if created:
                 subject = f"You're invited to join {get_current_site(request).domain}"
                 html_content = render_to_string(
                     "emails/vendor_staff_invite.html",
-                    {
-                        "staff": staff,
-                        "owner": request.user,
-                        "invite_link": invite_link,
-                        "site_name": get_current_site(request).domain,
-                    },
+                    {"staff": staff, "owner": request.user, "invite_link": invite_link,
+                     "site_name": get_current_site(request).domain},
                 )
-                text_content = (
-                    "You've been invited as vendor staff.\n\n"
-                    f"Accept your invite: {invite_link}"
-                )
+                text_content = f"You've been invited as vendor staff.\n\nAccept your invite: {invite_link}"
 
-                # Send only after commit so we don't email on a rolled-back txn
                 def _send():
                     try:
                         email = EmailMultiAlternatives(
@@ -343,9 +330,8 @@ class VendorStaffInviteAPI(APIView):
                     "vendor_staff_id": vs.id,
                     "owner_id": vs.owner_id,
                     "staff_id": vs.staff_id,
-                    "status": vs.status,
                     "is_active": vs.is_active,
-                    "invite_link_preview": invite_link if created else None,  # helpful for Postman/manual testing
+                    "invite_link_preview": invite_link if created else None,
                 },
             },
             status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
@@ -354,9 +340,9 @@ class VendorStaffInviteAPI(APIView):
 
 
 
-class VendorStaffAcceptAPI(APIView):
-    permission_classes = [permissions.IsAuthenticated]  # or AllowAny if you will log in later
 
+class VendorStaffAcceptAPI(APIView):
+    permission_classes = [permissions.IsAuthenticated]
     TOKEN_MAX_AGE = 60 * 60 * 24 * 7  # 7 days
 
     def post(self, request, token: str):
@@ -369,14 +355,24 @@ class VendorStaffAcceptAPI(APIView):
 
         vs_id = payload.get("vs_id")
         staff_id = payload.get("staff_id")
+        if not vs_id or not staff_id:
+            return Response({"detail": "Malformed invite token."}, status=400)
+
+        # Optional: lock to the actual staff account
+        if request.user.id != staff_id:
+            return Response({"detail": "This invite is not for the current user."}, status=403)
 
         with transaction.atomic():
-            vs = VendorStaff.objects.select_for_update().get(pk=vs_id, staff_id=staff_id)
+            try:
+                vs = VendorStaff.objects.select_for_update().get(pk=vs_id, staff_id=staff_id)
+            except VendorStaff.DoesNotExist:
+                return Response({"detail": "Invite not found."}, status=404)
+
             if vs.is_active:
                 return Response({"detail": "Already accepted."}, status=200)
-            vs.status = "accepted"
+
             vs.is_active = True
-            vs.save(update_fields=["status", "is_active"])
+            vs.save(update_fields=["is_active"])   # ← no status
 
         return Response({"ok": True, "message": "Invite accepted."}, status=200)
 
@@ -405,3 +401,23 @@ class VendorApplyAPI(APIView):
         ser.is_valid(raise_exception=True)
         app = ser.save()
         return Response({"ok": True, "application_id": app.id})
+
+
+
+
+# apis/views.py
+
+
+class VendorStaffListCreateView(APIView):
+    permission_classes = [permissions.IsAuthenticated]  # add IsVendorOwner for prod
+
+    def get(self, request):
+        # Usually you filter by the current owner; keep simple for now
+        qs = VendorStaff.objects.all()
+        return Response(VendorStaffOutSerializer(qs, many=True).data)
+
+    def post(self, request):
+        ser = VendorStaffCreateSerializer(data=request.data, context={"request": request})
+        ser.is_valid(raise_exception=True)
+        row = ser.save()
+        return Response(VendorStaffOutSerializer(row).data, status=status.HTTP_201_CREATED)
