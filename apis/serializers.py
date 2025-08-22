@@ -1,18 +1,15 @@
-# apis/serializers.py
 from django.apps import apps
 from django.db import transaction
 from django.utils.text import slugify
 from django.contrib.auth import get_user_model
-from django.contrib.auth.models import Group
 from rest_framework import serializers
 
-# Your models
 from product_app.models import Product, ProductStock, Warehouse
 from orders.models import OrderItem
 from users.models import VendorStaff, VendorApplication
-from users.services import deactivate_vendor_staff
-from users.constants import VENDOR_STAFF
 from users.utils import resolve_vendor_owner_for
+
+from users import services  # <-- correct: we now defined the functions here
 
 User = get_user_model()
 
@@ -210,53 +207,47 @@ class VendorProductCreateSerializer(serializers.ModelSerializer):
 # ----------------------------------------
 # Vendor staff management
 # ----------------------------------------
-class VendorStaffInviteSerializer(serializers.Serializer):
-    staff_id = serializers.IntegerField()
-    owner_id = serializers.IntegerField(required=False, allow_null=True)  # optional
+# --- VendorStaff direct create ---
+
+
+User = get_user_model()
+
+class VendorStaffCreateSerializer(serializers.Serializer):
+    owner_id = serializers.IntegerField(required=False)
+    staff_id = serializers.IntegerField(required=True)
+    role = serializers.ChoiceField(choices=[("staff","Staff"),("owner","Owner")], default="staff")
+
+    def to_internal_value(self, data):
+        data = dict(data)
+        # Tolerate alternate keys
+        if "owner" in data and "owner_id" not in data:
+            data["owner_id"] = data["owner"]
+        if "staff" in data and "staff_id" not in data:
+            data["staff_id"] = data["staff"]
+        return super().to_internal_value(data)
 
     def validate(self, attrs):
-        request = self.context["request"]
-
-        # Resolve owner safely (handles None, multiple owners, and 403 internally)
-        try:
-            owner_id = resolve_vendor_owner_for(
-                request.user,
-                attrs.get("owner_id"),
-                require_explicit_if_multiple=True,  # set False to auto-pick if >1
-            )
-        except ValueError as e:
-            # client input/ambiguity -> 400 on owner_id
-            raise serializers.ValidationError({"owner_id": str(e)})
-
-        # Ensure staff exists
-        try:
-            staff = User.objects.get(pk=attrs["staff_id"])
-        except User.DoesNotExist:
-            raise serializers.ValidationError({"staff_id": "User not found."})
-
-        if staff.id == owner_id:
-            raise serializers.ValidationError({"owner_id": "You cannot invite yourself."})
-
-        attrs["owner_id"] = owner_id
-        attrs["staff"] = staff
+        req = self.context.get("request")
+        owner_id = attrs.get("owner_id") or (req.user.id if req and req.user.is_authenticated else None)
+        staff_id = attrs["staff_id"]
+        if owner_id == staff_id:
+            raise serializers.ValidationError({"staff_id": "Owner cannot equal staff."})
         return attrs
 
-class VendorStaffRemoveSerializer(serializers.Serializer):
-    staff_id = serializers.IntegerField()
-    owner_id = serializers.IntegerField(required=False)
+    def create(self, attrs):
+        req = self.context.get("request")
+        owner = User.objects.get(pk=attrs.get("owner_id") or req.user.id)
+        staff = User.objects.get(pk=attrs["staff_id"])
+        return services.add_or_activate_staff(owner, staff, attrs.get("role","staff"))
 
-    def save(self, **kwargs):
-        request = self.context["request"]
-        try:
-            owner_id = resolve_vendor_owner_for(request.user, self.validated_data.get("owner_id"))
-        except ValueError as e:
-            raise serializers.ValidationError({"owner_id": str(e)})
-        try:
-            membership = VendorStaff.objects.get(owner_id=owner_id, staff_id=self.validated_data["staff_id"])
-        except VendorStaff.DoesNotExist:
-            return {"ok": True}
-        deactivate_vendor_staff(membership)
-        return {"ok": True}
+class VendorStaffOutSerializer(serializers.ModelSerializer):
+    owner_id = serializers.IntegerField( read_only=True)
+    staff_id = serializers.IntegerField( read_only=True)
+    class Meta:
+        model = VendorStaff
+        fields = ["id","owner_id","staff_id","role","is_active","created_at"]
+        read_only_fields = fields
+
 
 
 # ----------------------------------------
@@ -320,3 +311,69 @@ class ProductOutSerializer(serializers.ModelSerializer):
         return list(
             ProductStock.objects.filter(product=obj).values("warehouse_id", "quantity")
         )
+
+
+
+# --- Add below VendorStaffOutSerializer ---
+
+# apis/serializers.py
+class VendorStaffInviteSerializer(serializers.Serializer):
+    owner_id = serializers.IntegerField(required=False, allow_null=True)
+    staff_id = serializers.IntegerField(required=False)
+    staff_email = serializers.EmailField(required=False)
+
+    def validate(self, attrs):
+        request = self.context["request"]
+
+        # Resolve owner id (fallback to current user)
+        try:
+            owner_id = resolve_vendor_owner_for(
+                request.user,
+                attrs.get("owner_id"),
+                require_explicit_if_multiple=True,  # keep strict; change to False if you prefer auto-pick
+            )
+        except ValueError as e:
+            raise serializers.ValidationError({"owner_id": str(e)})
+
+        # Resolve staff by id or email
+        staff = None
+        if attrs.get("staff_id") is not None:
+            staff = User.objects.filter(pk=attrs["staff_id"]).first()
+            if not staff:
+                raise serializers.ValidationError({"staff_id": "User not found."})
+        elif attrs.get("staff_email"):
+            email = attrs["staff_email"].strip().lower()
+            staff = User.objects.filter(email__iexact=email).first()
+            if not staff:
+                raise serializers.ValidationError({"staff_email": "No user with that email."})
+        else:
+            raise serializers.ValidationError({"staff": "Provide staff_id or staff_email."})
+
+        if staff.id == owner_id:
+            raise serializers.ValidationError({"owner_id": "You cannot invite yourself."})
+
+        attrs["owner_id"] = owner_id
+        attrs["staff"] = staff
+        return attrs
+
+
+
+class VendorStaffRemoveSerializer(serializers.Serializer):
+    staff_id = serializers.IntegerField()
+    owner_id = serializers.IntegerField(required=False)
+
+    def save(self, **kwargs):
+        request = self.context["request"]
+        try:
+            owner_id = resolve_vendor_owner_for(request.user, self.validated_data.get("owner_id"))
+        except ValueError as e:
+            raise serializers.ValidationError({"owner_id": str(e)})
+
+        try:
+            membership = VendorStaff.objects.get(owner_id=owner_id, staff_id=self.validated_data["staff_id"])
+        except VendorStaff.DoesNotExist:
+            return {"ok": True}
+
+        # wrapper we added in users/services.py
+        services.deactivate_vendor_staff(membership)
+        return {"ok": True}
