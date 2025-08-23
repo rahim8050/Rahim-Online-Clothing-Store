@@ -1,7 +1,13 @@
 {% extends 'base.html' %}
+{% load static %}
 {% block content %}
-<div id="driver-app" class="p-4"></div>
+<div class="p-2" data-delivery-id="{{ delivery.id }}">
+  <div data-status-chip class="text-sm font-medium"></div>
+  <div data-toast class="hidden fixed bottom-4 right-4 bg-black/80 text-white px-3 py-2 rounded">.</div>
+  <div id="driver-app" class="p-4"></div>
+</div>
 <script src="https://cdn.jsdelivr.net/npm/vue@2/dist/vue.js"></script>
+<script defer src="{% static 'js/tracking-route.js' %}"></script>
 <script>
 new Vue({
   el: '#driver-app',
@@ -19,5 +25,35 @@ new Vue({
       </ul>
     </div>`
 });
+</script>
+<script>
+  // REST-based location updates (uses new /apis/driver/location/)
+  (function () {
+    const el = document.querySelector("[data-delivery-id]");
+    if (!el) return;
+    const deliveryId = parseInt(el.dataset.deliveryId, 10);
+
+    function postLoc(lat, lng) {
+      fetch("/apis/driver/location/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ delivery_id: deliveryId, lat, lng }),
+        credentials: "same-origin",
+      }).catch(()=>{});
+    }
+
+    if ("geolocation" in navigator) {
+      navigator.geolocation.watchPosition(
+        (pos) => {
+          const { latitude, longitude } = pos.coords;
+          postLoc(latitude, longitude);
+          // If you prefer WS pings instead of REST:
+          // if (window.sendDriverPing) window.sendDriverPing(latitude, longitude);
+        },
+        (err) => { console.warn("geo error", err); },
+        { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
+      );
+    }
+  })();
 </script>
 {% endblock %}
