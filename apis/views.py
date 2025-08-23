@@ -9,6 +9,8 @@ import logging
 from django.conf import settings
 # apis/views.py (top)
 from users.utils import resolve_vendor_owner_for
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
 
 
 
@@ -65,6 +67,20 @@ from .serializers import (
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
+
+
+def _publish_delivery(delivery, kind: str, payload: dict | None = None):
+    """
+    Publish a generic delivery event to the delivery's WS group.
+    kind: 'assign' | 'unassign' | 'accept' | 'status' | 'position'
+    """
+    layer = get_channel_layer()
+    if not layer:
+        return
+    data = {"type": "delivery.event", "kind": kind, "delivery_id": delivery.pk}
+    if payload:
+        data.update(payload)
+    async_to_sync(layer.group_send)(delivery.ws_group, data)
 
 
 
@@ -178,7 +194,10 @@ class DeliveryAssignAPI(APIView):
         driver = get_object_or_404(User, pk=ser.validated_data["driver_id"])
         delivery.mark_assigned(driver)
         delivery.save(update_fields=["driver", "status", "assigned_at"])
-        return Response(DeliverySerializer(delivery, context={"request": request}).data)
+        _publish_delivery(delivery, "assign", {"driver_id": driver.id})
+        return Response(
+            DeliverySerializer(delivery, context={"request": request}).data
+        )
 
 
 class DeliveryUnassignAPI(APIView):
@@ -191,7 +210,10 @@ class DeliveryUnassignAPI(APIView):
         delivery.status = Delivery.Status.PENDING
         delivery.assigned_at = None
         delivery.save(update_fields=["driver", "status", "assigned_at"])
-        return Response(DeliverySerializer(delivery, context={"request": request}).data)
+        _publish_delivery(delivery, "unassign", {"driver_id": None})
+        return Response(
+            DeliverySerializer(delivery, context={"request": request}).data
+        )
 
 
 class DeliveryAcceptAPI(APIView):
@@ -202,7 +224,10 @@ class DeliveryAcceptAPI(APIView):
         delivery = get_object_or_404(Delivery, pk=pk, driver__isnull=True)
         delivery.mark_assigned(request.user)
         delivery.save(update_fields=["driver", "status", "assigned_at"])
-        return Response(DeliverySerializer(delivery, context={"request": request}).data)
+        _publish_delivery(delivery, "accept", {"driver_id": request.user.id})
+        return Response(
+            DeliverySerializer(delivery, context={"request": request}).data
+        )
 
 
 class DeliveryStatusAPI(APIView):
@@ -220,7 +245,10 @@ class DeliveryStatusAPI(APIView):
         if new_status == Delivery.Status.DELIVERED:
             delivery.delivered_at = timezone.now()
         delivery.save(update_fields=["status", "picked_up_at", "delivered_at"])
-        return Response(DeliverySerializer(delivery, context={"request": request}).data)
+        _publish_delivery(delivery, "status", {"status": new_status})
+        return Response(
+            DeliverySerializer(delivery, context={"request": request}).data
+        )
 
 
 class DriverLocationAPI(APIView):
@@ -228,9 +256,45 @@ class DriverLocationAPI(APIView):
     required_groups = [DRIVER]
 
     def post(self, request):
-        lat = request.data.get("lat")
-        lng = request.data.get("lng")
-        logger.info("Driver %s location lat=%s lng=%s", request.user.pk, lat, lng)
+        # Expect: {"delivery_id": int, "lat": float, "lng": float}
+        delivery_id = request.data.get("delivery_id")
+        try:
+            delivery_id = int(delivery_id)
+        except (TypeError, ValueError):
+            return Response(
+                {"detail": "delivery_id required (int)"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            lat = float(request.data.get("lat"))
+            lng = float(request.data.get("lng"))
+        except (TypeError, ValueError):
+            return Response(
+                {"detail": "lat/lng must be numbers"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not (-90.0 <= lat <= 90.0 and -180.0 <= lng <= 180.0):
+            return Response(
+                {"detail": "lat/lng out of range"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        delivery = get_object_or_404(Delivery, pk=delivery_id, driver=request.user)
+
+        # Persist
+        delivery.last_lat = lat
+        delivery.last_lng = lng
+        delivery.last_ping_at = timezone.now()
+        delivery.save(update_fields=["last_lat", "last_lng", "last_ping_at"])
+
+        # Publish to WS (generic bridge)
+        _publish_delivery(
+            delivery,
+            "position",
+            {"lat": lat, "lng": lng, "ts": delivery.last_ping_at.isoformat()},
+        )
         return Response({"ok": True})
 
 
