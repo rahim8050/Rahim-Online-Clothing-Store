@@ -96,3 +96,14 @@ class DeliveryConsumer(AsyncJsonWebsocketConsumer):
 
     async def status_update(self, event):
         await self.send_json({"event": "status", "status": event["status"]})
+
+    async def delivery_event(self, event):
+        """
+        Generic bridge for REST-originated events.
+        Input: {"type":"delivery.event","kind":"assign|unassign|accept|status|position", ...payload}
+        Output to client: {"event": "<kind>", ...payload}
+        """
+        kind = event.get("kind")
+        payload = {k: v for k, v in event.items() if k not in {"type", "kind"}}
+        payload["event"] = kind
+        await self.send_json(payload)
