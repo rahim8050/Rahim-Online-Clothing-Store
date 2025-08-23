@@ -10,15 +10,19 @@ from django.db import transaction
 from django.conf import settings
 from django.core.mail import send_mail
 from django.template.loader import render_to_string
+from payments.notify import emit_once, send_refund_email, send_payment_email
+from payments.gateways import maybe_refund_duplicate_success
 import logging
-from django.http import HttpResponse
+from django.http import HttpResponse, HttpResponseForbidden
 from django.views.decorators.csrf import csrf_exempt
 
 from django.http import JsonResponse
+from users.utils import is_vendor_or_staff
 from orders.utils import reverse_geocode
 from orders.services import assign_warehouses_and_update_stock
 from django.utils import timezone
-from .models import Transaction, EmailDispatchLog
+from django.apps import apps
+from .models import Transaction, EmailDispatchLog, PaymentEvent
 
 import stripe
 import paypalrestsdk
@@ -401,16 +405,23 @@ def stripe_webhook(request):
     return HttpResponse(status=200)
 
 
-@csrf_exempt
+
+
+
+
 @csrf_exempt
 def paystack_webhook(request):
-
-    """Handle Paystack payment notifications."""
-
-    import logging
+    """
+    Paystack webhook with:
+      - signature verification
+      - replay dedupe via PaymentEvent(body_sha256)
+      - idempotent state updates
+      - customer notifications (emit-once, after commit)
+      - auto-refund of duplicate successes for the same order
+    """
     logger = logging.getLogger("paystack")
 
-
+    # 1) Verify signature
     signature = request.META.get("HTTP_X_PAYSTACK_SIGNATURE", "")
     computed = hmac.new(
         settings.PAYSTACK_SECRET_KEY.encode(), request.body, hashlib.sha512
@@ -419,98 +430,138 @@ def paystack_webhook(request):
         logger.warning("Invalid Paystack signature")
         return HttpResponse(status=400)
 
-    event = json.loads(request.body)
-    event_type = event.get("event")
-    data = event.get("data", {})
-    reference = data.get("reference")
-    order_id = data.get("metadata", {}).get("order_id")
-    customer_email = data.get("customer", {}).get("email")
+    # 2) Parse + replay-dedupe (by body hash)
+    body = request.body
+    try:
+        event = json.loads(body or b"{}")
+    except Exception:
+        return HttpResponse(status=400)
 
+    data = event.get("data", {}) or {}
+    reference = data.get("reference")
     if not reference:
         return HttpResponse(status=400)
 
-    try:
-        transaction = Transaction.objects.get(reference=reference)
-
-    except Transaction.DoesNotExist:
-        logger.error(f"[Webhook] Unknown transaction: {reference}")
+    sha = hashlib.sha256(body).hexdigest()
+    pe, created = PaymentEvent.objects.get_or_create(
+        body_sha256=sha,
+        defaults={"provider": "paystack", "reference": reference, "body": event},
+    )
+    if not created:
+        # exact same payload seen before -> acknowledge without reprocessing
         return HttpResponse(status=200)
 
-    transaction.callback_received = True
-    transaction.verified = True
-    if customer_email and not transaction.email:
-        transaction.email = customer_email
+    event_type = event.get("event")
+    order_id = (data.get("metadata") or {}).get("order_id")
+    customer_email = (data.get("customer") or {}).get("email")
 
-    if event_type == "charge.success":
-        transaction.status = "success"
-        transaction.save(update_fields=["callback_received", "verified", "status", "email"])
+    # 3) Single-source-of-truth update
+    with transaction.atomic():
+        try:
+            tx = Transaction.objects.select_for_update().get(reference=reference)
+        except Transaction.DoesNotExist:
+            logger.error(f"[Webhook] Unknown transaction: {reference}")
+            return HttpResponse(status=200)
 
+        # If we've already processed a callback for this tx, do nothing (idempotent)
+        if tx.callback_received:
+            return HttpResponse(status=200)
+
+        tx.callback_received = True
+        tx.raw_event = event
+        tx.processed_at = timezone.now()
+        if customer_email and not getattr(tx, "email", None):
+            tx.email = customer_email
+
+        # Try to load the Order (optional)
         order = None
         if order_id:
             try:
-                order = Order.objects.get(id=order_id)
+                order = Order.objects.select_for_update().get(id=order_id)
             except Order.DoesNotExist:
                 order = None
 
-        if order:
-            order.paid = True
-            order.payment_status = "paid"
-            order.save(update_fields=["paid", "payment_status"])
-            assign_warehouses_and_update_stock(order)
-
-            send_payment_receipt_email(transaction, order)
-            transaction.email_sent = True
-            transaction.save(update_fields=["email_sent"])
-
-    elif event_type == "charge.failed":
-        transaction.status = "failed"
-        transaction.save(update_fields=["callback_received", "verified", "status", "email"])
-        if order_id:
-            Order.objects.filter(id=order_id).update(payment_status="failed")
-
-    elif event_type == "charge.cancelled":
-        transaction.status = "cancelled"
-        transaction.save(update_fields=["callback_received", "verified", "status", "email"])
-        if order_id:
-            Order.objects.filter(id=order_id).update(payment_status="cancelled")
-    else:
-        transaction.save(update_fields=["callback_received", "verified", "email"])
-
-        transaction.callback_received = True
-        transaction.verified = True  # ✅ Mark as secure source
-
-        if customer_email and not transaction.email:
-            transaction.email = customer_email
-
+        # 4) Map Paystack event -> internal state, notify, and maybe auto-refund
         if event_type == "charge.success":
-            transaction.status = "success"
-            transaction.save(update_fields=["status", "callback_received", "email", "verified"])
+            tx.status = "success"          # keep your schema’s label
+            tx.verified = True
+            tx.save(update_fields=[
+                "callback_received", "verified", "status", "email", "raw_event", "processed_at"
+            ])
 
+            if order:
+                order.paid = True
+                order.payment_status = "success"
+                order.save(update_fields=["paid", "payment_status"])
+                assign_warehouses_and_update_stock(order)
+
+            # ---- notify payment success (emit-once, after commit) ----
+            if getattr(tx, "email", None):
+                emit_once(
+                    event_key=f"payment_success:{tx.reference}",
+                    user=getattr(tx, "user", None),
+                    channel="email",
+                    payload={"order_id": order_id, "amount": str(tx.amount)},
+                    send_fn=lambda: send_payment_email(tx.email, order_id, tx.amount, tx.reference, "received"),
+                )
+
+            # ---- auto-refund later duplicate successes for same order ----
+            # (only if we have an order_id to group by)
             if order_id:
-                try:
-                    order = Order.objects.get(id=order_id)
-                    order.paid = True
-                    order.payment_status = "paid"
-                    order.save(update_fields=["paid", "payment_status"])
-
-                    assign_warehouses_and_update_stock(order)
-
-                    send_payment_receipt_email(transaction, order)
-                    transaction.email_sent = True
-                    transaction.save(update_fields=["email_sent"])
-                except Order.DoesNotExist:
-                    logger.warning(f"Order {order_id} not found for reference {reference}")
+                refunded_refs = maybe_refund_duplicate_success(tx)  # returns list[str] of refunded references
+                # notify for each refunded duplicate
+                if refunded_refs and getattr(tx, "email", None):
+                    for ref in refunded_refs:
+                        emit_once(
+                            event_key=f"refund_completed:{ref}",
+                            user=getattr(tx, "user", None),
+                            channel="email",
+                            payload={"order_id": order_id, "amount": str(tx.amount)},
+                            send_fn=lambda ref=ref: send_refund_email(tx.email, order_id, tx.amount, ref, "completed"),
+                        )
 
         elif event_type == "charge.failed":
-            transaction.status = "failed"
-            transaction.save(update_fields=["status", "callback_received", "verified"])
+            tx.status = "failed"
+            tx.save(update_fields=[
+                "callback_received", "status", "email", "raw_event", "processed_at"
+            ])
+            if order:
+                order.payment_status = "failed"
+                order.save(update_fields=["payment_status"])
+
+            if getattr(tx, "email", None):
+                emit_once(
+                    event_key=f"payment_failed:{tx.reference}",
+                    user=getattr(tx, "user", None),
+                    channel="email",
+                    payload={"order_id": order_id, "amount": str(tx.amount)},
+                    send_fn=lambda: send_payment_email(tx.email, order_id, tx.amount, tx.reference, "failed"),
+                )
 
         elif event_type == "charge.cancelled":
-            transaction.status = "cancelled"
-            transaction.save(update_fields=["status", "callback_received", "verified"])
+            tx.status = "cancelled"
+            tx.save(update_fields=[
+                "callback_received", "status", "email", "raw_event", "processed_at"
+            ])
+            if order:
+                order.payment_status = "cancelled"
+                order.save(update_fields=["payment_status"])
+
+            if getattr(tx, "email", None):
+                emit_once(
+                    event_key=f"payment_cancelled:{tx.reference}",
+                    user=getattr(tx, "user", None),
+                    channel="email",
+                    payload={"order_id": order_id, "amount": str(tx.amount)},
+                    send_fn=lambda: send_payment_email(tx.email, order_id, tx.amount, tx.reference, "cancelled"),
+                )
 
         else:
-            logger.warning(f"Unhandled event type: {event_type}")
+            # Unknown or pending-ish event → mark pending but still idempotent
+            tx.status = "pending"
+            tx.save(update_fields=[
+                "callback_received", "status", "email", "raw_event", "processed_at"
+            ])
 
     return HttpResponse(status=200)
 
@@ -771,3 +822,39 @@ def save_location(request):
 
     return JsonResponse({"status": "success"})
 
+
+
+@login_required
+def track_order(request, order_id: int):
+    Order = apps.get_model("orders", "Order")
+    Delivery = apps.get_model("orders", "Delivery")
+    order = get_object_or_404(Order.objects.select_related("user"), pk=order_id)
+    is_owner = order.user_id == request.user.id
+    if not (is_owner or is_vendor_or_staff(request.user)):
+        return HttpResponseForbidden("Not allowed")
+    delivery = Delivery.objects.filter(order=order).order_by("-id").first()
+    warehouse = None
+    if delivery and delivery.origin_lat is not None and delivery.origin_lng is not None:
+        warehouse = {"lat": float(delivery.origin_lat), "lng": float(delivery.origin_lng)}
+    else:
+        item = order.items.select_related("warehouse").first()
+        wh = getattr(item, "warehouse", None)
+        if wh and wh.latitude is not None and wh.longitude is not None:
+            warehouse = {"lat": wh.latitude, "lng": wh.longitude}
+    route_ctx = {
+        "apiKey": settings.GEOAPIFY_API_KEY,
+        "warehouse": warehouse,
+        "destination": {"lat": float(order.dest_lat), "lng": float(order.dest_lng)},
+        "wsUrl": f"/ws/deliveries/{delivery.id}/" if delivery else "",
+    }
+    route_ctx_json = json.dumps(route_ctx)
+    return render(
+        request,
+        "orders/track.html",
+        {
+            "order": order,
+            "delivery": delivery,
+            "ws_path": route_ctx["wsUrl"],
+            "route_ctx": route_ctx_json,
+        },
+    )

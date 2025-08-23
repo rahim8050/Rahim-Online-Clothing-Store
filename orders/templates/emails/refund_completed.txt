@@ -1,0 +1,12 @@
+Refund {{ stage|title }} for Order {{ order_no }}
+
+{% if customer_name %}Hi {{ customer_name }},{% else %}Hi,{% endif %} your refund has been {{ stage }}.
+
+Amount: {{ currency }} {{ amount }}
+Payment method: {{ gateway|default:"" }}
+Transaction ref: {{ reference }}
+{% if refund_id %}Refund id: {{ refund_id }}{% endif %}
+Processed at: {{ processed_at }}
+
+{% if order_url %}View your order: {{ order_url }}{% endif %}
+If you didn’t request this, contact support{% if support_email %} at {{ support_email }}{% endif %}.
