@@ -15,7 +15,7 @@ from payments.gateways import maybe_refund_duplicate_success
 import logging
 from django.http import HttpResponse, HttpResponseForbidden
 from django.views.decorators.csrf import csrf_exempt
-
+from .models import Delivery
 from django.http import JsonResponse
 from users.utils import is_vendor_or_staff
 from orders.utils import reverse_geocode
@@ -43,7 +43,250 @@ paypalrestsdk.configure({
 
 # Create your views here.
 
+# add near the top
+from django.views.decorators.http import require_GET, require_POST
+from django.contrib.auth.decorators import login_required, user_passes_test
+from decimal import Decimal, ROUND_HALF_UP
 
+Q6 = Decimal("0.000001")
+def _q6(x: Decimal) -> Decimal:  # normalize coords
+    return x.quantize(Q6)
+
+def is_driver(u):
+    return u.is_authenticated and u.groups.filter(name__iexact="driver").exists()
+
+driver_required = user_passes_test(is_driver)
+
+# ---------- DRIVER DASHBOARD (HTML shell; Vue renders inside) ----------
+@login_required
+@driver_required
+def driver_deliveries_page(request):
+    return render(request, "orders/driver_deliveries.html")
+
+# ---------- API: list deliveries for the logged-in driver ----------
+@login_required
+@driver_required
+@require_GET
+def driver_deliveries_api(request):
+    from .models import Delivery  # local import to avoid cycles
+    qs = (Delivery.objects
+          .filter(driver=request.user)
+          .select_related("order")
+          .order_by("-updated_at"))
+    data = [{
+        "id": d.id,
+        "order_id": d.order_id,
+        "status": d.status,
+        "dest_lat": float(d.dest_lat) if d.dest_lat is not None else None,
+        "dest_lng": float(d.dest_lng) if d.dest_lng is not None else None,
+        "last_lat": float(d.last_lat) if d.last_lat is not None else None,
+        "last_lng": float(d.last_lng) if d.last_lng is not None else None,
+        "last_ping_at": d.last_ping_at.isoformat() if d.last_ping_at else None,
+    } for d in qs]
+    return JsonResponse(data, safe=False)
+
+# ---------- API: driver posts current location ----------
+@login_required
+@driver_required
+@require_POST
+def driver_location_api(request):
+    from .models import Delivery  # local import to avoid cycles
+    try:
+        body = json.loads(request.body.decode("utf-8"))
+        delivery_id = int(body["delivery_id"])
+        lat = _q6(Decimal(str(body["lat"])))
+        lng = _q6(Decimal(str(body["lng"])))
+    except Exception:
+        return JsonResponse({"error": "invalid payload"}, status=400)
+
+    try:
+        d = Delivery.objects.get(pk=delivery_id, driver=request.user)
+    except Delivery.DoesNotExist:
+        return JsonResponse({"error": "not your delivery"}, status=403)
+
+    d.last_lat = lat
+    d.last_lng = lng
+    d.last_ping_at = timezone.now()
+    if d.status == d.Status.ASSIGNED:
+        d.status = d.Status.EN_ROUTE  # auto-progress on first ping
+    d.save(update_fields=["last_lat", "last_lng", "last_ping_at", "status", "updated_at"])
+
+    return JsonResponse({"ok": True, "status": d.status, "ts": d.last_ping_at.isoformat()})
+
+
+@login_required
+@driver_required
+@require_POST
+def driver_action_api(request):
+    try:
+        p = json.loads(request.body.decode("utf-8"))
+        delivery_id = int(p["delivery_id"])
+        action = p["action"]
+    except Exception:
+        return JsonResponse({"error": "bad payload"}, status=400)
+
+    try:
+        d = Delivery.objects.get(pk=delivery_id, driver=request.user)
+    except Delivery.DoesNotExist:
+        return JsonResponse({"error": "not your delivery"}, status=403)
+
+    now = timezone.now()
+    if action == "picked_up":
+        d.status = Delivery.Status.PICKED_UP
+        d.picked_up_at = now
+        d.save(update_fields=["status","picked_up_at","updated_at"])
+    elif action == "delivered":
+        d.status = Delivery.Status.DELIVERED
+        d.delivered_at = now
+        if d.dest_lat is not None and d.dest_lng is not None:
+            d.last_lat, d.last_lng = d.dest_lat, d.dest_lng
+            d.save(update_fields=["status","delivered_at","last_lat","last_lng","updated_at"])
+        else:
+            d.save(update_fields=["status","delivered_at","updated_at"])
+    elif action == "cancel":
+        d.status = Delivery.Status.CANCELLED
+        d.save(update_fields=["status","updated_at"])
+    else:
+        return JsonResponse({"error": "unknown action"}, status=400)
+
+    return JsonResponse({"ok": True, "status": d.status, "ts": now.isoformat()})
+
+# --- Road routing proxy (Geoapify -> fallback OSRM) ---
+import math
+import time
+import requests
+from django.conf import settings
+from django.http import JsonResponse
+from .models import Delivery
+
+# very small in-memory cache to avoid spam (per process)
+_ROUTE_CACHE: dict[str, tuple[float, dict]] = {}
+_ROUTE_TTL = 60  # seconds
+
+def _route_cache_key(a_lat, a_lng, b_lat, b_lng) -> str:
+    # round to ~11m precision to improve hit rate
+    return f"{round(a_lat,5)},{round(a_lng,5)}:{round(b_lat,5)},{round(b_lng,5)}"
+
+def _cache_get(k: str):
+    item = _ROUTE_CACHE.get(k)
+    if not item: 
+        return None
+    ts, payload = item
+    if time.time() - ts > _ROUTE_TTL:
+        _ROUTE_CACHE.pop(k, None)
+        return None
+    return payload
+
+def _cache_set(k: str, payload: dict):
+    _ROUTE_CACHE[k] = (time.time(), payload)
+
+def _to_latlng(coords):
+    # GeoJSON style [lng, lat] -> Leaflet style [lat, lng]
+    return [[c[1], c[0]] for c in coords]
+
+def _haversine_km(a_lat, a_lng, b_lat, b_lng):
+    R=6371
+    dLat=math.radians(b_lat-a_lat); dLng=math.radians(b_lng-a_lng)
+    s1=math.sin(dLat/2)**2 + math.cos(math.radians(a_lat))*math.cos(math.radians(b_lat))*math.sin(dLng/2)**2
+    return 2*R*math.asin(math.sqrt(s1))
+
+def _geoapify_route(a_lat, a_lng, b_lat, b_lng, api_key: str):
+    url = "https://api.geoapify.com/v1/routing"
+    params = {
+        "waypoints": f"{a_lat},{a_lng}|{b_lat},{b_lng}",
+        "mode": "drive",
+        "format": "geojson",
+        "apiKey": api_key,
+    }
+    r = requests.get(url, params=params, timeout=10)
+    r.raise_for_status()
+    j = r.json()
+    feat = (j.get("features") or [None])[0]
+    if not feat:
+        raise ValueError("geoapify: no route")
+    coords = feat["geometry"]["coordinates"]
+    # LineString or MultiLineString
+    if isinstance(coords[0][0], (int, float)):
+        coords_ll = _to_latlng(coords)
+    else:
+        # MultiLineString -> flatten
+        flat = [p for part in coords for p in part]
+        coords_ll = _to_latlng(flat)
+
+    props = feat.get("properties", {})
+    dist_km = (props.get("distance", 0) or 0) / 1000.0
+    dur_min = (props.get("time", 0) or 0) / 60.0
+    return {"coords": coords_ll, "distance_km": dist_km, "duration_min": dur_min}
+
+def _osrm_route(a_lat, a_lng, b_lat, b_lng):
+    # public OSRM (no key). coords order: lng,lat
+    base = "https://router.project-osrm.org/route/v1/driving"
+    url = f"{base}/{a_lng},{a_lat};{b_lng},{b_lat}"
+    r = requests.get(url, params={"overview":"full","geometries":"geojson"}, timeout=10)
+    r.raise_for_status()
+    j = r.json()
+    route = (j.get("routes") or [None])[0]
+    if not route:
+        raise ValueError("osrm: no route")
+    coords = route["geometry"]["coordinates"]
+    coords_ll = _to_latlng(coords)
+    dist_km = (route.get("distance", 0) or 0) / 1000.0
+    dur_min = (route.get("duration", 0) or 0) / 60.0
+    return {"coords": coords_ll, "distance_km": dist_km, "duration_min": dur_min}
+
+from django.views.decorators.http import require_GET
+from django.contrib.auth.decorators import login_required, user_passes_test
+
+def is_driver(u):
+    return u.is_authenticated and u.groups.filter(name__iexact="driver").exists()
+driver_required = user_passes_test(is_driver)
+
+@login_required
+@driver_required
+@require_GET
+def driver_route_api(request, delivery_id: int):
+    try:
+        d = Delivery.objects.get(pk=delivery_id, driver=request.user)
+    except Delivery.DoesNotExist:
+        return JsonResponse({"error": "not found"}, status=404)
+
+    # need last (or origin) and destination
+    if d.last_lat is not None and d.last_lng is not None:
+        a_lat, a_lng = float(d.last_lat), float(d.last_lng)
+    elif d.origin_lat is not None and d.origin_lng is not None:
+        a_lat, a_lng = float(d.origin_lat), float(d.origin_lng)
+    else:
+        return JsonResponse({"error": "no start position"}, status=400)
+
+    if d.dest_lat is None or d.dest_lng is None:
+        return JsonResponse({"error": "no destination"}, status=400)
+    b_lat, b_lng = float(d.dest_lat), float(d.dest_lng)
+
+    # if obviously tiny distance, skip external call
+    if _haversine_km(a_lat, a_lng, b_lat, b_lng) < 0.12:  # ~120 m
+        coords = [[a_lat, a_lng], [b_lat, b_lng]]
+        return JsonResponse({"coords": coords, "distance_km": 0.12, "duration_min": 1})
+
+    key = _route_cache_key(a_lat, a_lng, b_lat, b_lng)
+    cached = _cache_get(key)
+    if cached:
+        return JsonResponse(cached)
+
+    try:
+        if getattr(settings, "GEOAPIFY_API_KEY", None):
+            payload = _geoapify_route(a_lat, a_lng, b_lat, b_lng, settings.GEOAPIFY_API_KEY)
+        else:
+            payload = _osrm_route(a_lat, a_lng, b_lat, b_lng)
+    except Exception:
+        # fall back to straight line if both providers fail
+        payload = {"coords": [[a_lat, a_lng],[b_lat, b_lng]],
+                   "distance_km": _haversine_km(a_lat,a_lng,b_lat,b_lng),
+                   "duration_min": None}
+
+    _cache_set(key, payload)
+    return JsonResponse(payload)
+
+# ======================================
 
 
 
