@@ -106,7 +106,7 @@
       _ensureWS() {
         if (this.ws && this.wsReady) return;
         const url = (location.protocol === "https:" ? "wss://" : "ws://") +
-                    location.host + `/ws/deliveries/${this.activeId}/`;
+                    location.host + `/ws/delivery/track/${this.activeId}/`;
         this.ws = new WebSocket(url);
 
         this.ws.onopen = () => {
@@ -116,10 +116,10 @@
 
         this.ws.onmessage = (e) => {
           const msg = JSON.parse(e.data || "{}");
-          if (msg.event === "driver_ping") {
+          if (msg.type === "position_update") {
             this._updateDriver(msg.lat, msg.lng);
-          } else if (msg.event === "status") {
-            const d = this.deliveries.find(x => x.id === msg.delivery_id);
+          } else if (msg.type === "status") {
+            const d = this.deliveries.find(x => x.id === this.activeId);
             if (d) d.status = msg.status;
           }
         };
@@ -136,7 +136,7 @@
         }
         this.lastSentAt = now; this.lastSent = { lat, lng };
 
-        const packet = { type: "ping", lat, lng };
+        const packet = { type: "position_update", lat, lng };
         if (this.wsReady) this.ws.send(JSON.stringify(packet));
         else this.outbox.push(packet);
 

@@ -29,7 +29,7 @@
                         <div class="border rounded p-2 mt-2">
                             <p>{{ item.quantity }} x {{ item.product.name }}</p>
                             <p class="text-sm">Delivery status: {{ item.delivery_status }}</p>
-                            <button class="track-item-btn" data-order-id="{{ order.id }}" data-item-id="{{ item.id }}" data-clat="{{ order.latitude|default_if_none:'' }}" data-clng="{{ order.longitude|default_if_none:'' }}" data-whlat="{{ item.warehouse.latitude|default_if_none:'' }}" data-whlng="{{ item.warehouse.longitude|default_if_none:'' }}">Track</button>
+                            <button class="track-item-btn" data-delivery-id="{{ order.deliveries.first.id }}" data-order-id="{{ order.id }}" data-item-id="{{ item.id }}" data-clat="{{ order.latitude|default_if_none:'' }}" data-clng="{{ order.longitude|default_if_none:'' }}" data-whlat="{{ item.warehouse.latitude|default_if_none:'' }}" data-whlng="{{ item.warehouse.longitude|default_if_none:'' }}">Track</button>
                             <div id="map-{{ order.id }}-{{ item.id }}" class="w-full h-64 rounded hidden"></div>
                         </div>
                     {% endfor %}
@@ -171,14 +171,15 @@
     }
 
     // Open WebSocket
-    const ws = new WebSocket(`${wsScheme}://${location.host}/ws/track/${orderId}/${itemId}/`);
+    const deliveryId = btn.dataset.deliveryId;
+    const ws = new WebSocket(`${wsScheme}://${location.host}/ws/delivery/track/${deliveryId}/`);
     mapDiv._ws = ws;
 
     let tick = 0;
     ws.onmessage = async (evt) => {
       try {
         const d = JSON.parse(evt.data);
-        if (d.type !== 'tick') return;
+        if (d.type !== 'position_update') return;
 
         let pos = [toNum(d.lat), toNum(d.lng)];
         if (pos[0] === null || pos[1] === null) return;

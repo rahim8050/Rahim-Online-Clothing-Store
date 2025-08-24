@@ -1,39 +1,43 @@
+import time
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
 from channels.db import database_sync_to_async
+from django.core.cache import cache
 from django.utils import timezone
 from django.contrib.auth.models import AnonymousUser
-from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
-from .models import Delivery
+from orders.models import Delivery
 
-Q6 = Decimal("0.000001")
+THROTTLE_SECONDS = 5  # limit DB writes per driver
 
-def in_range(lat, lng):
-    try:
-        lat = Decimal(str(lat)); lng = Decimal(str(lng))
-    except (InvalidOperation, TypeError):
-        return None
-    if not (-90 <= lat <= 90 and -180 <= lng <= 180):
-        return None
-    # quantize to 6 dp like your model
-    return (lat.quantize(Q6, rounding=ROUND_HALF_UP),
-            lng.quantize(Q6, rounding=ROUND_HALF_UP))
+
+def _throttle_key(delivery_id, user_id):
+    return f"drv:lastpos:{delivery_id}:{user_id}"
+
 
 class DeliveryConsumer(AsyncJsonWebsocketConsumer):
     async def connect(self):
-        self.delivery_id = int(self.scope["url_route"]["kwargs"]["delivery_id"])
-        self.group = f"delivery.{self.delivery_id}"
+        try:
+            self.delivery_id = int(self.scope["url_route"]["kwargs"]["delivery_id"])
+        except Exception:
+            await self.close(code=4400)
+            return
 
-        d = await self._get_delivery()
-        if not d:
-            await self.close(code=4404); return
+        user = self.scope.get("user")
+        if not user or isinstance(user, AnonymousUser) or not user.is_authenticated:
+            await self.close(code=4401)
+            return
 
-        u = self.scope.get("user")
-        self.is_authenticated = u and not isinstance(u, AnonymousUser)
-        self.is_driver = self.is_authenticated and (u.id == d.driver_id)
-        self.can_view = self.is_driver or (self.is_authenticated and (u.is_staff or u.id == d.order.user_id))
+        delivery = await self._get_delivery(self.delivery_id)
+        if not delivery:
+            await self.close(code=4404)
+            return
 
-        if not self.can_view:
-            await self.close(code=4403); return
+        if not await self._user_can_view(user, delivery):
+            await self.close(code=4403)
+            return
+
+        self.user = user
+        self.is_driver = delivery.driver_id == user.id
+        self.group = f"delivery.track.{self.delivery_id}"
 
         await self.channel_layer.group_add(self.group, self.channel_name)
         await self.accept()
@@ -42,76 +46,81 @@ class DeliveryConsumer(AsyncJsonWebsocketConsumer):
         await self.channel_layer.group_discard(self.group, self.channel_name)
 
     async def receive_json(self, content, **kwargs):
-        """
-        Driver -> server:
-          {"type":"ping","lat":-1.303,"lng":36.81}
-          {"type":"action","action":"picked_up" | "delivered"}
-        Viewers never send anything.
-        """
-        if content.get("type") == "ping":
-            if not self.is_driver:  # only the assigned driver can ping
-                return
-            pair = in_range(content.get("lat"), content.get("lng"))
-            if not pair:
-                return
-            lat, lng = pair
-            await self._save_ping(lat, lng)
-            await self.channel_layer.group_send(
-                self.group,
-                {"type": "broadcast", "data": {
-                    "event": "driver_ping",
-                    "delivery_id": self.delivery_id,
-                    "lat": float(lat), "lng": float(lng),
-                    "ts": timezone.now().isoformat()
-                }}
-            )
-            await self.send_json({"ok": True})
+        msg_type = content.get("type")
+        if msg_type not in {"position_update", "status"}:
+            await self.send_json({"type": "error", "error": "unsupported_type"})
+            return
 
-        elif content.get("type") == "action":
-            if not self.is_driver:
+        if not self.is_driver:
+            await self.send_json({"type": "error", "error": "forbidden"})
+            return
+
+        if msg_type == "position_update":
+            try:
+                lat = float(content["lat"])
+                lng = float(content["lng"])
+            except Exception:
+                await self.send_json({"type": "error", "error": "bad_position"})
                 return
-            action = content.get("action")
-            new_status = None
-            fields = {}
-            now = timezone.now()
-            if action == "picked_up":
-                new_status = Delivery.Status.PICKED_UP
-                fields["picked_up_at"] = now
-            elif action == "delivered":
-                new_status = Delivery.Status.DELIVERED
-                fields["delivered_at"] = now
-            else:
-                return
-            await self._set_status(new_status, fields)
+
+            # Broadcast standard event schema
             await self.channel_layer.group_send(
                 self.group,
-                {"type": "broadcast", "data": {
-                    "event": "status",
-                    "delivery_id": self.delivery_id,
-                    "status": new_status
-                }}
+                {"type": "broadcast", "payload": {"type": "position_update", "lat": lat, "lng": lng}},
             )
-            await self.send_json({"ok": True})
+
+            now = time.time()
+            key = _throttle_key(self.delivery_id, self.user.id)
+            last = cache.get(key)
+            if not last or (now - last) >= THROTTLE_SECONDS:
+                cache.set(key, now, timeout=THROTTLE_SECONDS)
+                await self._save_position(self.delivery_id, lat, lng)
+
+        else:  # status update
+            status = content.get("status")
+            if status not in {s[0] for s in Delivery.Status.choices}:
+                await self.send_json({"type": "error", "error": "bad_status"})
+                return
+
+            await self._update_status(self.delivery_id, status)
+
+            await self.channel_layer.group_send(
+                self.group,
+                {"type": "broadcast", "payload": {"type": "status", "status": status}},
+            )
 
     async def broadcast(self, event):
-        await self.send_json(event.get("data", {}))
+        await self.send_json(event["payload"])
 
-    # --- DB helpers (sync -> async) ---
+    # --- DB helpers ---
     @database_sync_to_async
-    def _get_delivery(self):
+    def _get_delivery(self, delivery_id):
         try:
-            return Delivery.objects.select_related("order").get(pk=self.delivery_id)
+            return Delivery.objects.select_related("order").get(pk=delivery_id)
         except Delivery.DoesNotExist:
             return None
 
     @database_sync_to_async
-    def _save_ping(self, lat: Decimal, lng: Decimal):
-        d = Delivery.objects.get(pk=self.delivery_id)
-        d.last_lat = lat
-        d.last_lng = lng
-        d.last_ping_at = timezone.now()
-        d.save(update_fields=["last_lat","last_lng","last_ping_at","updated_at"])
+    def _user_can_view(self, user, delivery):
+        return (
+            user.is_staff
+            or user.id == delivery.order.user_id
+            or user.id == delivery.driver_id
+        )
 
     @database_sync_to_async
-    def _set_status(self, status, extra_fields: dict):
-        Delivery.objects.filter(pk=self.delivery_id).update(status=status, updated_at=timezone.now(), **extra_fields)
+    def _save_position(self, delivery_id, lat, lng):
+        Delivery.objects.filter(pk=delivery_id).update(
+            last_lat=lat,
+            last_lng=lng,
+            last_ping_at=timezone.now(),
+            updated_at=timezone.now(),
+        )
+
+    @database_sync_to_async
+    def _update_status(self, delivery_id, status):
+        Delivery.objects.filter(pk=delivery_id).update(
+            status=status,
+            updated_at=timezone.now(),
+        )
+

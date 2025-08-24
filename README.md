@@ -15,11 +15,20 @@ python manage.py assign_warehouses_to_items
 Quick manual test from the browser console:
 
 ```javascript
-const ws = new WebSocket('ws://127.0.0.1:8000/ws/track/ORDER_ID/ITEM_ID/');
+const ws = new WebSocket('ws://127.0.0.1:8000/ws/delivery/track/DELIVERY_ID/');
 ws.onmessage = (e) => console.log(JSON.parse(e.data));
 ```
 
-Replace `ORDER_ID` and `ITEM_ID` with real identifiers.
+Replace `DELIVERY_ID` with a real identifier.
+
+Messages follow a unified schema:
+
+```
+{"type": "position_update", "lat": 1.23, "lng": 4.56}
+{"type": "status", "status": "EN_ROUTE"}
+```
+
+Redis (set via `REDIS_URL`) powers the channel layer and cache; configure it in production with password/SSL as needed.
 
 ## Geoapify setup
 
