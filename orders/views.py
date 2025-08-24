@@ -1088,7 +1088,7 @@ def track_order(request, order_id: int):
         "apiKey": settings.GEOAPIFY_API_KEY,
         "warehouse": warehouse,
         "destination": {"lat": float(order.dest_lat), "lng": float(order.dest_lng)},
-        "wsUrl": f"/ws/deliveries/{delivery.id}/" if delivery else "",
+        "wsUrl": f"/ws/delivery/track/{delivery.id}/" if delivery else "",
     }
     route_ctx_json = json.dumps(route_ctx)
     return render(

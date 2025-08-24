@@ -5,9 +5,10 @@
 
   const wsUrl =
     (window.route_ctx && window.route_ctx.wsUrl) ||
-    (location.origin.replace(/^http/, "ws") + `/ws/deliveries/${deliveryId}/`);
+    (location.origin.replace(/^http/, "ws") + `/ws/delivery/track/${deliveryId}/`);
 
-  let ws, retry = 0, reconnectTimer;
+  let ws,
+    retry = 0; // reconnection backoff counter
 
   function updateMarker(lat, lng) {
     // TODO: hook into your map lib; fallback: log
@@ -30,33 +31,36 @@
 
   function connect() {
     ws = new WebSocket(wsUrl);
-    ws.onopen = () => { retry = 0; console.log("WS connected", wsUrl); };
+    ws.onopen = () => {
+      retry = 0;
+      console.log("WS connected", wsUrl);
+    };
+    ws.onerror = (e) => console.error("WS error", e);
     ws.onmessage = (ev) => {
-      let data = {};
-      try { data = JSON.parse(ev.data || "{}"); } catch { return; }
-      switch (data.event) {
-        case "position": updateMarker(data.lat, data.lng); break;
-        case "status": updateStatus(data.status); break;
-        case "assign": toast("Driver assigned"); break;
-        case "unassign": toast("Driver unassigned"); break;
-        case "accept": toast("Driver accepted"); break;
-        default: /* ignore */ break;
+      let data;
+      try {
+        data = JSON.parse(ev.data || "{}");
+      } catch {
+        return;
+      }
+      if (data.type === "position_update") {
+        updateMarker(data.lat, data.lng);
+      } else if (data.type === "status") {
+        updateStatus(data.status);
       }
     };
     ws.onclose = () => {
-      const delay = Math.min(30000, 1000 * Math.pow(2, retry++));
-      clearTimeout(reconnectTimer);
-      reconnectTimer = setTimeout(connect, delay);
+      const delay = Math.min(10000, 1000 * 2 ** retry++); // exp. backoff up to 10s
+      setTimeout(connect, delay);
     };
-    ws.onerror = () => { try { ws.close(); } catch {} };
   }
 
   connect();
 
   // Optional: export a way to send pings if this page runs on the driver side
-  window.sendDriverPing = function (lat, lng) {
-    if (ws && ws.readyState === 1) {
-      ws.send(JSON.stringify({ type: "ping", lat, lng }));
+  window.sendDriverPosition = function (lat, lng) {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: "position_update", lat, lng }));
     }
   };
 })();
