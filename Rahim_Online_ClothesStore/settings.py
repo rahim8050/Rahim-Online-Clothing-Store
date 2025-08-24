@@ -133,16 +133,28 @@ DATABASES = {
 }
 
 # -------------------------- Channels --------------------------
-REDIS_URL = env("REDIS_URL", default=None)
+REDIS_URL = env("REDIS_URL", default="redis://127.0.0.1:6379/0")
+REDIS_SSL = REDIS_URL.startswith("rediss://")
+
 CHANNEL_LAYERS = {
-    "default": (
-        {
-            "BACKEND": "channels_redis.core.RedisChannelLayer",
-            "CONFIG": {"hosts": [REDIS_URL]},
-        }
-        if REDIS_URL
-        else {"BACKEND": "channels.layers.InMemoryChannelLayer"}
-    )
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": [REDIS_URL],
+            "ssl": REDIS_SSL,
+        },
+    }
+}
+
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.redis.RedisCache",
+        "LOCATION": REDIS_URL,
+        "TIMEOUT": None,
+        "OPTIONS": {
+            "ssl": REDIS_SSL,
+        },
+    }
 }
 
 # ------------------------- Auth / API -------------------------
