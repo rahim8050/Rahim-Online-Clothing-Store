@@ -70,12 +70,15 @@ class DeliveryConsumer(AsyncJsonWebsocketConsumer):
             lat, lng = content.get("lat"), content.get("lng")
             if not _valid_latlng(lat, lng):
                 await self.send_json({"type": "error", "error": "bad_position"}); return
+            lat_f, lng_f = float(lat), float(lng)
 
             # Broadcast to watchers (customer/vendor/driver)
             await self.channel_layer.group_send(
                 self.group,
-                {"type": "broadcast", "payload": {"type": "position_update", "lat": float(lat), "lng": float(lng)}},
+                {"type": "broadcast", "payload": {"type": "position_update", "lat": lat_f, "lng": lng_f}},
             )
+            # Echo back to sender immediately
+            await self.send_json({"type": "position_update", "lat": lat_f, "lng": lng_f})
 
             # Throttled DB persist
             now = time.time()
@@ -83,7 +86,7 @@ class DeliveryConsumer(AsyncJsonWebsocketConsumer):
             last = cache.get(key)
             if not last or (now - last) >= THROTTLE_SECONDS:
                 cache.set(key, now, timeout=THROTTLE_SECONDS)
-                await self._save_position(self.delivery_id, _q6(lat), _q6(lng))
+                await self._save_position(self.delivery_id, _q6(lat_f), _q6(lng_f))
             return
 
         if msg_type in {"action", "status"}:
