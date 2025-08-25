@@ -86,8 +86,8 @@ def driver_deliveries_api(request):
         "id": d.id,
         "order_id": d.order_id,
         "status": d.status,
-        "dest_lat": float(d.dest_lat) if d.dest_lat is not None else None,
-        "dest_lng": float(d.dest_lng) if d.dest_lng is not None else None,
+        "dest_lat": float(d.order.latitude) if d.order.latitude is not None else None,
+        "dest_lng": float(d.order.longitude) if d.order.longitude is not None else None,
         "last_lat": float(d.last_lat) if d.last_lat is not None else None,
         "last_lng": float(d.last_lng) if d.last_lng is not None else None,
         "last_ping_at": d.last_ping_at.isoformat() if d.last_ping_at else None,
@@ -182,8 +182,22 @@ def _cache_get(k: str):
 def _cache_set(k: str, payload: dict):
     _ROUTE_CACHE[k] = (time.time(), payload)
 
-def _to_latlng(coords):
-    # GeoJSON style [lng, lat] -> Leaflet style [lat, lng]
+def _to_latlng(coords, ref=None):
+    """Ensure coords are returned as [lat, lng].
+
+    Providers may return GeoJSON style [lng, lat]. When ``ref`` (start
+    coordinate) is provided, choose the orientation that is closest to the
+    reference to avoid double-flipping.
+    """
+    if not coords:
+        return []
+    if ref is not None:
+        first = coords[0]
+        as_is = _haversine_km(first[0], first[1], ref[0], ref[1])
+        flipped = _haversine_km(first[1], first[0], ref[0], ref[1])
+        if flipped < as_is:
+            return [[c[1], c[0]] for c in coords]
+        return [[c[0], c[1]] for c in coords]
     return [[c[1], c[0]] for c in coords]
 
 def _haversine_km(a_lat, a_lng, b_lat, b_lng):
@@ -210,11 +224,11 @@ def _geoapify_route(a_lat, a_lng, b_lat, b_lng, api_key: str):
     coords = feat["geometry"]["coordinates"]
     # LineString or MultiLineString
     if isinstance(coords[0][0], (int, float)):
-        coords_ll = _to_latlng(coords)
+        coords_ll = _to_latlng(coords, (a_lat, a_lng))
     else:
         # MultiLineString -> flatten
         flat = [p for part in coords for p in part]
-        coords_ll = _to_latlng(flat)
+        coords_ll = _to_latlng(flat, (a_lat, a_lng))
 
     props = feat.get("properties", {})
     dist_km = (props.get("distance", 0) or 0) / 1000.0
@@ -232,7 +246,7 @@ def _osrm_route(a_lat, a_lng, b_lat, b_lng):
     if not route:
         raise ValueError("osrm: no route")
     coords = route["geometry"]["coordinates"]
-    coords_ll = _to_latlng(coords)
+    coords_ll = _to_latlng(coords, (a_lat, a_lng))
     dist_km = (route.get("distance", 0) or 0) / 1000.0
     dur_min = (route.get("duration", 0) or 0) / 60.0
     return {"coords": coords_ll, "distance_km": dist_km, "duration_min": dur_min}
@@ -278,7 +292,8 @@ def driver_route_api(request, delivery_id: int):
         payload = {"coords": [[a_lat, a_lng], [b_lat, b_lng]],
                    "distance_km": _haversine_km(a_lat, a_lng, b_lat, b_lng),
                    "duration_min": None}
-
+    coords = payload.get("coords") or []
+    payload["coords"] = _to_latlng(coords, (a_lat, a_lng)) if coords else []
     _cache_set(key, payload)
     return JsonResponse(payload)
 
