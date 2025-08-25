@@ -175,7 +175,7 @@ def get_cart_data(request):
                     'id': item.product.id,
                     'name': item.product.name,
                     'description': item.product.description,
-                    'price': float(item.product.price),
+                    'price': str(item.product.price),  # Convert Decimal to string for JSON serialization
                     'image_url': item.product.image.url if item.product.image else '',
                     'detail_url': item.product.get_absolute_url(),  
                 },

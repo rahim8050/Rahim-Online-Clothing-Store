@@ -251,51 +251,60 @@ class DeliveryStatusAPI(APIView):
         )
 
 
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from django.shortcuts import get_object_or_404
+from django.utils import timezone
+
+Q6 = Decimal("0.000001")
+
+def _q6(x) -> Decimal:
+    # Robust: handle strings/numbers, avoid binary float issues
+    return Decimal(str(x)).quantize(Q6, rounding=ROUND_HALF_UP)
+
 class DriverLocationAPI(APIView):
     permission_classes = [IsAuthenticated, InGroups]
     required_groups = [DRIVER]
 
     def post(self, request):
-        # Expect: {"delivery_id": int, "lat": float, "lng": float}
+        # Expect: {"delivery_id": int, "lat": number|string, "lng": number|string}
         delivery_id = request.data.get("delivery_id")
         try:
             delivery_id = int(delivery_id)
         except (TypeError, ValueError):
-            return Response(
-                {"detail": "delivery_id required (int)"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return Response({"detail": "delivery_id required (int)"},
+                            status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            lat = float(request.data.get("lat"))
-            lng = float(request.data.get("lng"))
-        except (TypeError, ValueError):
-            return Response(
-                {"detail": "lat/lng must be numbers"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            lat = _q6(request.data.get("lat"))
+            lng = _q6(request.data.get("lng"))
+        except (InvalidOperation, TypeError, ValueError):
+            return Response({"detail": "lat/lng must be numeric"},
+                            status=status.HTTP_400_BAD_REQUEST)
 
-        if not (-90.0 <= lat <= 90.0 and -180.0 <= lng <= 180.0):
-            return Response(
-                {"detail": "lat/lng out of range"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        if not (Decimal("-90") <= lat <= Decimal("90") and
+                Decimal("-180") <= lng <= Decimal("180")):
+            return Response({"detail": "lat/lng out of range"},
+                            status=status.HTTP_400_BAD_REQUEST)
 
         delivery = get_object_or_404(Delivery, pk=delivery_id, driver=request.user)
 
-        # Persist
+        # Persist (keep as Decimal to match DecimalFields)
+        now = timezone.now()
         delivery.last_lat = lat
         delivery.last_lng = lng
-        delivery.last_ping_at = timezone.now()
-        delivery.save(update_fields=["last_lat", "last_lng", "last_ping_at"])
+        delivery.last_ping_at = now
+        delivery.save(update_fields=["last_lat", "last_lng", "last_ping_at", "updated_at"])
 
-        # Publish to WS (generic bridge)
+        # Publish to WebSocket — use the canonical event name your consumer expects
         _publish_delivery(
             delivery,
-            "position",
-            {"lat": lat, "lng": lng, "ts": delivery.last_ping_at.isoformat()},
+            "position_update",                            # <- was "position"
+            {"lat": float(lat), "lng": float(lng), "ts": now.isoformat()}  # floats OK for JSON payload
         )
-        return Response({"ok": True})
+        return Response({"ok": True, "status": "updated", "ts": now.isoformat()})
 
 
 class VendorProductCreateAPI(CreateAPIView):
