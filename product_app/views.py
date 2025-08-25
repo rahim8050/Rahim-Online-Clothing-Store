@@ -33,7 +33,7 @@ def product_list(request, category_slug=None):
             'id': product.id,
             'name': product.name,
             'description': product.description,
-            'price': float(product.price),
+            'price': str(product.price),
             'image_url': product.image.url if product.image else '',
             'category_slug': product.category.slug if product.category else '',
             'detail_url': product.get_absolute_url()
