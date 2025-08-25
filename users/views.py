@@ -347,3 +347,42 @@ def driver_dashboard(request):
     deliveries = Delivery.objects.filter(driver=u).select_related("order") if Delivery else []
 
     return render(request, "dash/driver.html", {"deliveries": deliveries})
+
+from django.shortcuts import render, get_object_or_404
+from orders.models import Delivery
+def driver_sim(request):
+    ctx = {}
+    # If you pass ?delivery=16 in the URL, prefill from DB
+    delivery_id = request.GET.get("delivery")
+    if delivery_id:
+        d = get_object_or_404(Delivery, pk=delivery_id)
+        # Example fields—adapt to your model
+        if getattr(d, "warehouse", None):
+            ctx["start_lat"] = d.warehouse.latitude
+            ctx["start_lng"] = d.warehouse.longitude
+        if getattr(d, "order", None):
+            ctx["dest_lat"] = getattr(d.order, "latitude", None)
+            ctx["dest_lng"] = getattr(d.order, "longitude", None)
+        ctx["delivery_id"] = d.id
+    return render(request, "users/accounts/driver_sim.html", ctx)
+
+
+
+
+
+from django.contrib.auth.decorators import login_required
+from django.shortcuts import render
+from django.apps import apps
+
+Delivery = apps.get_model('orders', 'Delivery')  # adjust app label if different
+
+@login_required
+def driver_live(request, delivery_id: int):
+    # TODO: enforce driver role/ownership if you have roles
+    d = Delivery.objects.select_related("order").get(pk=delivery_id)
+    ctx = {
+        "delivery_id": d.id,
+        "start_lat": getattr(d, "last_lat", None) or getattr(getattr(d, "warehouse", None), "latitude", None),
+        "start_lng": getattr(d, "last_lng", None) or getattr(getattr(d, "warehouse", None), "longitude", None),
+    }
+    return render(request, "users/accoonts/driver_live.html", ctx)

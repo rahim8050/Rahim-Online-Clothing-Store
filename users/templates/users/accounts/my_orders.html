@@ -4,53 +4,91 @@
 
 {% block content %}
 <div class="max-w-4xl mx-auto px-4 py-6">
-    <h1 class="text-3xl font-bold text-blue-600 mb-4">My Orders</h1>
+  <h1 class="text-3xl font-bold text-blue-600 mb-4">My Orders</h1>
 
-    {% if orders %}
-        <div class="space-y-4">
-            {% for order in orders %}
-                <div class="border rounded-lg p-4 shadow-sm">
-                    <p><span class="font-semibold">Order ID:</span> {{ order.id }}</p>
-                    <p><span class="font-semibold">Placed on:</span> {{ order.created_at|date:"Y-m-d H:i" }}</p>
-                    <p><span class="font-semibold">Status:</span>
-                        {% if order.paid %}
-                            {% if order.last_tx and order.last_tx.callback_received %}
-                                <span class="text-green-600 font-medium">Paid (verified)</span>
-                            {% else %}
-                                <span class="text-yellow-600 font-medium">Paid (awaiting confirmation)</span>
-                            {% endif %}
-                        {% else %}
-                            <span class="text-red-500 font-medium">Awaiting Payment</span>
-                        {% endif %}
-                    </p>
-                    <p><span class="font-semibold">Address:</span> {{ order.address }}</p>
+  {% if orders %}
+    <div class="space-y-4">
+      {% for order in orders %}
+        <div class="border rounded-lg p-4 shadow-sm">
+          <p><span class="font-semibold">Order ID:</span> {{ order.id }}</p>
+          <p><span class="font-semibold">Placed on:</span> {{ order.created_at|date:"Y-m-d H:i" }}</p>
 
-                    {% for item in order.items.all %}
-                        <div class="border rounded p-2 mt-2">
-                            <p>{{ item.quantity }} x {{ item.product.name }}</p>
-                            <p class="text-sm">Delivery status: {{ item.delivery_status }}</p>
-                            <button class="track-item-btn" data-delivery-id="{{ order.deliveries.first.id }}" data-order-id="{{ order.id }}" data-item-id="{{ item.id }}" data-clat="{{ order.latitude|default_if_none:'' }}" data-clng="{{ order.longitude|default_if_none:'' }}" data-whlat="{{ item.warehouse.latitude|default_if_none:'' }}" data-whlng="{{ item.warehouse.longitude|default_if_none:'' }}">Track</button>
-                            <div id="map-{{ order.id }}-{{ item.id }}" class="w-full h-64 rounded hidden"></div>
-                        </div>
-                    {% endfor %}
-                </div>
-            {% endfor %}
+          <p><span class="font-semibold">Status:</span>
+            {% if order.paid %}
+              {% if order.last_tx and order.last_tx.callback_received %}
+                <span class="text-green-600 font-medium">Paid (verified)</span>
+              {% else %}
+                <span class="text-yellow-600 font-medium">Paid (awaiting confirmation)</span>
+              {% endif %}
+            {% else %}
+              <span class="text-red-500 font-medium">Awaiting Payment</span>
+            {% endif %}
+          </p>
+
+          <p><span class="font-semibold">Address:</span> {{ order.address }}</p>
+{% with dlv=order.deliveries.first %}
+  {% for item in order.items.all %}
+    <div class="border rounded p-2 mt-2">
+      <p>{{ item.quantity }} × {{ item.product.name }}</p>
+
+      {% if item.delivery %}
+        {% with cur=item.delivery %}
+          <p class="text-sm">Delivery status: {{ cur.get_status_display }}</p>
+          <button
+            class="track-item-btn px-3 py-1 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+            data-delivery-id="{{ cur.id }}"
+            data-order-id="{{ order.id }}"
+            data-item-id="{{ item.id }}"
+            data-clat="{{ order.latitude|default_if_none:'' }}"
+            data-clng="{{ order.longitude|default_if_none:'' }}"
+            data-whlat="{{ item.warehouse.latitude|default_if_none:'' }}"
+            data-whlng="{{ item.warehouse.longitude|default_if_none:'' }}"
+          >Track</button>
+        {% endwith %}
+      {% elif dlv %}
+        {% with cur=dlv %}
+          <p class="text-sm">Delivery status: {{ cur.get_status_display }}</p>
+          <button
+            class="track-item-btn px-3 py-1 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+            data-delivery-id="{{ cur.id }}"
+            data-order-id="{{ order.id }}"
+            data-item-id="{{ item.id }}"
+            data-clat="{{ order.latitude|default_if_none:'' }}"
+            data-clng="{{ order.longitude|default_if_none:'' }}"
+            data-whlat="{{ item.warehouse.latitude|default_if_none:'' }}"
+            data-whlng="{{ item.warehouse.longitude|default_if_none:'' }}"
+          >Track</button>
+        {% endwith %}
+      {% else %}
+        <p class="text-sm">Delivery status: not assigned</p>
+        <button class="px-3 py-1 rounded bg-gray-300 text-gray-700 cursor-not-allowed" disabled>Track</button>
+      {% endif %}
+
+      <div id="map-{{ order.id }}-{{ item.id }}" class="w-full h-64 rounded hidden mt-2"></div>
+      <div id="note-{{ order.id }}-{{ item.id }}" class="text-sm text-gray-500 mt-1"></div>
+    </div>
+  {% endfor %}
+{% endwith %}
+
+
         </div>
-    {% else %}
-        <p class="text-gray-500">You have no orders yet.</p>
-    {% endif %}
+      {% endfor %}
+    </div>
+  {% else %}
+    <p class="text-gray-500">You have no orders yet.</p>
+  {% endif %}
 </div>
 {% endblock %}
 
 {% block extra_js %}
-<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css">
-<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet/dist/leaflet.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js" defer></script>
 
 <script>
 (function () {
   const wsScheme = location.protocol === 'https:' ? 'wss' : 'ws';
-  const TICK_SNAP_NEAREST_EVERY = 5; // when no route, snap to nearest road every 5 ticks
+  const TICK_SNAP_NEAREST_EVERY = 5;
 
   const toNum = (v) => {
     const n = Number(v);
@@ -58,19 +96,15 @@
   };
 
   async function fetchRoute(start, dest) {
-    // start/dest: [lat,lng]
-    const url =
-      `https://router.project-osrm.org/route/v1/driving/${start[1]},${start[0]};${dest[1]},${dest[0]}?overview=full&geometries=geojson`;
+    const url = `https://router.project-osrm.org/route/v1/driving/${start[1]},${start[0]};${dest[1]},${dest[0]}?overview=full&geometries=geojson`;
     const r = await fetch(url);
     const j = await r.json();
-    if (j.code !== 'Ok') throw new Error('route_failed');
+    if (j.code !== 'Ok' || !j.routes?.[0]?.geometry) throw new Error('route_failed');
     return j.routes[0].geometry; // GeoJSON LineString
   }
 
   async function nearestRoad(pos) {
-    // pos: [lat,lng]
-    const url =
-      `https://router.project-osrm.org/nearest/v1/driving/${pos[1]},${pos[0]}?number=1`;
+    const url = `https://router.project-osrm.org/nearest/v1/driving/${pos[1]},${pos[0]}?number=1`;
     const r = await fetch(url);
     const j = await r.json();
     const loc = j.waypoints && j.waypoints[0] && j.waypoints[0].location;
@@ -78,7 +112,6 @@
   }
 
   function snapToRoute(geoLine, pos) {
-    // geoLine: GeoJSON LineString, pos: [lat,lng]
     const pt = turf.point([pos[1], pos[0]]);
     const snapped = turf.nearestPointOnLine(geoLine, pt);
     const [lng, lat] = snapped.geometry.coordinates;
@@ -105,13 +138,14 @@
 
     const orderId = btn.dataset.orderId;
     const itemId  = btn.dataset.itemId;
+    const deliveryId = btn.dataset.deliveryId;
+    if (!deliveryId) return;
 
-    // destination (order/customer)
     const dest = [toNum(btn.dataset.clat), toNum(btn.dataset.clng)];
-    // start (warehouse)
     const start = [toNum(btn.dataset.whlat), toNum(btn.dataset.whlng)];
 
-    const mapDiv = document.getElementById(`map-${orderId}-${itemId}`);
+    const mapDiv  = document.getElementById(`map-${orderId}-${itemId}`);
+    const noteDiv = document.getElementById(`note-${orderId}-${itemId}`);
     if (!mapDiv) return;
 
     mapDiv.classList.remove('hidden');
@@ -142,9 +176,9 @@
       else mapDiv._destMarker.setLatLng(destLL);
     }
 
-    // Fit view
+    // Fit view safely
     if (startLL && destLL) {
-      map.fitBounds(L.latLngBounds(startLL, destLL), { padding: [24, 24] });
+      map.fitBounds(L.latLngBounds([startLL, destLL]), { padding: [24, 24] });
     } else if (startLL) {
       map.setView(startLL, 14);
     }
@@ -158,20 +192,17 @@
         if (mapDiv._routeLayer) map.removeLayer(mapDiv._routeLayer);
         mapDiv._routeLayer = L.geoJSON(geo, { weight: 3, dashArray: '4,6' }).addTo(map);
         map.fitBounds(mapDiv._routeLayer.getBounds(), { padding: [24, 24] });
+        if (noteDiv) noteDiv.textContent = '';
       } catch (err) {
+        if (noteDiv) noteDiv.textContent = 'Could not fetch route; showing live trail only.';
         console.warn('Route fetch failed', err);
       }
-    } else if (!destLL && !mapDiv._noDestMsg) {
-      // Informative message for missing destination
-      const note = document.createElement('div');
-      note.textContent = 'Destination not set — showing live trail only.';
-      note.className = 'text-sm text-gray-500 mb-1';
-      mapDiv.parentNode.insertBefore(note, mapDiv);
+    } else if (!destLL && noteDiv && !mapDiv._noDestMsg) {
+      noteDiv.textContent = 'Destination not set — showing live trail only.';
       mapDiv._noDestMsg = true;
     }
 
     // Open WebSocket
-    const deliveryId = btn.dataset.deliveryId;
     const ws = new WebSocket(`${wsScheme}://${location.host}/ws/delivery/track/${deliveryId}/`);
     mapDiv._ws = ws;
 
@@ -184,7 +215,6 @@
         let pos = [toNum(d.lat), toNum(d.lng)];
         if (pos[0] === null || pos[1] === null) return;
 
-        // Snap live position
         if (mapDiv._route) {
           pos = snapToRoute(mapDiv._route, pos);
         } else if ((++tick % TICK_SNAP_NEAREST_EVERY) === 0) {
@@ -197,18 +227,26 @@
           mapDiv._liveMarker.setLatLng(pos);
         }
 
-        // Gentle pan, avoid jitter
         const c = map.getCenter();
         if (c.distanceTo(L.latLng(pos)) > 30) map.panTo(pos, { animate: true });
       } catch (_) {}
     };
 
     ws.onclose = (e) => {
-      if (e.code >= 4000) {
-        mapDiv.textContent = `${e.code}: socket closed`;
+      if (e.code >= 4000 && noteDiv) {
+        noteDiv.textContent = `${e.code}: socket closed`;
       }
       console.log('WS CLOSE', e.code);
     };
+  });
+
+  // Cleanup on page unload
+  window.addEventListener('beforeunload', () => {
+    document.querySelectorAll('[id^="map-"]').forEach(div => {
+      if (div._ws && div._ws.readyState === WebSocket.OPEN) {
+        try { div._ws.close(1001, 'page_unload'); } catch {}
+      }
+    });
   });
 })();
 </script>

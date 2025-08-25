@@ -158,6 +158,10 @@ import requests
 from django.conf import settings
 from django.http import JsonResponse
 from .models import Delivery
+Q2 = Decimal("0.01")
+def q2(x):
+    x = x if isinstance(x, Decimal) else Decimal(str(x))
+    return x.quantize(Q2, rounding=ROUND_HALF_UP)
 
 # very small in-memory cache to avoid spam (per process)
 _ROUTE_CACHE: dict[str, tuple[float, dict]] = {}
@@ -477,75 +481,68 @@ def get_location_info(request):
     data = reverse_geocode(lat, lon)
     return JsonResponse(data)
 
+
+
+from orders.services.totals import safe_order_total   
+from orders.money import to_minor_units
+
 @require_http_methods(["GET", "POST"])
 def paystack_checkout(request, order_id):
-    """Initialize a Paystack transaction for card or M-Pesa."""
     order = get_object_or_404(Order, id=order_id)
 
-    # Try to fetch payment method from GET or POST
     payment_method = request.GET.get("payment_method") or request.POST.get("payment_method")
     if payment_method not in {"card", "mpesa"}:
         messages.error(request, "Invalid payment method")
         return redirect("orders:order_confirmation", order.id)
 
-    # Choose Paystack channel
     channel = "card" if payment_method == "card" else "mobile_money"
-
-    # Build email (fallback to user's email)
-    payer_email = order.email or (order.user.email if hasattr(order.user, "email") else None)
+    payer_email = order.email or getattr(order.user, "email", None)
     if not payer_email:
         messages.error(request, "No valid email found for Paystack checkout.")
         return redirect("orders:order_confirmation", order.id)
 
-    # Prepare Paystack API payload
+    # ✅ pure Decimal, no floats
+    total_dec = safe_order_total(order)
+
     headers = {"Authorization": f"Bearer {settings.PAYSTACK_SECRET_KEY}"}
     data = {
         "email": payer_email,
-        "amount": int(order.get_total_cost()) * 100,
-        "callback_url": request.build_absolute_uri(
-            reverse("orders:paystack_payment_confirm")
-        ),
-        "metadata": {"order_id": order.id},
+        "amount": to_minor_units(total_dec),   # ✅ integer minor units
+        "currency": getattr(settings, "PAYSTACK_CURRENCY", "KES"),
+        "callback_url": request.build_absolute_uri(reverse("orders:paystack_payment_confirm")),
+        "metadata": {"order_id": order.id, "payment_method": payment_method},
         "channels": [channel],
     }
 
     try:
-        response = requests.post(
-            "https://api.paystack.co/transaction/initialize",
-            json=data,
-            headers=headers,
-            timeout=30,
-        )
+        response = requests.post("https://api.paystack.co/transaction/initialize",
+                                 json=data, headers=headers, timeout=30)
         res_data = response.json()
-
-        # Fail gracefully if Paystack rejects the request
         if not response.ok or "data" not in res_data:
             print("💥 Paystack Init Failure:", res_data)
             raise Exception("Invalid Paystack response")
 
-        # Extract redirect URL and reference
-        auth_url = res_data["data"]["authorization_url"]
+        auth_url  = res_data["data"]["authorization_url"]
         reference = res_data["data"]["reference"]
 
-        # Save transaction with default 'unknown' status
         Transaction.objects.create(
             user=order.user,
             order=order,
-            amount=order.get_total_cost(),
+            amount=total_dec,            # ✅ keep Decimal in DB
             method=payment_method,
             gateway="paystack",
-            status="unknown",  # ✅ model now defaults to this
+            status="unknown",
             reference=reference,
-            email=payer_email
+            email=payer_email,
         )
-
         return redirect(auth_url)
 
     except Exception as e:
         print("🔥 Paystack Init Error:", e)
         messages.error(request, "Unable to initialize Paystack payment.")
+        return redirect("orders:order_confirmation", order.id)
 
-    return redirect("orders:order_confirmation", order.id)
+
 
 
 def stripe_checkout(request, order_id):

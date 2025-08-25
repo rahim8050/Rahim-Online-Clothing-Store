@@ -133,30 +133,34 @@ DATABASES = {
 }
 
 # -------------------------- Channels --------------------------
-REDIS_URL = env("REDIS_URL", default="redis://127.0.0.1:6379/0")
-REDIS_SSL = REDIS_URL.startswith("rediss://")
+# REDIS_URL = env("REDIS_URL", default="redis://127.0.0.1:6379/0")
+# REDIS_SSL = REDIS_URL.startswith("rediss://")
 
+# CHANNEL_LAYERS = {
+#     "default": {
+#         "BACKEND": "channels_redis.core.RedisChannelLayer",
+#         "CONFIG": {
+#             "hosts": [REDIS_URL],
+#             "ssl": REDIS_SSL,
+#         },
+#     }
+# }
+
+# CACHES = {
+#     "default": {
+#         "BACKEND": "django.core.cache.backends.redis.RedisCache",
+#         "LOCATION": REDIS_URL,
+#         "TIMEOUT": None,
+#         "OPTIONS": {
+#             "ssl": REDIS_SSL,
+#         },
+#     }
+# }
 CHANNEL_LAYERS = {
     "default": {
-        "BACKEND": "channels_redis.core.RedisChannelLayer",
-        "CONFIG": {
-            "hosts": [REDIS_URL],
-            "ssl": REDIS_SSL,
-        },
+        "BACKEND": "channels.layers.InMemoryChannelLayer",
     }
 }
-
-CACHES = {
-    "default": {
-        "BACKEND": "django.core.cache.backends.redis.RedisCache",
-        "LOCATION": REDIS_URL,
-        "TIMEOUT": None,
-        "OPTIONS": {
-            "ssl": REDIS_SSL,
-        },
-    }
-}
-
 # ------------------------- Auth / API -------------------------
 REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],

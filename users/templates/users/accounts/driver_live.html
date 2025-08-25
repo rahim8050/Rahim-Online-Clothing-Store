@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}Driver Live{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto p-4 space-y-3">
+  <h1 class="text-2xl font-bold">Driver Live — Delivery #{{ delivery_id }}</h1>
+
+  <div class="flex items-center gap-2">
+    <button id="btn-start" class="px-3 py-1.5 rounded bg-blue-600 text-white">Go Live</button>
+    <button id="btn-stop"  class="px-3 py-1.5 rounded bg-gray-600 text-white">Stop</button>
+    <span id="status" class="text-sm text-gray-600"></span>
+  </div>
+
+  <div id="map" class="w-full h-80 rounded border"></div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script>
+(function(){
+  const deliveryId = {{ delivery_id }};
+  const statusEl = document.getElementById('status');
+
+  let ws, watchId, map, liveMarker;
+
+  function setStatus(msg){ statusEl.textContent = msg; }
+  function ensureMap() {
+    if (map) return map;
+    map = L.map('map').setView([{{ start_lat|default:-1.286389 }}, {{ start_lng|default:36.817223 }}], 13);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom: 19}).addTo(map);
+    return map;
+  }
+  function openWS() {
+    const wsScheme = location.protocol === 'https:' ? 'wss' : 'ws';
+    ws = new WebSocket(`${wsScheme}://${location.host}/ws/delivery/track/${deliveryId}/`);
+    ws.onopen  = () => setStatus('WS connected');
+    ws.onclose = (e) => setStatus(`WS closed (${e.code})`);
+    ws.onerror = () => setStatus('WS error');
+  }
+  function send(lat, lng) {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'position_update', lat, lng }));
+    }
+  }
+
+  function start() {
+    // Geolocation requires HTTPS on phones (except localhost). Warn if not secure.
+    const isLocal = ['localhost', '127.0.0.1'].includes(location.hostname);
+    if (location.protocol !== 'https:' && !isLocal) {
+      setStatus('Use HTTPS (ngrok/tunnel) for geolocation on mobile.');
+    }
+
+    openWS();
+    const m = ensureMap();
+
+    if (!('geolocation' in navigator)) { setStatus('Geolocation not supported'); return; }
+
+    watchId = navigator.geolocation.watchPosition(
+      (pos) => {
+        const { latitude: lat, longitude: lng } = pos.coords;
+
+        if (!liveMarker) {
+          liveMarker = L.marker([lat, lng]).addTo(m).bindTooltip('You');
+        } else {
+          liveMarker.setLatLng([lat, lng]);
+        }
+        m.panTo([lat, lng], { animate: true });
+
+        send(lat, lng);
+      },
+      (err) => {
+        setStatus('Location error: ' + err.message);
+      },
+      { enableHighAccuracy: true, maximumAge: 1000, timeout: 20000 }
+    );
+
+    setStatus('Live… move the phone to update.');
+  }
+
+  function stop() {
+    if (watchId) { navigator.geolocation.clearWatch(watchId); watchId = null; }
+    if (ws && ws.readyState === WebSocket.OPEN) { try { ws.close(1000, 'stop'); } catch{} }
+    setStatus('Stopped.');
+  }
+
+  document.getElementById('btn-start').addEventListener('click', start);
+  document.getElementById('btn-stop').addEventListener('click', stop);
+
+  window.addEventListener('beforeunload', stop);
+})();
+</script>
+{% endblock %}
