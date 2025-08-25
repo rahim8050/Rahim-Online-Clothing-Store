@@ -14,6 +14,8 @@ from users.views import (
     after_login,
     VendorApplyAPI,
     VendorApplicationApproveAPI,
+    driver_sim,
+    driver_live,
 )
 from django.urls import reverse_lazy
 
@@ -55,5 +57,7 @@ path('vendor-dashboard/', vendor_dashboard, name='vendor_dashboard'),
     ), name='password_reset_complete'),
 
      path("dev/geoapify/", geoapify_test, name="geoapify-test"),
+     path("driver/sim/", driver_sim, name="driver-sim"),
+     path("driver/live/<int:delivery_id>/", driver_live, name="driver-live"),
 
 ]

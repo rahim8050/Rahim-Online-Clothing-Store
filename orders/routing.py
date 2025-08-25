@@ -1,7 +1,8 @@
-from django.urls import path
-from .consumers import DeliveryConsumer
+# orders/routing.py
+from django.urls import re_path
+from .consumers import DeliveryConsumer, DriverConsumer
 
 websocket_urlpatterns = [
-    # Single endpoint for delivery tracking
-    path("ws/delivery/track/<int:delivery_id>/", DeliveryConsumer.as_asgi()),
+    re_path(r"^ws/delivery/track/(?P<delivery_id>\d+)/$", DeliveryConsumer.as_asgi()),
+    re_path(r"^ws/driver/$", DriverConsumer.as_asgi()),  # <-- add this
 ]
