@@ -22,37 +22,83 @@
 {% verbatim %}
 <script>
 (function () {
-  const ACTIVE = ["assigned","picked_up","en_route"];
-  const SPEED_KMPH = 30;     // ETA fallback if route API is slow
-  const MIN_PING_MS = 8000;  // throttle client pings
-  const MIN_MOVE_M  = 25;    // only send WS ping if moved > 25 m
+  // --- knobs ---
+  const ACTIVE = ["assigned", "picked_up", "en_route"];
+  const SPEED_KMPH = 30;    // fallback ETA if route API not used/slow
+  const MIN_PING_MS = 8000; // throttle driver pings
+  const MIN_MOVE_M = 25;    // only ping if moved > X meters
+
+  // --- helpers ---
+  const num = (v) => v == null || v === "" ? null : Number(v);
+  const latlngFixed = (lat, lng) => {
+    lat = num(lat); lng = num(lng);
+    if (lat == null || lng == null) return { lat: null, lng: null };
+    // If someone swapped them (e.g., 36.8, -1.29), fix it.
+    if (Math.abs(lat) > 90 && Math.abs(lng) <= 180) { const t = lat; lat = lng; lng = t; }
+    return { lat, lng };
+  };
+
+  // Pure Haversine (used by chooseBestDest and component)
+  function haversineKm(a, b) {
+    const R = 6371;
+    const dLat = (b.lat - a.lat) * Math.PI / 180;
+    const dLng = (b.lng - a.lng) * Math.PI / 180;
+    const s1 = Math.sin(dLat / 2) ** 2 +
+               Math.cos(a.lat * Math.PI / 180) * Math.cos(b.lat * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(s1));
+  }
+
+  // Choose the destination orientation (as-is vs swapped) that is closer to the driver
+  const chooseBestDest = (driver, dest) => {
+    if (!driver || driver.lat == null || driver.lng == null ||
+        !dest || dest.lat == null || dest.lng == null) return dest;
+
+    const dAsIs = haversineKm(driver, dest);
+    const dSwap = haversineKm(driver, { lat: dest.lng, lng: dest.lat });
+
+    // If swapping reduces distance clearly (buffer 100m), use swapped
+    return (isFinite(dAsIs) && isFinite(dSwap) && dSwap + 0.1 < dAsIs)
+      ? { lat: dest.lng, lng: dest.lat }
+      : dest;
+  };
+
+  const hasGeoAPI = () =>
+    typeof navigator !== "undefined" &&
+    navigator.geolocation &&
+    typeof navigator.geolocation.watchPosition === "function";
 
   new Vue({
     el: "#driver-app",
     delimiters: ["[[", "]]"],
-    data: {
-      deliveries: [],
-      activeId: null,
 
-      // geo + websocket
-      watchId: null,
-      ws: null,
-      wsReady: false,
-      outbox: [],
+    data() {
+      return {
+        deliveries: [],
+        activeId: null,
 
-      // throttling
-      lastSentAt: 0,
-      lastSent: null,
+        // geo + websocket
+        watchId: null,
+        ws: null,
+        wsReady: false,
+        outbox: [],
 
-      // map state
-      map: null, driverMarker: null, destMarker: null, routeLine: null,
-      etaText: "—",
+        // throttling
+        lastSentAt: 0,
+        lastSent: null,
 
-      // route throttling
-      lastRouteKey: null,
-      lastRouteAt: 0,
+        // map state
+        map: null,
+        driverMarker: null,
+        destMarker: null,
+        routeLine: null,
+        etaText: "—",
 
-      refreshTimer: null
+        // route throttling
+        lastRouteKey: null,
+        lastRouteAt: 0,
+
+        refreshTimer: null
+      };
     },
 
     computed: {
@@ -66,25 +112,58 @@
     },
 
     beforeDestroy() {
-      if (this.watchId) navigator.geolocation.clearWatch(this.watchId);
-      if (this.ws) this.ws.close();
+      this._stopGeoWatch();
+      this._closeWS();
       if (this.refreshTimer) clearInterval(this.refreshTimer);
     },
 
     methods: {
+      // ---------- Data loading ----------
       async refresh() {
-        const r = await fetch(window.DELIVERY_API.list, { credentials: "same-origin" });
-        if (!r.ok) return;
-        this.deliveries = await r.json();
-        if (!this.activeId && this.activeList.length) this.activeId = this.activeList[0].id;
+        try {
+          const r = await fetch(window.DELIVERY_API.list, { credentials: "same-origin" });
+          if (!r.ok) return;
+          const arr = await r.json();
 
-        // keep map marker in sync with server-snapshotted last_lat/lng
-        if (this.map && this.active && this.active.last_lat != null) {
-          this._updateDriver(this.active.last_lat, this.active.last_lng);
+          this.deliveries = arr.map(d => {
+            // normalize numbers and fix obvious global swap (abs(lat)>90)
+            const last = latlngFixed(d.last_lat, d.last_lng);
+            let dest   = latlngFixed(d.dest_lat, d.dest_lng);
+
+            // If we have a last-known driver point, pick whichever dest (as-is vs swapped) is closer.
+            if (last.lat != null && last.lng != null && dest.lat != null && dest.lng != null) {
+              dest = chooseBestDest(last, dest);
+            }
+
+            return Object.assign({}, d, {
+              last_lat: last.lat, last_lng: last.lng,
+              dest_lat: dest.lat, dest_lng: dest.lng
+            });
+          });
+
+          if (!this.activeId && this.activeList.length) this.activeId = this.activeList[0].id;
+
+          // keep map marker in sync with snapshot
+          if (this.map && this.active && this.active.last_lat != null) {
+            this._updateDriver(this.active.last_lat, this.active.last_lng);
+          }
+
+          // Debug once if needed:
+          // console.table(this.deliveries.map(d => ({ id: d.id, last: [d.last_lat, d.last_lng], dest: [d.dest_lat, d.dest_lng] })));
+        } catch (e) {
+          console.warn("refresh failed:", e);
         }
       },
 
+      // ---------- Tracking ----------
       track(id) {
+        if (this.activeId !== id) {
+          // switching deliveries: reset map overlays & tracking
+          this._resetMapOverlays();
+          this._stopGeoWatch();
+          this._closeWS();
+        }
+
         this.activeId = id;
 
         this.$nextTick(() => {
@@ -92,26 +171,33 @@
           this._ensureWS();
         });
 
-        if (!("geolocation" in navigator)) return;
-        if (this.watchId) navigator.geolocation.clearWatch(this.watchId);
+        if (!hasGeoAPI()) return;
+        this._stopGeoWatch(); // ensure no duplicate watchers
         this.watchId = navigator.geolocation.watchPosition(
-          pos => this._sendPing(pos.coords.latitude, pos.coords.longitude),
-          ()  => {},
-          { enableHighAccuracy: true, maximumAge: 0, timeout: 20000 }
+          (pos) => this._sendPing(pos.coords.latitude, pos.coords.longitude),
+          (err) => { console.warn("watchPosition error:", err); /* keep running; user may allow later */ },
+          { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 }
         );
       },
 
       stopTracking() {
-        if (this.watchId) { navigator.geolocation.clearWatch(this.watchId); this.watchId = null; }
-        if (this.ws) { this.ws.close(); this.ws = null; this.wsReady = false; this.outbox = []; }
+        this._stopGeoWatch();
+        this._closeWS();
       },
 
+      _stopGeoWatch() {
+        if (this.watchId != null && hasGeoAPI() && typeof navigator.geolocation.clearWatch === "function") {
+          try { navigator.geolocation.clearWatch(this.watchId); } catch (_) {}
+        }
+        this.watchId = null;
+      },
+
+      // ---------- WebSocket ----------
       _ensureWS() {
         if (this.ws && this.wsReady) return;
         const url = (location.protocol === "https:" ? "wss://" : "ws://") +
                     location.host + `/ws/delivery/track/${this.activeId}/`;
         this.ws = new WebSocket(url);
-        window.__ws = this.ws; // handy for devtools testing
 
         this.ws.onopen = () => {
           this.wsReady = true;
@@ -121,21 +207,38 @@
         this.ws.onmessage = (e) => {
           const msg = JSON.parse(e.data || "{}");
           if (msg.type === "position_update") {
-            this._updateDriver(msg.lat, msg.lng);
+            const p = latlngFixed(msg.lat, msg.lng);
+            if (p.lat != null) this._updateDriver(p.lat, p.lng);
           } else if (msg.type === "status") {
             const d = this.deliveries.find(x => x.id === this.activeId);
-            if (d) d.status = msg.status;
+            if (d && msg.status) d.status = msg.status;
           }
         };
 
-        this.ws.onclose = () => { this.wsReady = false; setTimeout(() => this._ensureWS(), 1500); };
+        this.ws.onclose = () => {
+          this.wsReady = false;
+          // backoff-lite
+          setTimeout(() => { if (this.activeId) this._ensureWS(); }, 1500);
+        };
+      },
+
+      _closeWS() {
+        if (this.ws) {
+          try { this.ws.close(); } catch (_) {}
+        }
+        this.ws = null;
+        this.wsReady = false;
+        this.outbox = [];
       },
 
       _sendPing(lat, lng) {
+        lat = num(lat); lng = num(lng);
+        if (lat == null || lng == null) return;
+
         const now = Date.now();
-        const movedEnough = !this.lastSent || (this._haversineKm(this.lastSent, {lat, lng}) * 1000) > MIN_MOVE_M;
+        const movedEnough = !this.lastSent || (haversineKm(this.lastSent, { lat, lng }) * 1000) > MIN_MOVE_M;
         if (now - this.lastSentAt < MIN_PING_MS || !movedEnough) {
-          this._updateDriver(lat, lng);
+          this._updateDriver(lat, lng); // still update locally
           return;
         }
         this.lastSentAt = now; this.lastSent = { lat, lng };
@@ -144,16 +247,17 @@
         if (this.wsReady) this.ws.send(JSON.stringify(packet));
         else this.outbox.push(packet);
 
-        this._updateDriver(lat, lng); // optimistic update
+        this._updateDriver(lat, lng); // optimistic paint
       },
 
-      // ---- status buttons ----
+      // ---------- Status actions ----------
       markPickedUp() {
         if (!this.activeId) return;
         this._ensureWS();
         const packet = { type: "status", status: "picked_up" };
         if (this.wsReady) this.ws.send(JSON.stringify(packet)); else this.outbox.push(packet);
       },
+
       markDelivered() {
         if (!this.activeId) return;
         this._ensureWS();
@@ -162,16 +266,16 @@
         this.stopTracking();
       },
 
-      // ---- map / route ----
+      // ---------- Map ----------
       _ensureMap() {
         const shell = this.$el.querySelector("#map-shell");
         if (!shell) return;
 
         if (!this.map) {
           const c = this._center();
-          this.map = L.map(shell).setView([c.lat, c.lng], 13);
+          this.map = L.map(shell).setView([c.lat, c.lng], (c.lat === 0 && c.lng === 0) ? 2 : 13);
           L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-            maxZoom: 19, attribution: "&copy; OpenStreetMap"
+            maxZoom: 19, attribution: "&copy; OpenStreetMap contributors"
           }).addTo(this.map);
         }
         this._paintStatic();
@@ -184,14 +288,26 @@
         return { lat: 0, lng: 0 };
       },
 
+      _resetMapOverlays() {
+        if (this.routeLine) { try { this.map.removeLayer(this.routeLine); } catch (_) {} this.routeLine = null; }
+        if (this.driverMarker) { try { this.map.removeLayer(this.driverMarker); } catch (_) {} this.driverMarker = null; }
+        if (this.destMarker) { try { this.map.removeLayer(this.destMarker); } catch (_) {} this.destMarker = null; }
+        this.etaText = "—";
+        this.lastRouteKey = null;
+        this.lastRouteAt = 0;
+      },
+
       _paintStatic() {
         const a = this.active; if (!a) return;
+
         if (a.dest_lat != null) {
+          const pt = [a.dest_lat, a.dest_lng];
           if (!this.destMarker)
-            this.destMarker = L.marker([a.dest_lat, a.dest_lng], { title: "Destination" }).addTo(this.map);
+            this.destMarker = L.marker(pt, { title: "Destination" }).addTo(this.map);
           else
-            this.destMarker.setLatLng([a.dest_lat, a.dest_lng]);
+            this.destMarker.setLatLng(pt);
         }
+
         if ((a.last_lat != null || this.driverMarker) && a.dest_lat != null) {
           this._drawRoadRoute();
         }
@@ -204,7 +320,7 @@
         const lng = (this.driverMarker ? this.driverMarker.getLatLng().lng : a.last_lng);
         if (lat == null || lng == null) return;
 
-        // throttle the expensive route call
+        // throttle expensive route call
         const key = `${this.activeId}:${lat.toFixed(5)},${lng.toFixed(5)}:${a.dest_lat.toFixed(5)},${a.dest_lng.toFixed(5)}`;
         const now = Date.now();
         if (this.lastRouteKey === key && now - this.lastRouteAt < 60_000) return;
@@ -218,9 +334,9 @@
         // accept multiple shapes from the API
         let coords = j.coords || [];
         if (!coords.length && j.geometry && Array.isArray(j.geometry.coordinates)) {
-          coords = j.geometry.coordinates.map(([x, y]) => [y, x]); // lon,lat -> lat,lng
+          // GeoJSON: [lon, lat] -> [lat, lng]
+          coords = j.geometry.coordinates.map(([x, y]) => [y, x]);
         }
-
         if (!coords.length) return;
 
         if (!this.routeLine) this.routeLine = L.polyline(coords, { weight: 3 }).addTo(this.map);
@@ -230,11 +346,14 @@
           this.etaText = `${j.distance_km.toFixed(2)} km · ~${Math.round(j.duration_min)} min`;
         }
 
-        this.map.fitBounds(this.routeLine.getBounds(), { padding: [20, 20] });
+        const b = this.routeLine.getBounds();
+        if (b && b.isValid()) this.map.fitBounds(b, { padding: [20, 20] });
       },
 
       _updateDriver(lat, lng) {
         if (!this.map) return;
+        lat = num(lat); lng = num(lng);
+        if (lat == null || lng == null) return;
 
         if (!this.driverMarker)
           this.driverMarker = L.circleMarker([lat, lng], { radius: 7 }).addTo(this.map);
@@ -245,21 +364,12 @@
 
         const a = this.active;
         if (a && a.dest_lat != null) {
-          const dist = this._haversineKm({ lat, lng }, { lat: a.dest_lat, lng: a.dest_lng });
+          const dist = haversineKm({ lat, lng }, { lat: a.dest_lat, lng: a.dest_lng });
           if (!/km/.test(this.etaText)) {
             const etaMin = Math.round((dist / SPEED_KMPH) * 60);
             this.etaText = isFinite(etaMin) ? `${dist.toFixed(2)} km · ~${etaMin} min` : "—";
           }
         }
-      },
-
-      _haversineKm(a, b) {
-        const R = 6371;
-        const dLat = (b.lat - a.lat) * Math.PI / 180;
-        const dLng = (b.lng - a.lng) * Math.PI / 180;
-        const s1 = Math.sin(dLat / 2) ** 2 +
-          Math.cos(a.lat * Math.PI / 180) * Math.cos(b.lat * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
-        return 2 * R * Math.asin(Math.sqrt(s1));
       }
     },
 
