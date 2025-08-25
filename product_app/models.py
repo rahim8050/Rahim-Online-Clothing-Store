@@ -48,6 +48,7 @@ class Warehouse(models.Model):
     latitude = models.FloatField()
     longitude = models.FloatField()
     address = models.CharField(max_length=255, blank=True)
+    is_active = models.BooleanField(default=True) 
 
     def clean(self) -> None:
         """Validate coordinates are within the global range and inside Kenya."""
