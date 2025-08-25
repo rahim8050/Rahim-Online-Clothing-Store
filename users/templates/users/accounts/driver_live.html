@@ -16,79 +16,181 @@
 {% endblock %}
 
 {% block extra_js %}
-<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css">
-<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 (function(){
-  const deliveryId = {{ delivery_id }};
+  // ---- config knobs ----
+  const DELIVERY_ID = {{ delivery_id|default:"0" }};
+  const START_LAT = Number({{ start_lat|default:-1.286389 }});
+  const START_LNG = Number({{ start_lng|default:36.817223 }});
+  const MIN_PING_MS = 8000;      // throttle WebSocket pings
+  const MIN_MOVE_M  = 25;        // only send if moved > X meters
+  const KE = { latMin:-5.5, latMax:5.5, lngMin:33.5, lngMax:42.5 };
+
+  // ---- DOM refs ----
   const statusEl = document.getElementById('status');
+  const btnStart = document.getElementById('btn-start');
+  const btnStop  = document.getElementById('btn-stop');
 
-  let ws, watchId, map, liveMarker;
+  // ---- state ----
+  let ws = null, wsReady = false, wsBackoff = 500, outbox = [];
+  let watchId = null;
+  let map = null, liveMarker = null, accCircle = null;
+  let lastSentAt = 0, lastSent = null;
 
-  function setStatus(msg){ statusEl.textContent = msg; }
+  // ---- helpers ----
+  const setStatus = (msg) => statusEl.textContent = msg;
+
+  const hasGeo = () => typeof navigator !== 'undefined' &&
+                       navigator.geolocation &&
+                       typeof navigator.geolocation.watchPosition === 'function';
+
+  function toLatLng(lat, lng){
+    // normalize -> floats, repair obvious swaps (|lat|>90)
+    lat = (lat === null || lat === undefined || lat === "") ? null : Number(lat);
+    lng = (lng === null || lng === undefined || lng === "") ? null : Number(lng);
+    if (lat === null || lng === null || Number.isNaN(lat) || Number.isNaN(lng)) return null;
+    if (Math.abs(lat) > 90 && Math.abs(lng) <= 180) { const t = lat; lat = lng; lng = t; }
+    return [lat, lng];
+  }
+
+  function inKe(pt){
+    if (!pt) return false;
+    const [lat,lng] = pt;
+    return lat >= KE.latMin && lat <= KE.latMax && lng >= KE.lngMin && lng <= KE.lngMax;
+  }
+
+  function haversineM(a, b){
+    if (!a || !b) return Infinity;
+    const [lat1,lng1] = a, [lat2,lng2] = b;
+    const R = 6371000;
+    const dLat = (lat2 - lat1) * Math.PI/180;
+    const dLng = (lng2 - lng1) * Math.PI/180;
+    const s1 = Math.sin(dLat/2)**2 +
+               Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
+    return 2 * R * Math.asin(Math.sqrt(s1));
+  }
+
   function ensureMap() {
     if (map) return map;
-    map = L.map('map').setView([{{ start_lat|default:-1.286389 }}, {{ start_lng|default:36.817223 }}], 13);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom: 19}).addTo(map);
+    const start = toLatLng(START_LAT, START_LNG) || [0,0];
+    map = L.map('map').setView(start, (inKe(start) ? 13 : 2));
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19, attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
     return map;
   }
-  function openWS() {
+
+  function ensureWS() {
+    if (ws && wsReady) return;
     const wsScheme = location.protocol === 'https:' ? 'wss' : 'ws';
-    ws = new WebSocket(`${wsScheme}://${location.host}/ws/delivery/track/${deliveryId}/`);
-    ws.onopen  = () => setStatus('WS connected');
-    ws.onclose = (e) => setStatus(`WS closed (${e.code})`);
+    ws = new WebSocket(`${wsScheme}://${location.host}/ws/delivery/track/${DELIVERY_ID}/`);
+
+    ws.onopen = () => {
+      wsReady = true; wsBackoff = 500;
+      setStatus('WS connected');
+      while(outbox.length) ws.send(JSON.stringify(outbox.shift()));
+    };
+
+    ws.onmessage = (e) => {
+      // if your server echoes position_update, we could visualize/verify here if needed
+      // const msg = JSON.parse(e.data||"{}");
+    };
+
+    ws.onclose = () => {
+      wsReady = false;
+      setStatus('WS closed, reconnecting…');
+      // reconnect (simple backoff)
+      setTimeout(() => { if (ws) ensureWS(); }, wsBackoff);
+      wsBackoff = Math.min(wsBackoff * 2, 8000);
+    };
+
     ws.onerror = () => setStatus('WS error');
   }
-  function send(lat, lng) {
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ type: 'position_update', lat, lng }));
-    }
+
+  function wsSend(lat, lng){
+    if (!ws) return;
+    const payload = { type: 'position_update', lat, lng };
+    if (wsReady) ws.send(JSON.stringify(payload));
+    else outbox.push(payload);
   }
 
   function start() {
-    // Geolocation requires HTTPS on phones (except localhost). Warn if not secure.
-    const isLocal = ['localhost', '127.0.0.1'].includes(location.hostname);
+    // Geolocation needs HTTPS on mobile; allow localhost for dev
+    const isLocal = ['localhost','127.0.0.1'].includes(location.hostname);
     if (location.protocol !== 'https:' && !isLocal) {
-      setStatus('Use HTTPS (ngrok/tunnel) for geolocation on mobile.');
+      setStatus('Tip: use HTTPS (ngrok/tunnel) for geolocation on mobile.');
     }
 
-    openWS();
+    ensureWS();
     const m = ensureMap();
 
-    if (!('geolocation' in navigator)) { setStatus('Geolocation not supported'); return; }
+    if (!hasGeo()) { setStatus('Geolocation not supported'); return; }
+
+    // kill any previous watch
+    stopWatch();
 
     watchId = navigator.geolocation.watchPosition(
       (pos) => {
-        const { latitude: lat, longitude: lng } = pos.coords;
+        let pt = toLatLng(pos.coords.latitude, pos.coords.longitude);
+        if (!pt) return;
+        const [lat,lng] = pt;
 
         if (!liveMarker) {
-          liveMarker = L.marker([lat, lng]).addTo(m).bindTooltip('You');
+          liveMarker = L.circleMarker(pt, { radius: 7 }).addTo(m).bindTooltip('You', {permanent:false});
+          m.setView(pt, inKe(pt) ? 15 : 13);
         } else {
-          liveMarker.setLatLng([lat, lng]);
+          liveMarker.setLatLng(pt);
+          // pan only on significant move to avoid jitter
+          const moved = !lastSent ? Infinity : haversineM(lastSent, pt);
+          if (moved > 60) m.panTo(pt, { animate: true });
         }
-        m.panTo([lat, lng], { animate: true });
 
-        send(lat, lng);
+        // (optional) show accuracy circle
+        const acc = Number(pos.coords.accuracy || 0);
+        if (!Number.isNaN(acc) && acc > 0 && acc < 200) {
+          if (!accCircle) accCircle = L.circle(pt, { radius: acc }).addTo(m);
+          else accCircle.setLatLng(pt).setRadius(acc);
+        }
+
+        // throttle + distance filter
+        const now = Date.now();
+        const movedEnough = !lastSent || haversineM(lastSent, pt) > MIN_MOVE_M;
+        if (now - lastSentAt >= MIN_PING_MS && movedEnough) {
+          wsSend(lat, lng);
+          lastSentAt = now;
+          lastSent = pt;
+        }
       },
       (err) => {
         setStatus('Location error: ' + err.message);
       },
-      { enableHighAccuracy: true, maximumAge: 1000, timeout: 20000 }
+      { enableHighAccuracy: true, maximumAge: 2000, timeout: 20000 }
     );
 
     setStatus('Live… move the phone to update.');
+    btnStart.disabled = true;
+    btnStop.disabled = false;
+  }
+
+  function stopWatch(){
+    if (watchId != null && navigator.geolocation && typeof navigator.geolocation.clearWatch === 'function') {
+      try { navigator.geolocation.clearWatch(watchId); } catch {}
+    }
+    watchId = null;
+  }
+
+  function closeWS(){
+    if (ws) {
+      try { ws.close(1000, 'stop'); } catch {}
+    }
+    ws = null; wsReady = false; outbox = [];
   }
 
   function stop() {
-    if (watchId) { navigator.geolocation.clearWatch(watchId); watchId = null; }
-    if (ws && ws.readyState === WebSocket.OPEN) { try { ws.close(1000, 'stop'); } catch{} }
+    stopWatch();
+    closeWS();
     setStatus('Stopped.');
-  }
-
-  document.getElementById('btn-start').addEventListener('click', start);
-  document.getElementById('btn-stop').addEventListener('click', stop);
-
-  window.addEventListener('beforeunload', stop);
-})();
-</script>
-{% endblock %}
+    btnStart.disabled = false;
+    btnStop.disabled = true

@@ -1,0 +1,1 @@
+delivery_id,driver_id,wh_lat,wh_lng,dest_lat,dest_lng,asgmt_hour,asgmt_dow,picked_hour,picked_dow,dist_haversine_km,route_distance_km,duration_min
