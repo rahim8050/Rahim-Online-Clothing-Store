@@ -34,13 +34,18 @@ class DeliveryWebsocketTests(TestCase):
             connected, _ = await comm.connect()
             assert connected
             comm.scope["user"] = driver
-            await comm.send_json_to({"type": "position_update", "lat": 1, "lng": 2})
+            await comm.send_json_to({"type": "position_update", "lat": -1.31, "lng": 36.80})
             msg = await comm.receive_json_from()
             await comm.disconnect()
             return msg
 
         msg = async_to_sync(flow)()
         self.assertEqual(msg["type"], "position_update")
+        self.assertEqual(msg["lat"], -1.31)
+        self.assertEqual(msg["lng"], 36.80)
+        d = Delivery.objects.get(pk=delivery.id)
+        self.assertEqual(float(d.last_lat), -1.31)
+        self.assertEqual(float(d.last_lng), 36.80)
 
     def test_consumer_denies_intruder(self):
         if "users_customuser" not in connection.introspection.table_names():
