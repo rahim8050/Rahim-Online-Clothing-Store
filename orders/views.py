@@ -9,16 +9,26 @@ from django.views.decorators.http import require_http_methods
 from orders.models import Order
 from django.db import transaction
 from django.conf import settings
-import stripe
-import paypalrestsdk
+
+try:
+    import stripe
+except Exception:  # pragma: no cover
+    stripe = None
+
+try:
+    import paypalrestsdk
+except Exception:  # pragma: no cover
+    paypalrestsdk = None
 
 # Configure Stripe and PayPal with keys from settings
-stripe.api_key = settings.STRIPE_SECRET_KEY
-paypalrestsdk.configure({
-    "mode": settings.PAYPAL_MODE,
-    "client_id": settings.PAYPAL_CLIENT_ID,
-    "client_secret": settings.PAYPAL_CLIENT_SECRET,
-})
+if stripe:
+    stripe.api_key = settings.STRIPE_SECRET_KEY
+if paypalrestsdk:
+    paypalrestsdk.configure({
+        "mode": settings.PAYPAL_MODE,
+        "client_id": settings.PAYPAL_CLIENT_ID,
+        "client_secret": settings.PAYPAL_CLIENT_SECRET,
+    })
 # Create your views here.
 
 
@@ -65,6 +75,7 @@ def order_create(request):
                         OrderItem.objects.create(
                             order=order,
                             product=item.product,
+                            product_version=item.product.version,
                             price=item.product.price,
                             quantity=item.quantity
                         )

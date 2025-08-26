@@ -36,10 +36,7 @@ urlpatterns = [
                   path('users/', include('django.contrib.auth.urls')), 
                   path('products/', include('product_app.urls', namespace='product_app')),  # Fixed syntax
                   path('accounts/profile/', views.profile, name='profile'),
-                
-   
 
-
-
-
-]+ static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)+ static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+]+ static(settings.STATIC_URL, document_root=settings.STATIC_ROOT) + static(
+    settings.MEDIA_URL, document_root=settings.MEDIA_ROOT
+)
