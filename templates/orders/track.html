@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+  <h2 class="text-xl font-semibold mb-2">Order {{ order.id }} Tracking</h2>
+  <div class="text-sm text-gray-600 mb-3">Status: {% if delivery %}{{ delivery.status }}{% else %}—{% endif %}</div>
+
+  <div id="map" style="height: 400px;"></div>
+
+  <!-- Leaflet (keep versions consistent) -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- Route context: must be JSON from json.dumps(...) -->
+  <script>
+    // IMPORTANT: In your view, set route_ctx["wsUrl"] to `/ws/delivery/track/{{ delivery.id }}/`
+    window.__ROUTE_CTX__ = {{ route_ctx|safe }};
+  </script>
+
+  <!-- Your map/WS bootstrap -->
+  <script defer src="{% static 'js/tracking-route.js' %}"></script>
+{% endblock %}

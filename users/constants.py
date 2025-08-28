@@ -1,0 +1,7 @@
+VENDOR = "Vendor"
+VENDOR_STAFF = "Vendor Staff"
+DRIVER = "Driver"
+ADMIN = "Admin"
+CUSTOMER = "Customer"
+
+ALL_GROUPS = [ADMIN, CUSTOMER, VENDOR, VENDOR_STAFF, DRIVER]

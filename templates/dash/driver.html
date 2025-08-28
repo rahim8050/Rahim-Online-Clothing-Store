@@ -1,0 +1,409 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+<div class="p-4">
+  <h2 class="text-xl font-semibold mb-3">My Deliveries</h2>
+  <div id="driver-app"></div>
+</div>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/vue@2/dist/vue.js"></script>
+
+<!-- Django-resolved URLs (outside verbatim so template tags work) -->
+<script>
+  window.DELIVERY_API = {
+    list: "{% url 'orders:driver-deliveries-api' %}",
+    routePattern: "{% url 'orders:driver-route-api' 0 %}" // -> /orders/apis/driver/route/0/
+  };
+</script>
+
+{% verbatim %}
+<script>
+(function () {
+  // --- knobs ---
+  const ACTIVE = ["assigned", "picked_up", "en_route"];
+  const SPEED_KMPH = 30;    // fallback ETA if route API not used/slow
+  const MIN_PING_MS = 8000; // throttle driver pings
+  const MIN_MOVE_M = 25;    // only ping if moved > X meters
+
+  // --- helpers ---
+  const num = (v) => v == null || v === "" ? null : Number(v);
+  const latlngFixed = (lat, lng) => {
+    lat = num(lat); lng = num(lng);
+    if (lat == null || lng == null) return { lat: null, lng: null };
+    // If someone swapped them (e.g., 36.8, -1.29), fix it.
+    if (Math.abs(lat) > 90 && Math.abs(lng) <= 180) { const t = lat; lat = lng; lng = t; }
+    return { lat, lng };
+  };
+
+  // Pure Haversine (used by chooseBestDest and component)
+  function haversineKm(a, b) {
+    const R = 6371;
+    const dLat = (b.lat - a.lat) * Math.PI / 180;
+    const dLng = (b.lng - a.lng) * Math.PI / 180;
+    const s1 = Math.sin(dLat / 2) ** 2 +
+               Math.cos(a.lat * Math.PI / 180) * Math.cos(b.lat * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(s1));
+  }
+
+  // Choose the destination orientation (as-is vs swapped) that is closer to the driver
+  const chooseBestDest = (driver, dest) => {
+    if (!driver || driver.lat == null || driver.lng == null ||
+        !dest || dest.lat == null || dest.lng == null) return dest;
+
+    const dAsIs = haversineKm(driver, dest);
+    const dSwap = haversineKm(driver, { lat: dest.lng, lng: dest.lat });
+
+    // If swapping reduces distance clearly (buffer 100m), use swapped
+    return (isFinite(dAsIs) && isFinite(dSwap) && dSwap + 0.1 < dAsIs)
+      ? { lat: dest.lng, lng: dest.lat }
+      : dest;
+  };
+
+  const hasGeoAPI = () =>
+    typeof navigator !== "undefined" &&
+    navigator.geolocation &&
+    typeof navigator.geolocation.watchPosition === "function";
+
+  new Vue({
+    el: "#driver-app",
+    delimiters: ["[[", "]]"],
+
+    data() {
+      return {
+        deliveries: [],
+        activeId: null,
+
+        // geo + websocket
+        watchId: null,
+        ws: null,
+        wsReady: false,
+        outbox: [],
+
+        // throttling
+        lastSentAt: 0,
+        lastSent: null,
+
+        // map state
+        map: null,
+        driverMarker: null,
+        destMarker: null,
+        routeLine: null,
+        etaText: "—",
+
+        // route throttling
+        lastRouteKey: null,
+        lastRouteAt: 0,
+
+        refreshTimer: null
+      };
+    },
+
+    computed: {
+      active()     { return this.deliveries.find(d => d.id === this.activeId) || null; },
+      activeList() { return this.deliveries.filter(d => ACTIVE.includes(d.status)); }
+    },
+
+    mounted() {
+      this.refresh();
+      this.refreshTimer = setInterval(() => this.refresh(), 10_000);
+    },
+
+    beforeDestroy() {
+      this._stopGeoWatch();
+      this._closeWS();
+      if (this.refreshTimer) clearInterval(this.refreshTimer);
+    },
+
+    methods: {
+      // ---------- Data loading ----------
+      async refresh() {
+        try {
+          const r = await fetch(window.DELIVERY_API.list, { credentials: "same-origin" });
+          if (!r.ok) return;
+          const arr = await r.json();
+
+          this.deliveries = arr.map(d => {
+            // normalize numbers and fix obvious global swap (abs(lat)>90)
+            const last = latlngFixed(d.last_lat, d.last_lng);
+            let dest   = latlngFixed(d.dest_lat, d.dest_lng);
+
+            // If we have a last-known driver point, pick whichever dest (as-is vs swapped) is closer.
+            if (last.lat != null && last.lng != null && dest.lat != null && dest.lng != null) {
+              dest = chooseBestDest(last, dest);
+            }
+
+            return Object.assign({}, d, {
+              last_lat: last.lat, last_lng: last.lng,
+              dest_lat: dest.lat, dest_lng: dest.lng
+            });
+          });
+
+          if (!this.activeId && this.activeList.length) this.activeId = this.activeList[0].id;
+
+          // keep map marker in sync with snapshot
+          if (this.map && this.active && this.active.last_lat != null) {
+            this._updateDriver(this.active.last_lat, this.active.last_lng);
+          }
+
+          // Debug once if needed:
+          // console.table(this.deliveries.map(d => ({ id: d.id, last: [d.last_lat, d.last_lng], dest: [d.dest_lat, d.dest_lng] })));
+        } catch (e) {
+          console.warn("refresh failed:", e);
+        }
+      },
+
+      // ---------- Tracking ----------
+      track(id) {
+        if (this.activeId !== id) {
+          // switching deliveries: reset map overlays & tracking
+          this._resetMapOverlays();
+          this._stopGeoWatch();
+          this._closeWS();
+        }
+
+        this.activeId = id;
+
+        this.$nextTick(() => {
+          this._ensureMap();
+          this._ensureWS();
+        });
+
+        if (!hasGeoAPI()) return;
+        this._stopGeoWatch(); // ensure no duplicate watchers
+        this.watchId = navigator.geolocation.watchPosition(
+          (pos) => this._sendPing(pos.coords.latitude, pos.coords.longitude),
+          (err) => { console.warn("watchPosition error:", err); /* keep running; user may allow later */ },
+          { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 }
+        );
+      },
+
+      stopTracking() {
+        this._stopGeoWatch();
+        this._closeWS();
+      },
+
+      _stopGeoWatch() {
+        if (this.watchId != null && hasGeoAPI() && typeof navigator.geolocation.clearWatch === "function") {
+          try { navigator.geolocation.clearWatch(this.watchId); } catch (_) {}
+        }
+        this.watchId = null;
+      },
+
+      // ---------- WebSocket ----------
+      _ensureWS() {
+        if (this.ws && this.wsReady) return;
+        const url = (location.protocol === "https:" ? "wss://" : "ws://") +
+                    location.host + `/ws/delivery/track/${this.activeId}/`;
+        this.ws = new WebSocket(url);
+
+        this.ws.onopen = () => {
+          this.wsReady = true;
+          while (this.outbox.length) this.ws.send(JSON.stringify(this.outbox.shift()));
+        };
+
+        this.ws.onmessage = (e) => {
+          const msg = JSON.parse(e.data || "{}");
+          if (msg.type === "position_update") {
+            const p = latlngFixed(msg.lat, msg.lng);
+            if (p.lat != null) this._updateDriver(p.lat, p.lng);
+          } else if (msg.type === "status") {
+            const d = this.deliveries.find(x => x.id === this.activeId);
+            if (d && msg.status) d.status = msg.status;
+          }
+        };
+
+        this.ws.onclose = () => {
+          this.wsReady = false;
+          // backoff-lite
+          setTimeout(() => { if (this.activeId) this._ensureWS(); }, 1500);
+        };
+      },
+
+      _closeWS() {
+        if (this.ws) {
+          try { this.ws.close(); } catch (_) {}
+        }
+        this.ws = null;
+        this.wsReady = false;
+        this.outbox = [];
+      },
+
+      _sendPing(lat, lng) {
+        lat = num(lat); lng = num(lng);
+        if (lat == null || lng == null) return;
+
+        const now = Date.now();
+        const movedEnough = !this.lastSent || (haversineKm(this.lastSent, { lat, lng }) * 1000) > MIN_MOVE_M;
+        if (now - this.lastSentAt < MIN_PING_MS || !movedEnough) {
+          this._updateDriver(lat, lng); // still update locally
+          return;
+        }
+        this.lastSentAt = now; this.lastSent = { lat, lng };
+
+        const packet = { type: "position_update", lat, lng };
+        if (this.wsReady) this.ws.send(JSON.stringify(packet));
+        else this.outbox.push(packet);
+
+        this._updateDriver(lat, lng); // optimistic paint
+      },
+
+      // ---------- Status actions ----------
+      markPickedUp() {
+        if (!this.activeId) return;
+        this._ensureWS();
+        const packet = { type: "status", status: "picked_up" };
+        if (this.wsReady) this.ws.send(JSON.stringify(packet)); else this.outbox.push(packet);
+      },
+
+      markDelivered() {
+        if (!this.activeId) return;
+        this._ensureWS();
+        const packet = { type: "status", status: "delivered" };
+        if (this.wsReady) this.ws.send(JSON.stringify(packet)); else this.outbox.push(packet);
+        this.stopTracking();
+      },
+
+      // ---------- Map ----------
+      _ensureMap() {
+        const shell = this.$el.querySelector("#map-shell");
+        if (!shell) return;
+
+        if (!this.map) {
+          const c = this._center();
+          this.map = L.map(shell).setView([c.lat, c.lng], (c.lat === 0 && c.lng === 0) ? 2 : 13);
+          L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+            maxZoom: 19, attribution: "&copy; OpenStreetMap contributors"
+          }).addTo(this.map);
+        }
+        this._paintStatic();
+      },
+
+      _center() {
+        const a = this.active || {};
+        if (a.last_lat != null) return { lat: a.last_lat, lng: a.last_lng };
+        if (a.dest_lat != null) return { lat: a.dest_lat, lng: a.dest_lng };
+        return { lat: 0, lng: 0 };
+      },
+
+      _resetMapOverlays() {
+        if (this.routeLine) { try { this.map.removeLayer(this.routeLine); } catch (_) {} this.routeLine = null; }
+        if (this.driverMarker) { try { this.map.removeLayer(this.driverMarker); } catch (_) {} this.driverMarker = null; }
+        if (this.destMarker) { try { this.map.removeLayer(this.destMarker); } catch (_) {} this.destMarker = null; }
+        this.etaText = "—";
+        this.lastRouteKey = null;
+        this.lastRouteAt = 0;
+      },
+
+      _paintStatic() {
+        const a = this.active; if (!a) return;
+
+        if (a.dest_lat != null) {
+          const pt = [a.dest_lat, a.dest_lng];
+          if (!this.destMarker)
+            this.destMarker = L.marker(pt, { title: "Destination" }).addTo(this.map);
+          else
+            this.destMarker.setLatLng(pt);
+        }
+
+        if ((a.last_lat != null || this.driverMarker) && a.dest_lat != null) {
+          this._drawRoadRoute();
+        }
+      },
+
+      async _drawRoadRoute() {
+        const a = this.active; if (!a || a.dest_lat == null) return;
+
+        const lat = (this.driverMarker ? this.driverMarker.getLatLng().lat : a.last_lat);
+        const lng = (this.driverMarker ? this.driverMarker.getLatLng().lng : a.last_lng);
+        if (lat == null || lng == null) return;
+
+        // throttle expensive route call
+        const key = `${this.activeId}:${lat.toFixed(5)},${lng.toFixed(5)}:${a.dest_lat.toFixed(5)},${a.dest_lng.toFixed(5)}`;
+        const now = Date.now();
+        if (this.lastRouteKey === key && now - this.lastRouteAt < 60_000) return;
+        this.lastRouteKey = key; this.lastRouteAt = now;
+
+        const url = window.DELIVERY_API.routePattern.replace(/\/0\/?$/, `/${this.activeId}/`);
+        const r = await fetch(url, { credentials: "same-origin" });
+        if (!r.ok) return;
+        const j = await r.json();
+
+        // accept multiple shapes from the API
+        let coords = j.coords || [];
+        if (!coords.length && j.geometry && Array.isArray(j.geometry.coordinates)) {
+          // GeoJSON: [lon, lat] -> [lat, lng]
+          coords = j.geometry.coordinates.map(([x, y]) => [y, x]);
+        }
+        if (!coords.length) return;
+
+        if (!this.routeLine) this.routeLine = L.polyline(coords, { weight: 3 }).addTo(this.map);
+        else this.routeLine.setLatLngs(coords);
+
+        if (typeof j.distance_km === "number" && typeof j.duration_min === "number" && isFinite(j.duration_min)) {
+          this.etaText = `${j.distance_km.toFixed(2)} km · ~${Math.round(j.duration_min)} min`;
+        }
+
+        const b = this.routeLine.getBounds();
+        if (b && b.isValid()) this.map.fitBounds(b, { padding: [20, 20] });
+      },
+
+      _updateDriver(lat, lng) {
+        if (!this.map) return;
+        lat = num(lat); lng = num(lng);
+        if (lat == null || lng == null) return;
+
+        if (!this.driverMarker)
+          this.driverMarker = L.circleMarker([lat, lng], { radius: 7 }).addTo(this.map);
+        else
+          this.driverMarker.setLatLng([lat, lng]);
+
+        this._drawRoadRoute();
+
+        const a = this.active;
+        if (a && a.dest_lat != null) {
+          const dist = haversineKm({ lat, lng }, { lat: a.dest_lat, lng: a.dest_lng });
+          if (!/km/.test(this.etaText)) {
+            const etaMin = Math.round((dist / SPEED_KMPH) * 60);
+            this.etaText = isFinite(etaMin) ? `${dist.toFixed(2)} km · ~${etaMin} min` : "—";
+          }
+        }
+      }
+    },
+
+    template: `
+      <div>
+        <ul v-if="deliveries.length" class="divide-y rounded border bg-white">
+          <li v-for="d in deliveries" :key="d.id" class="p-2 flex items-center justify-between">
+            <div>
+              <div class="font-medium">Delivery #[[ d.id ]] — Order #[[ d.order_id ]]</div>
+              <div class="text-xs text-gray-600">Status: [[ d.status ]]</div>
+            </div>
+            <div class="flex items-center">
+              <button class="px-3 py-1 rounded bg-indigo-600 text-white text-xs"
+                      @click="track(d.id)">Track</button>
+              <button v-if="activeId===d.id && d.status!=='picked_up' && d.status!=='delivered'"
+                      class="ml-2 px-3 py-1 rounded bg-blue-600 text-white text-xs"
+                      @click="markPickedUp()">Picked up</button>
+              <button v-if="activeId===d.id && d.status!=='delivered'"
+                      class="ml-2 px-3 py-1 rounded bg-green-600 text-white text-xs"
+                      @click="markDelivered()">Delivered</button>
+            </div>
+          </li>
+        </ul>
+        <div v-else class="text-gray-600">No deliveries yet.</div>
+
+        <div v-if="active" class="mt-4 rounded border bg-white">
+          <div class="p-2 text-sm text-gray-600">
+            Tracking delivery #[[ active.id ]] · ETA: [[ etaText ]]
+          </div>
+          <div id="map-shell" class="h-80 w-full" style="height: 22rem;"></div>
+        </div>
+      </div>`
+  });
+})();
+</script>
+{% endverbatim %}
+{% endblock %}

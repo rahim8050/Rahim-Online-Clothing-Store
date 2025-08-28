@@ -2,7 +2,7 @@ from django.db import models
 from django.urls import reverse
 from django.core.exceptions import ValidationError
 from django.db.models import CheckConstraint, Q
-
+from django.conf import settings
 
 class Category(models.Model):
     name = models.CharField(max_length=100)
@@ -18,6 +18,12 @@ class Category(models.Model):
 class Product(models.Model):
     category = models.ForeignKey(
         Category, related_name="products", on_delete=models.CASCADE
+    )
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        related_name="vendor_products",
+        on_delete=models.CASCADE,
+        null=True, blank=True,   
     )
     name = models.CharField(max_length=100)
     slug = models.SlugField(max_length=100, unique=True)
@@ -42,6 +48,7 @@ class Warehouse(models.Model):
     latitude = models.FloatField()
     longitude = models.FloatField()
     address = models.CharField(max_length=255, blank=True)
+    is_active = models.BooleanField(default=True) 
 
     def clean(self) -> None:
         """Validate coordinates are within the global range and inside Kenya."""
@@ -91,6 +98,9 @@ class ProductStock(models.Model):
 
     class Meta:
         unique_together = ("product", "warehouse")
+        constraints = [
+            CheckConstraint(check=Q(quantity__gte=0), name="productstock_quantity_gte_0")
+        ]
 
     def __str__(self) -> str:
         return f"{self.product.name} - {self.warehouse.name}"
