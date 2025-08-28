@@ -124,17 +124,19 @@ TEMPLATES = [
 ]
 
 # -------------------------- Database --------------------------
-DATABASES = {
-   default_sqlite = f"sqlite:///{BASE_DIR / 'db.sqlite3'}"
+# Use DATABASE_URL if present (Render), otherwise fall back to local SQLite.
+# Add sslmode ONLY for Postgres to avoid sqlite3 sslmode errors.
+default_sqlite = f"sqlite:///{BASE_DIR / 'db.sqlite3'}"
 
-db = dj_database_url.config(default=default_sqlite, conn_max_age=600)  # no ssl here yet
+db = dj_database_url.config(default=default_sqlite, conn_max_age=600)  # no SSL here yet
 
-# Add sslmode ONLY for Postgres
-if db.get("ENGINE", "").endswith("postgresql"):
+# Add SSL only for Postgres engines
+engine = db.get("ENGINE", "")
+if engine.endswith(("postgresql", "postgresql_psycopg2")):
     db.setdefault("OPTIONS", {})["sslmode"] = "require"
 
 DATABASES = {"default": db}
-}
+
 
 # -------------------------- Channels --------------------------
 REDIS_URL = env("REDIS_URL", default="redis://127.0.0.1:6379/0")
