@@ -15,7 +15,7 @@ from payments.gateways import maybe_refund_duplicate_success
 from django.http import HttpResponse, HttpResponseForbidden, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from users.utils import is_vendor_or_staff
-from orders.utils import reverse_geocode
+from orders.utils import reverse_geocode, derive_ui_payment_status
 from orders.services import assign_warehouses_and_update_stock
 from django.utils import timezone
 from django.apps import apps
@@ -452,7 +452,106 @@ def order_create(request):
 
 def order_confirmation(request, order_id):
     order = get_object_or_404(Order, id=order_id)
-    return render(request, "orders/order_confirmation.html", {"order": order})
+    last_tx = (
+        Transaction.objects.filter(order=order)
+        .order_by("-created_at")
+        .first()
+    )
+    ui_payment_status = derive_ui_payment_status(order, last_tx)
+    return render(
+        request,
+        "orders/order_confirmation.html",
+        {
+            "order": order,
+            "ui_payment_status": ui_payment_status,
+        },
+    )
+
+
+# ---------- Order edit (unpaid only) ----------
+@login_required
+@require_http_methods(["GET", "POST"])
+def order_edit(request, order_id: int):
+    order = get_object_or_404(Order.objects.prefetch_related("items__product"), id=order_id, user=request.user)
+
+    if not order.is_editable:
+        messages.error(request, "This order can no longer be edited.")
+        return redirect("orders:order_confirmation", order.id)
+
+    form = OrderForm(instance=order)
+    error_msg = None
+
+    if request.method == "POST":
+        # Validate destination fields (hidden inputs set by autocomplete)
+        try:
+            txt = (request.POST.get("dest_address_text") or order.dest_address_text or "").strip()
+            lat = _parse_coord(request.POST.get("dest_lat") or order.dest_lat)
+            lng = _parse_coord(request.POST.get("dest_lng") or order.dest_lng)
+            if not (Decimal('-90') <= lat <= Decimal('90') and Decimal('-180') <= lng <= Decimal('180')):
+                raise ValueError
+        except Exception:
+            messages.error(request, "Please select a valid delivery address from suggestions.")
+            return redirect("orders:order_edit", order.id)
+
+        form = OrderForm(request.POST, instance=order)
+        if form.is_valid():
+            with transaction.atomic():
+                order = form.save(commit=False)
+                # Update destination fields and keep address in sync
+                order.dest_address_text = txt
+                order.dest_lat = lat
+                order.dest_lng = lng
+                order.dest_source = "autocomplete"
+                order.address = txt  # keep legacy address aligned
+                order.save()
+
+                # Update items (quantities and removals)
+                items = list(order.items.select_for_update().select_related("product"))
+                remaining = 0
+                for it in items:
+                    remove_flag = request.POST.get(f"remove_{it.id}")
+                    qty_raw = request.POST.get(f"quantity_{it.id}")
+                    try:
+                        qty_val = int(qty_raw) if qty_raw is not None else it.quantity
+                    except (TypeError, ValueError):
+                        qty_val = it.quantity
+
+                    if remove_flag or qty_val <= 0:
+                        it.delete()
+                        continue
+
+                    if qty_val != it.quantity:
+                        it.quantity = max(1, qty_val)
+                        it.save(update_fields=["quantity"])
+                    remaining += 1
+
+                if remaining == 0:
+                    # If all items removed, delete order and send user back to cart
+                    order.delete()
+                    messages.info(request, "Order was emptied and removed. Please create a new order from your cart.")
+                    return redirect("cart:cart_detail")
+
+            messages.success(request, "Order updated.")
+            return redirect("orders:order_confirmation", order.id)
+        else:
+            error_msg = "Please correct the errors in your form."
+
+    # Sidebar-like summary (reusing existing totals helper)
+    from orders.services.totals import safe_order_total
+    selected_total = safe_order_total(order)
+
+    return render(
+        request,
+        "orders/order_edit.html",
+        {
+            "form": form,
+            "order": order,
+            "order_items": order.items.select_related("product"),
+            "selected_total": selected_total,
+            "error_msg": error_msg,
+            "GEOAPIFY_ENABLED": bool(settings.GEOAPIFY_API_KEY),
+        },
+    )
 
 
 def get_location_info(request):
