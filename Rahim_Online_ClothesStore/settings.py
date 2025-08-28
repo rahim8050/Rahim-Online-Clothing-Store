@@ -125,11 +125,15 @@ TEMPLATES = [
 
 # -------------------------- Database --------------------------
 DATABASES = {
-    "default": dj_database_url.config(
-        default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
-        conn_max_age=600,
-        ssl_require=not DEBUG,
-    )
+   default_sqlite = f"sqlite:///{BASE_DIR / 'db.sqlite3'}"
+
+db = dj_database_url.config(default=default_sqlite, conn_max_age=600)  # no ssl here yet
+
+# Add sslmode ONLY for Postgres
+if db.get("ENGINE", "").endswith("postgresql"):
+    db.setdefault("OPTIONS", {})["sslmode"] = "require"
+
+DATABASES = {"default": db}
 }
 
 # -------------------------- Channels --------------------------
