@@ -3,8 +3,8 @@ from .models import Order
 
 class OrderForm(forms.ModelForm):
     PAYMENT_CHOICES = [
-        ('card', 'Paystack (Card)'),
-        ('mpesa', 'Paystack (M-Pesa)'),
+        ('card', 'Card'),
+        ('mpesa',  'M-Pesa'),
         ('paypal', 'PayPal'),
     ]
 
