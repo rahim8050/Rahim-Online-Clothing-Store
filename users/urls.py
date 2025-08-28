@@ -16,7 +16,7 @@ from users.views import (
     VendorApplicationApproveAPI,
     driver_sim,
     driver_live,
-    after_login,
+
 )
 from django.urls import reverse_lazy
 
@@ -54,7 +54,7 @@ path('vendor-dashboard/', vendor_dashboard, name='vendor_dashboard'),
     ), name='password_reset_confirm'),
 
 
-     path("after-login/", after_login, name="after_login"),
+   
     path('reset_password_complete/', auth_views.PasswordResetCompleteView.as_view(
         template_name='users/accounts/password_reset_complete.html'
     ), name='password_reset_complete'),

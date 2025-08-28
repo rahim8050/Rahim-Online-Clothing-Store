@@ -6,7 +6,9 @@ Production settings for Rahim_Online_ClothesStore (Render).
 from pathlib import Path
 import os
 from datetime import timedelta
+
 from django.core.management.utils import get_random_secret_key
+
 import environ
 import dj_database_url
 from django.contrib import messages
@@ -15,11 +17,28 @@ from django.db import models
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Single source of truth for env vars
+
 env = environ.Env(DEBUG=(bool, False))
 # Locally this reads .env; on Render you use dashboard env vars (safe to keep here)
 environ.Env.read_env(BASE_DIR / ".env")
 
 DEBUG = env.bool("DEBUG", False)
+
+SECRET_KEY = env("SECRET_KEY", default=None)
+
+
+env = environ.Env(
+    DEBUG=(bool, False),
+    ENV=(str, "prod"),  # prod|staging|dev
+)
+
+# Only read .env locally if present (avoid overriding Render dashboard envs)
+if os.path.exists(BASE_DIR / ".env"):
+    environ.Env.read_env(BASE_DIR / ".env")
+
+DEBUG = env.bool("DEBUG", False)
+ENV = env("ENV").lower()
+IS_PROD = (ENV == "prod") and not DEBUG
 
 SECRET_KEY = env("SECRET_KEY", default=None)
 
@@ -32,6 +51,7 @@ if not SECRET_KEY:
 
 ALLOWED_HOSTS = env.list(
     "ALLOWED_HOSTS",
+
     default=["codealpa-online-clothesstore.onrender.com"]
 )
 
@@ -44,10 +64,26 @@ STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "")
 PAYSTACK_SECRET_KEY = os.getenv("PAYSTACK_SECRET_KEY", "")
 SENTRY_DSN = os.getenv("SENTRY_DSN", "")
 
+    default=["codealpa-online-clothesstore.onrender.com"],
+)
+
+# Render dynamic hostname support
+RENDER_HOST = os.getenv("RENDER_EXTERNAL_HOSTNAME")
+if RENDER_HOST and RENDER_HOST not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(RENDER_HOST)
+
+
 # CSRF needs absolute origins with scheme
 CSRF_TRUSTED_ORIGINS = env.list(
     "CSRF_TRUSTED_ORIGINS",
+
     default=[f"https://{h}" if not h.startswith(("http://", "https://")) else h for h in ALLOWED_HOSTS]
+
+    default=[
+        (h if h.startswith(("http://", "https://")) else f"https://{h}")
+        for h in ALLOWED_HOSTS
+    ],
+
 )
 
 ROOT_URLCONF = "Rahim_Online_ClothesStore.urls"
@@ -129,6 +165,7 @@ TEMPLATES = [
 ]
 
 # -------------------------- Database --------------------------
+
 DATABASES = {
     "default": dj_database_url.config(
         default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
@@ -150,6 +187,52 @@ CHANNEL_LAYERS = {
         },
     }
 }
+
+# Prefer DATABASE_URL (Supabase/Render). Fallback to SQLite for local dev.
+DATABASE_URL = env("DATABASE_URL", default=None)
+
+if DATABASE_URL:
+    DATABASES = {
+        "default": dj_database_url.parse(
+            DATABASE_URL,
+            conn_max_age=600,
+            ssl_require=True,  # enforces sslmode=require
+        )
+    }
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "db.sqlite3",
+        }
+    }
+
+# -------------------------- Channels --------------------------
+REDIS_URL = env("REDIS_URL", default=None)
+if REDIS_URL:
+    # If your Redis is TLS (rediss://), channels_redis detects it via URL
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels_redis.core.RedisChannelLayer",
+            "CONFIG": {"hosts": [REDIS_URL]},
+        }
+    }
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.redis.RedisCache",
+            "LOCATION": REDIS_URL,
+            "TIMEOUT": None,
+        }
+    }
+else:
+    # Safe fallback for environments without Redis
+    CHANNEL_LAYERS = {
+        "default": {"BACKEND": "channels.layers.InMemoryChannelLayer"}
+    }
+    CACHES = {
+        "default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}
+    }
+
 
 CACHES = {
     "default": {
@@ -217,6 +300,7 @@ MEDIA_URL = "media/"
 MEDIA_ROOT = BASE_DIR / "mediafiles"
 
 # -------------------------- Security --------------------------
+
 ENV = os.getenv("ENV", "dev").lower()     # dev | staging | prod
 DEBUG = os.getenv("DEBUG", "1") == "1"
 IS_PROD = ENV == "prod"
@@ -232,13 +316,20 @@ SECURE_HSTS_INCLUDE_SUBDOMAINS = IS_PROD
 SECURE_HSTS_PRELOAD = IS_PROD
 
 # --- Cookies (secure only when using HTTPS) ---
+
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+SECURE_SSL_REDIRECT = IS_PROD
+
 SESSION_COOKIE_SECURE = IS_PROD
 CSRF_COOKIE_SECURE = IS_PROD
 SESSION_COOKIE_SAMESITE = "Lax"
 CSRF_COOKIE_SAMESITE = "Lax"
 
+
 # Optional: set a canonical host in prod to avoid odd redirects
 ALLOWED_HOSTS = ["127.0.0.1", "localhost"] if not IS_PROD else ["yourdomain.com"]
+
+
 
 CORS_ALLOWED_ORIGINS = env.list("CORS_ALLOWED_ORIGINS", default=[])
 
@@ -267,12 +358,16 @@ PAYPAL_CLIENT_ID = env("PAYPAL_CLIENT_ID", default=None)
 PAYPAL_CLIENT_SECRET = env("PAYPAL_CLIENT_SECRET", default=None)
 PAYPAL_MODE = env("PAYPAL_MODE", default="sandbox")
 
-# Paystack (✅ these are the ones you need)
+
 PAYSTACK_PUBLIC_KEY = env("PAYSTACK_PUBLIC_KEY", default=None)
 PAYSTACK_SECRET_KEY = env("PAYSTACK_SECRET_KEY", default=None)
 
 # Fail fast in production if Paystack keys are missing
+
 if not DEBUG:
+
+if IS_PROD:
+
     missing = [k for k, v in {
         "PAYSTACK_PUBLIC_KEY": PAYSTACK_PUBLIC_KEY,
         "PAYSTACK_SECRET_KEY": PAYSTACK_SECRET_KEY,
@@ -280,7 +375,11 @@ if not DEBUG:
     if missing:
         raise RuntimeError(f"Missing required Paystack envs: {', '.join(missing)}")
 
+
 # Optional: short prefix logs in DEBUG only (remove after verifying)
+
+# Optional: short prefix logs in DEBUG only
+
 if DEBUG:
     print("PAYSTACK_PUBLIC_KEY:", (PAYSTACK_PUBLIC_KEY or "")[:6], "…")
     print("PAYSTACK_SECRET_KEY:", (PAYSTACK_SECRET_KEY or "")[:6], "…")
@@ -307,7 +406,7 @@ EMAIL_HOST_USER = _env_str("EMAIL_HOST_USER")
 EMAIL_HOST_PASSWORD = _env_str("EMAIL_HOST_PASSWORD")
 EMAIL_TIMEOUT = int(os.getenv("EMAIL_TIMEOUT", "10"))
 
-# Prefer a branded From that matches the authenticated account
+
 _default_from = _env_str("DEFAULT_FROM_EMAIL") or EMAIL_HOST_USER or "no-reply@codealpa.shop"
 DEFAULT_FROM_EMAIL = _default_from
 SERVER_EMAIL = _env_str("SERVER_EMAIL") or DEFAULT_FROM_EMAIL
@@ -318,7 +417,11 @@ if DEBUG and not EMAIL_HOST:
     EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 
 # Fail fast in production if using SMTP without proper creds
+
 if not DEBUG and EMAIL_BACKEND.endswith("smtp.EmailBackend"):
+
+if IS_PROD and EMAIL_BACKEND.endswith("smtp.EmailBackend"):
+
     missing = []
     if not EMAIL_HOST_USER:
         missing.append("EMAIL_HOST_USER")
@@ -326,7 +429,6 @@ if not DEBUG and EMAIL_BACKEND.endswith("smtp.EmailBackend"):
         missing.append("EMAIL_HOST_PASSWORD")
     if missing:
         raise RuntimeError(f"Missing required email envs: {', '.join(missing)}")
-
 
 # --------------------------- UI bits ---------------------------
 CRISPY_ALLOWED_TEMPLATE_PACKS = "bootstrap5"
