@@ -4,47 +4,107 @@ from django.views.decorators.http import require_POST
 from django.http import JsonResponse
 from django.utils.safestring import mark_safe
 import json
-from product_app.models import Product
-from .models import Cart,CartItem
-from django.contrib.auth.decorators import login_required, permission_required
+from product_app.models import Product,ProductStock
+from .models import Cart, CartItem
+from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 import traceback
+from django.db.models import Sum
 from orders.forms import OrderForm
+from users.permissions import NotBuyingOwnListing
+from django.conf import settings
 
 
+# cart/views.py
+def wants_json(request):
+    accept = request.headers.get("Accept", "")
+    xrw = request.headers.get("X-Requested-With", "")
+    return "application/json" in accept or xrw == "XMLHttpRequest"
+
+def _json_ok(message, *, count=None, extra=None, status=201):
+    payload = {"success": True, "code": "OK", "message": message}
+    if count is not None:
+        payload["count"] = count
+    if extra:
+        payload.update(extra)
+    return JsonResponse(payload, status=status)
+
+def _json_err(message, *, code="ERROR", status=400, extra=None):
+    payload = {"success": False, "code": code, "message": message}
+    if extra:
+        payload.update(extra)
+    return JsonResponse(payload, status=status)
 
 @require_POST
 def cart_add(request, product_id):
     try:
-        cart_id = request.session.get('cart_id')
-
-        if cart_id:
-            cart, created = Cart.objects.get_or_create(id=cart_id)
-        else:
-            cart = Cart.objects.create()
-            request.session['cart_id'] = cart.id
+        # --- auth gate ---
+        if not request.user.is_authenticated:
+            login_url = f"{settings.LOGIN_URL}?next={request.get_full_path()}"
+            if wants_json(request):
+                return _json_err("Please log in to continue.", code="AUTH_REQUIRED", status=401,
+                                 extra={"login_url": login_url})
+            return redirect(login_url)
 
         product = get_object_or_404(Product, id=product_id)
 
-        cart_item, created = CartItem.objects.get_or_create(cart=cart, product=product)
-        if not created:
-            cart_item.quantity += 1
-        cart_item.save()
+        # quantity from JSON/form; default = 1
+        qty = 1
+        if request.body:
+            try:
+                qty = int(json.loads(request.body).get("quantity", 1))
+            except Exception:
+                pass
+        else:
+            try:
+                qty = int(request.POST.get("quantity", 1))
+            except Exception:
+                qty = 1
+        if qty < 1:
+            return _json_err("Quantity must be at least 1.", code="INVALID_QUANTITY", status=400)
 
-        request.session['cart_count'] = request.session.get('cart_count', 0) + 1
+        # not buying own listing
+        perm = NotBuyingOwnListing()
+        if not perm.has_object_permission(request, None, product):
+            return _json_err(perm.message or "You cannot purchase your own product.",
+                             code="OWN_LISTING", status=403)
 
-        return JsonResponse({
-            "success": True,
-            "message": f'Added {product.name} to cart'
-        })
+        # optional stock + availability checks
+        if hasattr(product, "available") and not product.available:
+            return _json_err("Product is not available.", code="UNAVAILABLE", status=409)
+
+        available = ProductStock.objects.filter(product=product)\
+                       .aggregate(total=Sum("quantity"))["total"] or 0
+        if qty > available:
+            return _json_err(f"Only {available} left in stock.", code="OUT_OF_STOCK", status=409)
+
+        # session cart
+        cart_id = request.session.get("cart_id")
+        if cart_id:
+            cart, _ = Cart.objects.get_or_create(id=cart_id)
+        else:
+            cart = Cart.objects.create()
+            request.session["cart_id"] = cart.id
+
+        item, created = CartItem.objects.get_or_create(cart=cart, product=product)
+        item.quantity = (item.quantity if not created else 0) + qty
+        item.save()
+
+        request.session["cart_count"] = int(request.session.get("cart_count", 0)) + qty
+
+        return _json_ok(
+            f"Added {qty} × {product.name} to cart.",
+            count=request.session["cart_count"],
+            extra={"item_id": item.id, "product_id": product.id, "quantity": item.quantity},
+            status=201
+        )
 
     except Exception as e:
         print("Error in cart_add:", e)
         traceback.print_exc()
-        return JsonResponse({
-            "success": False,
-            "message": "Something went wrong. Please try again."
-        }, status=500)
+        return _json_err("Something went wrong. Please try again.",
+                         code="SERVER_ERROR", status=500)
+
         
         
 def cart_count(request):
@@ -115,7 +175,7 @@ def get_cart_data(request):
                     'id': item.product.id,
                     'name': item.product.name,
                     'description': item.product.description,
-                    'price': float(item.product.price),
+                    'price': str(item.product.price),  # Convert Decimal to string for JSON serialization
                     'image_url': item.product.image.url if item.product.image else '',
                     'detail_url': item.product.get_absolute_url(),  
                 },

@@ -18,6 +18,12 @@ from .views import (
     get_location_info,
     save_location,
     geo_autocomplete,
+    track_order,
+    driver_deliveries_page,
+    driver_deliveries_api,  
+    driver_location_api,
+    driver_action_api,
+    driver_route_api,
 )
 
 app_name = "orders"
@@ -47,4 +53,11 @@ urlpatterns = [
     path('payment/success/<int:order_id>/', payment_success, name='payment_success'),
     path('payment/cancel/<int:order_id>/', payment_cancel, name='payment_cancel'),
     path('save-location/', save_location, name='save_location'),
+    path("orders/<int:order_id>/track/", track_order, name="order-track"),
+    path("driver/deliveries/", driver_deliveries_page, name="driver-deliveries"),  # HTML page
+    path("apis/driver/deliveries/", driver_deliveries_api, name="driver-deliveries-api"),  # JSON
+    path("apis/driver/location/", driver_location_api, name="driver-location-api"), 
+     path("apis/driver/action/",     driver_action_api,     name="driver-action-api"),
+     path("apis/driver/route/<int:delivery_id>/", driver_route_api, name="driver-route-api"),
+
 ]

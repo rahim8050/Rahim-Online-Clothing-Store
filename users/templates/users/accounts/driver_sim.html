@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+{% block title %}Driver Simulator{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto p-4 space-y-4">
+  <h1 class="text-2xl font-bold">Driver Simulator</h1>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+    <label class="block">
+      <span class="text-sm font-medium">Delivery ID</span>
+      <input id="sim-delivery-id" class="w-full border rounded px-2 py-1" placeholder="e.g. 4" value="{{ delivery_id|default:'' }}">
+    </label>
+
+    <label class="block">
+      <span class="text-sm font-medium">Interval (ms)</span>
+      <input id="sim-interval" class="w-full border rounded px-2 py-1" type="number" value="1200">
+    </label>
+
+    <div class="grid grid-cols-2 gap-2">
+      <label class="block">
+        <span class="text-sm font-medium">Start Lat (warehouse)</span>
+        <input id="sim-start-lat" class="w-full border rounded px-2 py-1" placeholder="-1.3171" value="{{ start_lat|default:'' }}">
+      </label>
+      <label class="block">
+        <span class="text-sm font-medium">Start Lng (warehouse)</span>
+        <input id="sim-start-lng" class="w-full border rounded px-2 py-1" placeholder="36.8183" value="{{ start_lng|default:'' }}">
+      </label>
+    </div>
+
+    <div class="grid grid-cols-2 gap-2">
+      <label class="block">
+        <span class="text-sm font-medium">Dest Lat (customer)</span>
+        <input id="sim-dest-lat" class="w-full border rounded px-2 py-1" placeholder="-1.286389" value="{{ dest_lat|default:'' }}">
+      </label>
+      <label class="block">
+        <span class="text-sm font-medium">Dest Lng (customer)</span>
+        <input id="sim-dest-lng" class="w-full border rounded px-2 py-1" placeholder="36.817223" value="{{ dest_lng|default:'' }}">
+      </label>
+    </div>
+  </div>
+
+  <div class="flex items-center gap-2">
+    <button id="sim-start-btn" class="px-3 py-1.5 rounded bg-blue-600 text-white">Start</button>
+    <button id="sim-pause-btn" class="px-3 py-1.5 rounded bg-gray-600 text-white">Pause</button>
+    <button id="sim-stop-btn"  class="px-3 py-1.5 rounded bg-red-600 text-white">Stop</button>
+  </div>
+
+  <div id="sim-log" class="text-sm text-gray-600 whitespace-pre-wrap"></div>
+  <div id="sim-map" class="w-full h-80 rounded border"></div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script>
+(function(){
+  const log = (m) => { const el = document.getElementById('sim-log'); el.textContent += m + "\\n"; el.scrollTop = el.scrollHeight; };
+
+  // read a pair of fields and return [lat, lng] or null
+  function readLL(latId, lngId) {
+    const lat = Number(document.getElementById(latId).value.trim());
+    const lng = Number(document.getElementById(lngId).value.trim());
+    if (Number.isFinite(lat) && Number.isFinite(lng)) return [lat, lng];
+    return null;
+  }
+
+  let ws, timer, routeLayer, liveMarker, map;
+
+  function ensureMap() {
+    if (map) return map;
+    map = L.map('sim-map').setView([-1.286389, 36.817223], 12);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom: 19}).addTo(map);
+    return map;
+  }
+
+  async function osrmRoute(start, dest) {
+    const url = `https://router.project-osrm.org/route/v1/driving/${start[1]},${start[0]};${dest[1]},${dest[0]}?overview=full&geometries=geojson`;
+    const r = await fetch(url); const j = await r.json();
+    if (j.code !== 'Ok') throw new Error('OSRM route failed');
+    const line = j.routes[0].geometry;
+    const distance = j.routes[0].distance, duration = j.routes[0].duration;
+    return { line, distance, duration };
+  }
+
+  function iterCoords(geojson) {
+    return geojson.coordinates.map(([lng,lat]) => [lat,lng]);
+  }
+
+  function drawRoute(geo) {
+    const m = ensureMap();
+    if (routeLayer) m.removeLayer(routeLayer);
+    routeLayer = L.geoJSON(geo, {weight: 3, dashArray: '4,6'}).addTo(m);
+    m.fitBounds(routeLayer.getBounds(), {padding: [24,24]});
+  }
+
+  function openWS(deliveryId) {
+    const wsScheme = location.protocol === 'https:' ? 'wss' : 'ws';
+    ws = new WebSocket(`${wsScheme}://${location.host}/ws/delivery/track/${deliveryId}/`);
+    ws.onopen  = () => log('WS: open');
+    ws.onclose = (e) => log(`WS: close ${e.code}`);
+    ws.onerror = () => log('WS: error');
+  }
+
+  function send(lat, lng) {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'position_update', lat, lng }));
+    }
+  }
+
+  function startStream(points, intervalMs) {
+    const m = ensureMap();
+    let i = 0;
+    if (timer) clearInterval(timer);
+    timer = setInterval(() => {
+      if (i >= points.length) { log('Reached destination.'); clearInterval(timer); return; }
+      const pos = points[i++];
+      if (!liveMarker) liveMarker = L.marker(pos).addTo(m).bindTooltip('Driver');
+      else liveMarker.setLatLng(pos);
+      send(pos[0], pos[1]);
+    }, intervalMs);
+  }
+
+  // Buttons
+  document.getElementById('sim-start-btn').addEventListener('click', async () => {
+    const deliveryId = document.getElementById('sim-delivery-id').value.trim();
+    const start = readLL('sim-start-lat', 'sim-start-lng');
+    const dest  = readLL('sim-dest-lat',  'sim-dest-lng');
+    const interval = Number(document.getElementById('sim-interval').value) || 1200;
+
+    if (!deliveryId || !start || !dest) { log('Fill Delivery ID, Start Lat/Lng, Dest Lat/Lng.'); return; }
+
+    if (ws && ws.readyState === WebSocket.OPEN) { try { ws.close(1000, 'restart'); } catch {} }
+    openWS(deliveryId);
+
+    try {
+      const r = await osrmRoute(start, dest);
+      drawRoute(r.line);
+      const km = (r.distance/1000).toFixed(2);
+      const min = Math.round(r.duration/60);
+      log(`Route ok — ${km} km, ~${min} min`);
+      startStream(iterCoords(r.line), interval);
+    } catch (e) {
+      log('OSRM failed, using straight line fallback.');
+      const pts = [];
+      const STEPS = 180;
+      for (let i=0;i<=STEPS;i++){
+        const t = i/STEPS;
+        pts.push([start[0] + (dest[0]-start[0])*t, start[1] + (dest[1]-start[1])*t]);
+      }
+      startStream(pts, interval);
+    }
+  });
+
+  document.getElementById('sim-pause-btn').addEventListener('click', () => {
+    if (timer) { clearInterval(timer); timer = null; log('Paused'); }
+  });
+
+  document.getElementById('sim-stop-btn').addEventListener('click', () => {
+    if (timer) clearInterval(timer);
+    timer = null;
+    if (ws) try { ws.close(1000, 'stop'); } catch {}
+    log('Stopped');
+  });
+})();
+</script>
+{% endblock %}

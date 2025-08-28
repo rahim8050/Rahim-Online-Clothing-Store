@@ -1,28 +1,47 @@
-from math import radians, sin, cos, sqrt, atan2
-from typing import Optional
+# orders/assignment.py
+import math
+from decimal import Decimal
+from typing import Optional, Union
 
-from product_app.models import Warehouse
+Number = Union[float, int, Decimal]
 
+def _to_float(x: Optional[Number]) -> Optional[float]:
+    """Normalize Decimal/int to float for trig math."""
+    return float(x) if x is not None else None
 
-def _haversine(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
-    R = 6371  # Earth radius km
-    dlat = radians(lat2 - lat1)
-    dlng = radians(lng2 - lng1)
-    a = sin(dlat / 2) ** 2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlng / 2) ** 2
-    c = 2 * atan2(sqrt(a), sqrt(1 - a))
-    return R * c
+def _haversine(lat1: Number, lng1: Number, lat2: Number, lng2: Number) -> float:
+    # Coerce everything to float once, at the edge
+    lat1 = _to_float(lat1); lng1 = _to_float(lng1)
+    lat2 = _to_float(lat2); lng2 = _to_float(lng2)
 
+    # If any coord missing, make distance infinite so it won't be chosen
+    if None in (lat1, lng1, lat2, lng2):
+        return float("inf")
 
-def pick_warehouse(lat: Optional[float], lng: Optional[float]):
-    qs = Warehouse.objects.all()
-    if lat is not None and lng is not None:
-        best = None
-        best_d = None
-        for wh in qs:
-            d = _haversine(lat, lng, wh.latitude, wh.longitude)
-            if best_d is None or d < best_d:
-                best_d = d
-                best = wh
-        if best:
-            return best
-    return qs.first()
+    R = 6_371_000.0  # meters
+    phi1, phi2 = math.radians(lat1), math.radians(lat2)
+    dphi = math.radians(lat2 - lat1)
+    dlambda = math.radians(lng2 - lng1)
+
+    a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
+    return 2 * R * math.atan2(math.sqrt(a), math.sqrt(1.0 - a))
+
+def pick_warehouse(lat: Number, lng: Number):
+    """Return the nearest active Warehouse with coordinates."""
+    from .models import Warehouse  # local import avoids early app loading issues
+    lat = _to_float(lat); lng = _to_float(lng)
+
+    qs = Warehouse.objects.filter(
+        is_active=True,
+        latitude__isnull=False,
+        longitude__isnull=False,
+    )
+
+    chosen = None
+    best = float("inf")
+    for wh in qs.iterator():
+        dist = _haversine(lat, lng, wh.latitude, wh.longitude)
+        if dist < best:
+            best = dist
+            chosen = wh
+    return chosen

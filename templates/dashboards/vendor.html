@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Vendor Dashboard{% endblock %}
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 py-6 space-y-6">
+  <h1 class="text-2xl font-bold">Vendor Dashboard</h1>
+
+  {% if note %}
+    <div class="rounded-xl border p-4 bg-yellow-50 text-sm text-yellow-800">{{ note }}</div>
+  {% endif %}
+
+  <!-- Stats -->
+  <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+    <div class="rounded-2xl border p-4">
+      <div class="text-sm text-gray-500">Products</div>
+      <div class="text-2xl font-semibold">{{ stats.products_total }}</div>
+    </div>
+    <div class="rounded-2xl border p-4">
+      <div class="text-sm text-gray-500">Active</div>
+      <div class="text-2xl font-semibold">{{ stats.active_products }}</div>
+    </div>
+    <div class="rounded-2xl border p-4">
+      <div class="text-sm text-gray-500">Order Items</div>
+      <div class="text-2xl font-semibold">{{ stats.order_items_total }}</div>
+    </div>
+  </div>
+
+  <!-- Products (latest 25) -->
+  <div class="rounded-2xl border overflow-hidden">
+    <div class="px-4 py-3 border-b">
+      <h2 class="text-lg font-semibold">My Products (25 latest)</h2>
+    </div>
+    <div class="divide-y">
+      {% for p in products %}
+        <div class="px-4 py-2 flex justify-between">
+          <span class="font-medium">{{ p.name }} <span class="text-gray-400">#{{ p.id }}</span></span>
+          <span>{{ p.price }}</span>
+        </div>
+      {% empty %}
+        <div class="px-4 py-6 text-gray-500">No products yet.</div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- Order Items (latest 25) -->
+  <div class="rounded-2xl border overflow-hidden">
+    <div class="px-4 py-3 border-b">
+      <h2 class="text-lg font-semibold">Recent Order Items (25 latest)</h2>
+    </div>
+    <div class="divide-y">
+      {% for oi in order_items %}
+        <div class="px-4 py-2">
+          <div class="flex items-center justify-between">
+            <span>#{{ oi.order.id }} — {{ oi.product.name }}</span>
+            <span>{{ oi.price }}</span>
+          </div>
+          <div class="text-sm text-gray-500">Qty: {{ oi.quantity }}</div>
+        </div>
+      {% empty %}
+        <div class="px-4 py-6 text-gray-500">No order items yet.</div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endblock %}

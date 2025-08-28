@@ -1,0 +1,12 @@
+<button
+  class="track-item-btn px-3 py-1 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+  data-delivery-id="{{ delivery_id }}"
+  data-order-id="{{ order.id }}"
+  data-item-id="{{ item.id }}"
+  data-clat="{{ order.latitude|default_if_none:'' }}"
+  data-clng="{{ order.longitude|default_if_none:'' }}"
+  data-whlat="{{ item.warehouse.latitude|default_if_none:'' }}"
+  data-whlng="{{ item.warehouse.longitude|default_if_none:'' }}"
+>
+  Track
+</button>

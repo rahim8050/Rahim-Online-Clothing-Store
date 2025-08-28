@@ -70,4 +70,11 @@ celerybeat-schedule
 *.pid
 
 # ===== Pytest =====
-.pytest_cache/
+.pytest_cache/# Python bytecode
+__pycache__/
+*.py[cod]
+*.pyo
+# Python bytecode
+__pycache__/
+*.py[cod]
+*.pyo

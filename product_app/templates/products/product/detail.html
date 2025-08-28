@@ -3,58 +3,79 @@
 
 {% block content %}
 <div id="product-app" class="min-h-screen flex items-center justify-center bg-gray-50 py-10 px-4">
-    <div class="bg-white rounded-xl shadow-xl overflow-hidden w-full max-w-4xl flex flex-col md:flex-row transition"
-         :class="{ 'shadow-2xl': isHovered }"
-         @mouseenter="isHovered = true"
-         @mouseleave="isHovered = false">
+  <div class="bg-white rounded-xl shadow-xl overflow-hidden w-full max-w-4xl flex flex-col md:flex-row transition"
+       :class="{ 'shadow-2xl': isHovered }"
+       @mouseenter="isHovered = true"
+       @mouseleave="isHovered = false">
 
-        <!-- Image Section -->
-        <div class="w-full md:w-1/2">
-            {% if product.image %}
-            <img src="{{ product.image.url }}" alt="{{ product.name }}"
-                 class="w-full h-full object-cover rounded-t-xl md:rounded-l-xl md:rounded-tr-none">
-            {% else %}
-            <div class="bg-gray-100 w-full h-64 flex items-center justify-center rounded-t-xl md:rounded-l-xl md:rounded-tr-none">
-                <p class="text-gray-500">Image not available</p>
-            </div>
-            {% endif %}
-        </div>
-
-        <!-- Product Details Section -->
-        <div class="w-full md:w-1/2 p-6 flex flex-col justify-between">
-            <div>
-                <h3 class="font-semibold text-2xl md:text-3xl mb-4">[[ productName ]]</h3>
-                <p class="text-indigo-600 text-xl md:text-2xl mb-6">[[ formattedPrice ]]</p>
-
-                <div class="mb-6">
-                    <p class="text-gray-700 leading-relaxed">
-                        [[ shortDescription ]]
-                        <span v-if="!showDescription && hasMoreDescription">
-                            <button @click="showDescription = true" class="text-indigo-600 hover:underline ml-2">See More</button>
-                        </span>
-                    </p>
-
-                    <p v-if="showDescription" class="text-gray-700 leading-relaxed mt-2">
-                        [[ productDescription ]]
-                        <button @click="showDescription = false" class="text-indigo-600 hover:underline ml-2">Show less</button>
-                    </p>
-                </div>
-            </div>
-
-            <form @submit.prevent="addToCart" class="mt-6">
-                <button type="submit"
-                        class="w-full md:w-auto text-white bg-indigo-600 hover:bg-indigo-700 px-6 py-3 rounded-lg transition-colors duration-300 text-sm md:text-base">
-                    Add To Cart
-                </button>
-                <p class="mt-2 text-sm text-gray-600">[[ message ]]</p>
-            </form>
-        </div>
+    <!-- Image Section -->
+    <div class="w-full md:w-1/2">
+      {% if product.image %}
+      <img src="{{ product.image.url }}" alt="{{ product.name }}"
+           class="w-full h-full object-cover rounded-t-xl md:rounded-l-xl md:rounded-tr-none">
+      {% else %}
+      <div class="bg-gray-100 w-full h-64 flex items-center justify-center rounded-t-xl md:rounded-l-xl md:rounded-tr-none">
+        <p class="text-gray-500">Image not available</p>
+      </div>
+      {% endif %}
     </div>
+
+    <!-- Product Details Section -->
+    <div class="w-full md:w-1/2 p-6 flex flex-col justify-between">
+      <div>
+        <h3 class="font-semibold text-2xl md:text-3xl mb-4">[[ productName ]]</h3>
+        <p class="text-indigo-600 text-xl md:text-2xl mb-6">[[ formattedPrice ]]</p>
+
+        <div class="mb-6">
+          <p class="text-gray-700 leading-relaxed">
+            [[ shortDescription ]]
+            <span v-if="!showDescription && hasMoreDescription">
+              <button @click="showDescription = true" class="text-indigo-600 hover:underline ml-2">See More</button>
+            </span>
+          </p>
+
+          <p v-if="showDescription" class="text-gray-700 leading-relaxed mt-2">
+            [[ productDescription ]]
+            <button @click="showDescription = false" class="text-indigo-600 hover:underline ml-2">Show less</button>
+          </p>
+        </div>
+      </div>
+
+      <form @submit.prevent="addToCart" class="mt-6">
+        <button type="submit"
+                class="w-full md:w-auto text-white bg-indigo-600 hover:bg-indigo-700 px-6 py-3 rounded-lg transition-colors duration-300 text-sm md:text-base">
+          Add To Cart
+        </button>
+        <p class="mt-2 text-sm text-gray-600">[[ message ]]</p>
+      </form>
+    </div>
+  </div>
+
+  <!-- Toasts (inside Vue root so they're reactive) -->
+  <div id="toast-host"
+       class="fixed z-[9999] top-4 right-4 flex flex-col gap-2 pointer-events-none">
+    <div v-for="t in toasts" :key="t.id"
+         class="pointer-events-auto shadow-lg rounded-xl px-4 py-3 text-sm text-white
+                transition ease-out duration-200 translate-y-[-8px] opacity-0"
+         :class="[
+           t.visible ? 'translate-y-0 opacity-100' : '',
+           t.type==='success' ? 'bg-green-600' :
+           t.type==='error'   ? 'bg-red-600'   :
+           t.type==='warning' ? 'bg-amber-600' : 'bg-slate-800'
+         ]"
+         role="status" aria-live="polite">
+      <div class="flex items-start gap-3">
+        <span class="mt-[2px]">[[ t.message ]]</span>
+        <button type="button" class="ml-auto/ opacity-80 hover:opacity-100"
+                @click="dismissToast(t.id)">✕</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- Product JSON injection -->
 <script id="product-data" type="application/json">
-    {{ product_json|safe }}
+  {{ product_json|safe }}
 </script>
 {% endblock %}
 
@@ -64,95 +85,126 @@
 const { createApp } = Vue;
 
 function capitalizeWords(text) {
-    return text ? text.toLowerCase().split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') : '';
+  return text ? text.toLowerCase().split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') : '';
 }
-
 function capitalizeSlug(slug) {
-    return slug ? slug.replace(/[-_]/g, ' ').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') : '';
+  return slug ? slug.replace(/[-_]/g, ' ').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') : '';
+}
+function getCookie(name){
+  const m = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
+  return m ? m.pop() : '';
 }
 
 createApp({
-    delimiters: ['[[', ']]'],
-    data() {
-        let productData = {};
-        try {
-            productData = JSON.parse(document.getElementById('product-data').textContent);
-        } catch (e) {
-            console.error('Invalid product JSON:', e);
-        }
+  delimiters: ['[[', ']]'],
+  data() {
+    let productData = {};
+    try { productData = JSON.parse(document.getElementById('product-data').textContent); }
+    catch (e) { console.error('Invalid product JSON:', e); }
 
-        return {
-            productName: capitalizeWords(productData.name || 'Unknown Product'),
-            productSlug: capitalizeSlug(productData.slug || ''),
-            productPrice: productData.price || 0,
-            productDescription: productData.description || '',
+    return {
+      productName: capitalizeWords(productData.name || 'Unknown Product'),
+      productSlug: capitalizeSlug(productData.slug || ''),
+      productPrice: productData.price || 0,
+      productDescription: productData.description || '',
 
-            csrfToken: "{{ csrf_token }}",
-            addToCartUrl: "{% url 'cart:cart_add' product.id %}",
+      csrfToken: getCookie('csrftoken'),                                   // read CSRF from cookie
+      addToCartUrl: "{% url 'cart:cart_add' product.id %}",
 
-            showDescription: false,
-            isHovered: false,
-            message: '',
-            toastMessage: ''
-        };
+      showDescription: false,
+      isHovered: false,
+      message: '',
+      toasts: []                                                            // toast state
+    };
+  },
+  computed: {
+    formattedPrice() {
+      const price = parseFloat(this.productPrice);
+      if (isNaN(price)) return 'Ksh 0.00';
+      return `Ksh ${price.toLocaleString('en-KE', { minimumFractionDigits: 2 })}`;
     },
-    computed: {
-        formattedPrice() {
-            const price = parseFloat(this.productPrice);
-            if (isNaN(price)) return 'Ksh 0.00';
-            return `Ksh ${price.toLocaleString('en-KE', { minimumFractionDigits: 2 })}`;
-        },
-        shortDescription() {
-            if (!this.productDescription) return '';
-            const parts = this.productDescription.split('. ');
-            return parts.length ? parts[0] + '.' : this.productDescription;
-        },
-        hasMoreDescription() {
-            return this.productDescription && this.productDescription.split('. ').length > 1;
-        }
+    shortDescription() {
+      if (!this.productDescription) return '';
+      const parts = this.productDescription.split('. ');
+      return parts.length ? parts[0] + '.' : this.productDescription;
     },
-    methods: {
-        async addToCart() {
-            try {
-                const formData = new FormData();
-                formData.append('csrfmiddlewaretoken', this.csrfToken);
-
-                const response = await fetch(this.addToCartUrl, {
-                    method: 'POST',
-                    headers: { 'X-CSRFToken': this.csrfToken },
-                    body: formData
-                });
-
-                const data = await response.json();
-                this.message = data.success ? data.message : 'Failed to add to cart';
-                if (data.success) {
-                    this.showToast('Added to cart!');
-                    this.updateCartCounterDisplay();
-                }
-            } catch (error) {
-                console.error('Add to cart error:', error);
-                this.message = 'Something went wrong.';
-                this.showToast('Failed to add to cart');
-            }
-        },
-        showToast(msg) {
-            this.toastMessage = msg;
-            setTimeout(() => this.toastMessage = '', 3000);
-        },
-        async updateCartCounterDisplay() {
-            try {
-                const response = await fetch("/cart/count/");
-                const data = await response.json();
-                const counter = document.getElementById("cart-counter");
-                if (counter) counter.textContent = data.count;
-            } catch (err) {
-                console.error("Cart count update failed:", err);
-            }
-        }
-    },
-    mounted() {
-        this.updateCartCounterDisplay();
+    hasMoreDescription() {
+      return this.productDescription && this.productDescription.split('. ').length > 1;
     }
+  },
+  methods: {
+    // --- Toasts ---
+    toast(message, type='success', duration=3500) {
+      const id = Date.now() + Math.random();
+      const t = { id, message, type, visible: false };
+      this.toasts.push(t);
+      requestAnimationFrame(() => { t.visible = true; });
+      t._timer = setTimeout(() => this.dismissToast(id), duration);
+    },
+    dismissToast(id) {
+      const i = this.toasts.findIndex(x => x.id === id);
+      if (i >= 0) {
+        const t = this.toasts[i];
+        t.visible = false;
+        clearTimeout(t._timer);
+        setTimeout(() => { this.toasts.splice(i, 1); }, 200);
+      }
+    },
+
+    async addToCart() {
+      try {
+        const response = await fetch(this.addToCartUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',               // ask for JSON
+            'X-CSRFToken': this.csrfToken
+          },
+          body: JSON.stringify({ quantity: 1 })
+        });
+
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+          let text = data.message || 'Failed to add to cart.';
+          if (data.code === 'AUTH_REQUIRED' && data.login_url) {
+            this.toast('Please log in to continue.', 'warning');
+            setTimeout(() => { window.location.href = data.login_url; }, 800);
+            return;
+          }
+          if (data.code === 'OWN_LISTING')  text = 'You cannot purchase your own product.';
+          if (data.code === 'OUT_OF_STOCK') text = data.message || 'Not enough stock.';
+          if (data.code === 'CSRF_FAILED')  text = 'Session expired. Refresh and try again.';
+          this.message = text;
+          this.toast(text, 'error');
+          return;
+        }
+
+        const successMsg = data.message || 'Added to cart.';
+        this.message = successMsg;
+        this.toast(successMsg, 'success');
+        this.updateCartCounterDisplay();
+      } catch (error) {
+        console.error('Add to cart error:', error);
+        this.message = 'Something went wrong.';
+        this.toast('Something went wrong.', 'error');
+      }
+    },
+
+    async updateCartCounterDisplay() {
+      try {
+        const res = await fetch("/cart/count/", { headers: { 'Accept': 'application/json' } });
+        const data = await res.json();
+        const counter = document.getElementById("cart-counter");
+        if (counter && typeof data.count === 'number') counter.textContent = data.count;
+      } catch (err) {
+        console.error("Cart count update failed:", err);
+      }
+    }
+  },
+  mounted() {
+    this.updateCartCounterDisplay();
+  }
 }).mount('#product-app');
 </script>
 {% endblock %}
