@@ -53,6 +53,7 @@ def geoapify_test(request):
     return render(request, "users/accounts/dev.html", {
         "GEOAPIFY_API_KEY": api_key,
     })
+
 @login_required
 def my_orders(request):
     orders = Order.objects.filter(user=request.user).order_by('-created_at')
@@ -66,6 +67,24 @@ def my_orders(request):
         'users/accounts/my_orders.html',
         {'orders': orders},
     )
+
+    
+@login_required
+def my_orders(request):
+    orders = Order.objects.filter(user=request.user).order_by('-created_at')
+
+
+    # Attach last transaction per order (optional, keeps your template simple)
+    for o in orders:
+        o.last_tx = o.transaction_set.order_by('-id').first()
+
+    return render(
+        request,
+        'users/accounts/my_orders.html',
+        {'orders': orders},
+    )
+
+
 
 
 # -------------------- Auth Views --------------------
@@ -174,6 +193,7 @@ class ResendActivationEmailView(View):
         email = (form.cleaned_data["email"] or "").strip()
         cache_key = f"resend_activation:{email.lower()}"
 
+
         if cache.get(cache_key):
             messages.info(request, "We recently sent a link. Check your inbox (and spam) or try again in a few minutes.")
             return redirect("users:resend_activation")
@@ -197,6 +217,33 @@ class ResendActivationEmailView(View):
         cache.set(cache_key, True, timeout=self.COOLDOWN_SECONDS)
         messages.success(request, "A new activation link has been sent to your email.")
         return redirect("users:resend_activation")
+
+
+
+        if cache.get(cache_key):
+            messages.info(request, "We recently sent a link. Check your inbox (and spam) or try again in a few minutes.")
+            return redirect("users:resend_activation")
+
+        try:
+            user = User.objects.get(email__iexact=email)
+        except User.DoesNotExist:
+            messages.error(request, "No account found with that email.")
+            return redirect("users:resend_activation")
+
+        if user.is_active:
+            messages.info(request, "This account is already active.")
+            return redirect("users:resend_activation")
+
+        try:
+            send_activation_email(request, user)
+        except Exception:
+            messages.error(request, "We couldn’t send the email right now. Please try again shortly.")
+            return redirect("users:resend_activation")
+
+        cache.set(cache_key, True, timeout=self.COOLDOWN_SECONDS)
+        messages.success(request, "A new activation link has been sent to your email.")
+        return redirect("users:resend_activation")
+
 
 
 
@@ -284,6 +331,7 @@ def vendor_dashboard(request):
     if not _is_vendor(u):
         return HttpResponseForbidden()
 
+
     Product = apps.get_model("product_app", "Product")
     Delivery = apps.get_model("orders", "Delivery")  # may be None
 
@@ -293,6 +341,19 @@ def vendor_dashboard(request):
     except Exception as e:
         logger.warning("Could not resolve vendor field on Product: %s", e)
         field = None
+
+
+
+    Product = apps.get_model("product_app", "Product")
+    Delivery = apps.get_model("orders", "Delivery")  # may be None
+
+    # Resolve vendor/owner field on Product
+    try:
+        field = get_vendor_field(Product)
+    except Exception as e:
+        logger.warning("Could not resolve vendor field on Product: %s", e)
+        field = None
+
 
     # Vendor's own products (safe even if field is None)
     if field:
