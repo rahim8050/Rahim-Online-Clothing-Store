@@ -6,7 +6,7 @@ Production settings for Rahim_Online_ClothesStore (Render).
 from pathlib import Path
 import os
 from datetime import timedelta
-
+from django.core.management.utils import get_random_secret_key
 import environ
 import dj_database_url
 from django.contrib import messages
@@ -22,8 +22,13 @@ environ.Env.read_env(BASE_DIR / ".env")
 DEBUG = env.bool("DEBUG", False)
 
 SECRET_KEY = env("SECRET_KEY", default=None)
+
 if not SECRET_KEY:
-    raise RuntimeError("SECRET_KEY is not set in environment.")
+    if DEBUG:  # local/dev only
+        SECRET_KEY = "django-insecure-" + get_random_secret_key()
+    else:
+        raise RuntimeError("SECRET_KEY is not set in environment.")
+    
 
 ALLOWED_HOSTS = env.list(
     "ALLOWED_HOSTS",
