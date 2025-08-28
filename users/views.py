@@ -53,6 +53,14 @@ def geoapify_test(request):
     return render(request, "users/accounts/dev.html", {
         "GEOAPIFY_API_KEY": api_key,
     })
+    
+    
+
+@login_required
+def after_login(request):
+    # central place to branch by role later if you want
+    return redirect("dashboard")  # or whatever you have
+    
 @login_required
 def my_orders(request):
     orders = Order.objects.filter(user=request.user).order_by('-created_at')
