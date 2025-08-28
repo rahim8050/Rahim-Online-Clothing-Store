@@ -13,7 +13,6 @@
            class="block px-4 py-2 hover:bg-blue-100">Change Password</a>
         <a href="{% url 'users:my_orders' %}"
            class="block px-4 py-2 hover:bg-blue-100">My Orders</a>
-        <!-- other links -->
     </aside>
 
     <!-- Main content -->
@@ -21,12 +20,88 @@
         <h1 class="text-xl font-semibold mb-4 border-b pb-2">Profile Settings</h1>
         <form method="post" enctype="multipart/form-data" class="space-y-4">
             {% csrf_token %}
-            <!-- Avatar -->
-            ...
-            <!-- Other profile fields -->
+
+            {% if profile_form.errors or profile_form.non_field_errors %}
+                <div class="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+                    <strong class="font-semibold flex items-center mb-2">
+                        <i class="fas fa-exclamation-circle mr-2"></i> Please fix the following errors:
+                    </strong>
+                    <ul class="list-disc list-inside space-y-1">
+                        {% for field in profile_form %}
+                          {% for error in field.errors %}
+                            <li><strong>{{ field.label }}:</strong> {{ error }}</li>
+                          {% endfor %}
+                        {% endfor %}
+                        {% for error in profile_form.non_field_errors %}
+                          <li>{{ error }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            {% endif %}
+
+            <!-- Avatar block with preview and trigger -->
+            <div class="mb-4">
+              <label class="block text-sm font-medium text-gray-700 mb-2">Profile Picture</label>
+              <div class="flex items-center space-x-4">
+                {% if request.user.avatar %}
+                  <img id="avatar-preview" src="{{ request.user.avatar.url }}" alt="Avatar preview" class="w-20 h-20 rounded-full object-cover border-2 border-white shadow" />
+                {% else %}
+                  <div id="avatar-preview" class="w-20 h-20 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-full flex items-center justify-center text-gray-400 text-2xl shadow">
+                    <i class="fas fa-user"></i>
+                  </div>
+                {% endif %}
+                <label for="avatar-upload" class="cursor-pointer px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm text-gray-700 hover:bg-gray-50 flex items-center">
+                  <i class="fas fa-upload mr-2"></i> Change
+                </label>
+              </div>
+              <!-- Keep the actual input hidden; rendered as-is to preserve widget attrs (id=avatar-upload, class=hidden) -->
+              {{ profile_form.avatar }}
+            </div>
+
+            {% for field in profile_form %}
+              {% if field.name != 'avatar' %}
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">{{ field.label }}</label>
+                {% if field.field.widget.input_type == 'file' %}
+                  {% render_field field %}
+                {% else %}
+                  {% render_field field class="w-full px-4 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" %}
+                {% endif %}
+                {% if field.help_text %}
+                  <p class="text-xs text-gray-500 mt-1">{{ field.help_text }}</p>
+                {% endif %}
+              </div>
+              {% endif %}
+            {% endfor %}
+
             <button type="submit" name="update_profile"
                     class="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700">Save Changes</button>
         </form>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  // Avatar preview
+  document.addEventListener('DOMContentLoaded', function(){
+    const input = document.getElementById('avatar-upload');
+    const preview = document.getElementById('avatar-preview');
+    if (!input || !preview) return;
+    input.addEventListener('change', function(){
+      const file = this.files && this.files[0];
+      if (!file) return;
+      const url = URL.createObjectURL(file);
+      if (preview.tagName === 'IMG') {
+        preview.src = url;
+      } else {
+        const img = document.createElement('img');
+        img.src = url;
+        img.className = 'w-20 h-20 rounded-full object-cover border-2 border-white shadow';
+        preview.replaceWith(img);
+        img.id = 'avatar-preview';
+      }
+    });
+  });
+</script>
 {% endblock %}

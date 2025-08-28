@@ -1,0 +1,209 @@
+{% extends 'base.html' %}
+{% load widget_tweaks %}
+
+{% block title %}Edit Order{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8 max-w-5xl">
+  <div class="bg-white rounded-lg shadow-md overflow-hidden">
+    <h2 class="text-2xl md:text-3xl font-bold text-indigo-600 mb-0 text-center py-4 bg-indigo-50">
+      Edit Order #{{ order.id }}
+    </h2>
+
+    <form method="post" action="{% url 'orders:order_edit' order.id %}" id="edit-form"
+          class="md:flex md:divide-x md:divide-gray-200" novalidate>
+      {% csrf_token %}
+
+      {% if form.non_field_errors %}
+        <div class="m-6 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
+          {{ form.non_field_errors }}
+        </div>
+      {% endif %}
+
+      {% if error_msg %}
+        <div class="m-6 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
+          {{ error_msg }}
+        </div>
+      {% endif %}
+
+      <!-- Left Column: Details -->
+      <div class="w-full md:w-1/2 p-6 space-y-4">
+        <div>
+          <label for="dest-search" class="block text-sm font-medium text-gray-700 mb-1">
+            Delivery Address <span class="text-red-500">*</span>
+          </label>
+          <input id="dest-search" type="text"
+                 class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                 autocomplete="off" value="{{ order.dest_address_text }}">
+          <ul id="dest-suggestions"
+              class="border border-gray-300 mt-1 bg-white rounded-md shadow-md max-h-60 overflow-auto hidden"></ul>
+
+          {% render_field form.address type="hidden" id="id_address" value=order.dest_address_text %}
+          <input type="hidden" name="dest_address_text" id="dest_address_text" value="{{ order.dest_address_text }}">
+          <input type="hidden" name="dest_lat" id="dest_lat" value="{{ order.dest_lat }}">
+          <input type="hidden" name="dest_lng" id="dest_lng" value="{{ order.dest_lng }}">
+          <input type="hidden" name="dest_source" id="dest_source" value="autocomplete">
+        </div>
+
+        {# Render all fields EXCEPT address & payment_method #}
+        {% for field in form %}
+          {% if field.name != "address" and field.name != "payment_method" %}
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">
+                {{ field.label }}{% if field.field.required %}<span class="text-red-500">*</span>{% endif %}
+              </label>
+              {% if error_msg and field.errors %}
+                {% render_field field class="w-full px-3 py-2 border border-red-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500" %}
+                <p class="mt-1 text-sm text-red-600">{{ field.errors|striptags }}</p>
+              {% else %}
+                {% render_field field class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500" %}
+              {% endif %}
+            </div>
+          {% endif %}
+        {% endfor %}
+
+        {# Payment method (Card / M-Pesa only; no PayPal) #}
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2">
+            Select Payment Method <span class="text-red-500">*</span>
+          </label>
+
+          {% with current=form.payment_method.value|default_if_none:order.payment_method %}
+          <div class="space-y-2">
+            <label class="flex items-center gap-3 p-3 border rounded-lg hover:bg-indigo-50 cursor-pointer">
+              <input type="radio" name="payment_method" value="card"
+                     class="h-4 w-4 text-indigo-600 focus:ring-indigo-500"
+                     {% if current == "card" %}checked{% endif %}>
+              <span>Card</span>
+            </label>
+
+            <label class="flex items-center gap-3 p-3 border rounded-lg hover:bg-indigo-50 cursor-pointer">
+              <input type="radio" name="payment_method" value="mpesa"
+                     class="h-4 w-4 text-indigo-600 focus:ring-indigo-500"
+                     {% if current == "mpesa" %}checked{% endif %}>
+              <span>M-Pesa</span>
+            </label>
+          </div>
+          {% endwith %}
+
+          {% if form.payment_method.errors %}
+            <p class="mt-1 text-sm text-red-600">{{ form.payment_method.errors|striptags }}</p>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Right Column: Items & Total -->
+      <div class="w-full md:w-1/2 p-6 bg-gray-50">
+        <h3 class="text-xl font-semibold text-gray-800 mb-3">Items</h3>
+        <div class="space-y-3">
+          {% for item in order_items %}
+            <div class="p-3 bg-white border rounded">
+              <div class="flex items-center justify-between">
+                <div>
+                  <div class="font-medium">{{ item.product.name }}</div>
+                  <div class="text-sm text-gray-500">KES {{ item.price }} each</div>
+                </div>
+                <div class="flex items-center space-x-3">
+                  <label class="text-sm text-gray-600">Qty</label>
+                  <input type="number" min="0" name="quantity_{{ item.id }}"
+                         value="{{ item.quantity }}" class="w-20 px-2 py-1 border rounded" />
+                  <label class="inline-flex items-center text-sm">
+                    <input type="checkbox" name="remove_{{ item.id }}" class="mr-1">
+                    Remove
+                  </label>
+                </div>
+              </div>
+            </div>
+          {% empty %}
+            <p class="text-sm text-gray-600">No items.</p>
+          {% endfor %}
+        </div>
+
+        <!-- Order Total (recomputed server-side after save) -->
+        <div class="mt-6 border-t border-gray-200 pt-4">
+          <h4 class="text-sm font-medium text-gray-700 mb-2">Current Total</h4>
+          <div class="text-xl font-semibold text-indigo-600">KES {{ selected_total|floatformat:2 }}</div>
+        </div>
+
+        <button type="submit" id="save-btn"
+                class="w-full mt-6 bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-6 py-3 rounded-lg">
+          Save Changes
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{% if GEOAPIFY_ENABLED %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const input = document.getElementById('dest-search');
+  const list = document.getElementById('dest-suggestions');
+  const addr = document.getElementById('id_address');
+  const destTxt = document.getElementById('dest_address_text');
+  const destLat = document.getElementById('dest_lat');
+  const destLng = document.getElementById('dest_lng');
+  let controller;
+
+  function choosePlace(p) {
+    input.value = p.formatted;
+    addr.value = p.formatted;
+    destTxt.value = p.formatted;
+    destLat.value = p.lat;
+    destLng.value = p.lon;
+    list.classList.add('hidden');
+  }
+
+  input.addEventListener('input', function () {
+    const q = input.value.trim();
+    list.innerHTML = '';
+    if (q.length < 3) {
+      list.classList.add('hidden');
+      return;
+    }
+    if (controller) controller.abort();
+    controller = new AbortController();
+    fetch('{% url "orders:geo-autocomplete" %}?q=' + encodeURIComponent(q), {signal: controller.signal})
+      .then(r => r.ok ? r.json() : {results: []})
+      .then(data => {
+        list.innerHTML = '';
+        (data.results || []).forEach((p) => {
+          const li = document.createElement('li');
+          li.tabIndex = 0;
+          li.className = 'p-2 hover:bg-indigo-600 hover:text-white cursor-pointer';
+          li.textContent = p.formatted;
+          li.addEventListener('click', () => choosePlace(p));
+          li.addEventListener('keydown', e => { if (e.key === 'Enter') choosePlace(p); });
+          list.appendChild(li);
+        });
+        list.classList.toggle('hidden', !list.children.length);
+      }).catch(() => {});
+  });
+
+  input.addEventListener('keydown', function(e){
+    if (e.key === 'ArrowDown' && list.children.length) {
+      e.preventDefault();
+      list.children[0].focus();
+    }
+  });
+
+  list.addEventListener('keydown', function(e){
+    const items = Array.from(list.children);
+    const idx = items.indexOf(document.activeElement);
+    if (e.key === 'ArrowDown' && idx < items.length - 1) {
+      e.preventDefault();
+      items[idx+1].focus();
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (idx > 0) items[idx-1].focus(); else input.focus();
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      document.activeElement.click();
+    }
+  });
+});
+</script>
+{% endif %}
+{% endblock %}

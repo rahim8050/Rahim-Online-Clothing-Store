@@ -55,9 +55,15 @@ def geoapify_test(request):
     })
 @login_required
 def my_orders(request):
-    orders = Order.objects.filter(user=request.user).order_by('-created_at')
+    orders = (
+        Order.objects
+        .filter(user=request.user)
+        .order_by('-created_at')
+        .prefetch_related('items__product', 'items__warehouse', 'deliveries')
+        .annotate(delivery_count=Count('deliveries'))
+    )
 
-    # Attach last transaction per order (optional, keeps your template simple)
+    # Attach last transaction per order (used by template to show verified status)
     for o in orders:
         o.last_tx = o.transaction_set.order_by('-id').first()
 
@@ -228,6 +234,46 @@ def profile_view(request):
         request,
         "users/accounts/profile.html",
         {"profile_form": profile_form, "password_form": password_form},
+    )
+
+
+# -------------------- Split Profile Pages --------------------
+@login_required
+def profile_settings_view(request):
+    if request.method == "POST":
+        form = UserUpdateForm(request.POST, request.FILES, instance=request.user)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Your profile has been updated successfully.")
+            return redirect("users:profile_settings")
+        messages.error(request, "Please correct the errors in your profile form.")
+    else:
+        form = UserUpdateForm(instance=request.user)
+
+    return render(
+        request,
+        "users/accounts/profile_settings.html",
+        {"profile_form": form},
+    )
+
+
+@login_required
+def change_password_view(request):
+    if request.method == "POST":
+        form = CustomPasswordChangeForm(user=request.user, data=request.POST)
+        if form.is_valid():
+            user = form.save()
+            update_session_auth_hash(request, user)
+            messages.success(request, "Your password was updated successfully.")
+            return redirect("users:change_password")
+        messages.error(request, "Please correct the errors in your password form.")
+    else:
+        form = CustomPasswordChangeForm(user=request.user)
+
+    return render(
+        request,
+        "users/accounts/change_password.html",
+        {"password_form": form},
     )
 
 

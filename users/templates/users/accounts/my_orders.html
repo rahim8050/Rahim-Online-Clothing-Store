@@ -25,6 +25,16 @@
             {% endif %}
           </p>
 
+          {% comment %} Show Edit button when order is safely editable: unpaid, stock not reserved, and no deliveries {% endcomment %}
+          {% if not order.paid and not order.stock_updated and order.delivery_count == 0 %}
+            <div class="mt-2">
+              <a href="{% url 'orders:order_edit' order.id %}"
+                 class="inline-block bg-yellow-500 hover:bg-yellow-600 text-white text-sm font-medium px-3 py-2 rounded">
+                Edit Order
+              </a>
+            </div>
+          {% endif %}
+
           <p><span class="font-semibold">Address:</span> {{ order.address }}</p>
 {% with dlv=order.deliveries.first %}
   {% for item in order.items.all %}
