@@ -1,90 +1,47 @@
 """
-Production settings for Rahim_Online_ClothesStore (Render).
+Production settings for Rahim_Online_ClothesStore on Render.
 """
-
-# ---------------------------- Core ----------------------------
 from pathlib import Path
 import os
 from datetime import timedelta
 
-from django.core.management.utils import get_random_secret_key
-
-import environ
 import dj_database_url
-from django.contrib import messages
 from django.db import models
+from django.db.models import CharField
+from django.contrib import messages
+from django.db.models.functions import Length  # for CharField lookup
 
+# ---------------------------- Core ----------------------------
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# Single source of truth for env vars
+def env_bool(key: str, default: bool = False) -> bool:
+    val = os.getenv(key)
+    if val is None:
+        return default
+    return str(val).lower() in {"1", "true", "yes", "on"}
 
-env = environ.Env(DEBUG=(bool, False))
-# Locally this reads .env; on Render you use dashboard env vars (safe to keep here)
-environ.Env.read_env(BASE_DIR / ".env")
+DEBUG = env_bool("DEBUG", False)
 
-DEBUG = env.bool("DEBUG", False)
-
-SECRET_KEY = env("SECRET_KEY", default=None)
-
-
-env = environ.Env(
-    DEBUG=(bool, False),
-    ENV=(str, "prod"),  # prod|staging|dev
-)
-
-# Only read .env locally if present (avoid overriding Render dashboard envs)
-if os.path.exists(BASE_DIR / ".env"):
-    environ.Env.read_env(BASE_DIR / ".env")
-
-DEBUG = env.bool("DEBUG", False)
-ENV = env("ENV").lower()
-IS_PROD = (ENV == "prod") and not DEBUG
-
-SECRET_KEY = env("SECRET_KEY", default=None)
-
+SECRET_KEY = os.getenv("SECRET_KEY")
 if not SECRET_KEY:
-    if DEBUG:  # local/dev only
-        SECRET_KEY = "django-insecure-" + get_random_secret_key()
-    else:
-        raise RuntimeError("SECRET_KEY is not set in environment.")
-    
+    raise RuntimeError("SECRET_KEY is not set in environment.")
 
-ALLOWED_HOSTS = env.list(
+# Parse ALLOWED_HOSTS from comma list, trimming spaces
+ALLOWED_HOSTS = [h.strip() for h in os.getenv(
     "ALLOWED_HOSTS",
+    "127.0.0.1,localhost,codealpa-online-clothesstore.onrender.com",
+).split(",") if h.strip()]
 
-    default=["codealpa-online-clothesstore.onrender.com"]
-)
-
-# Render dynamic hostname support
-RENDER_HOST = os.getenv("RENDER_EXTERNAL_HOSTNAME")
+# Dynamic Render hostname support
+RENDER_HOST = os.environ.get("RENDER_EXTERNAL_HOSTNAME")  # e.g. mysvc.onrender.com
 if RENDER_HOST and RENDER_HOST not in ALLOWED_HOSTS:
     ALLOWED_HOSTS.append(RENDER_HOST)
-
-STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "")
-PAYSTACK_SECRET_KEY = os.getenv("PAYSTACK_SECRET_KEY", "")
-SENTRY_DSN = os.getenv("SENTRY_DSN", "")
-
-    default=["codealpa-online-clothesstore.onrender.com"],
-)
-
-# Render dynamic hostname support
-RENDER_HOST = os.getenv("RENDER_EXTERNAL_HOSTNAME")
-if RENDER_HOST and RENDER_HOST not in ALLOWED_HOSTS:
-    ALLOWED_HOSTS.append(RENDER_HOST)
-
 
 # CSRF needs absolute origins with scheme
-CSRF_TRUSTED_ORIGINS = env.list(
-    "CSRF_TRUSTED_ORIGINS",
-
-    default=[f"https://{h}" if not h.startswith(("http://", "https://")) else h for h in ALLOWED_HOSTS]
-
-    default=[
-        (h if h.startswith(("http://", "https://")) else f"https://{h}")
-        for h in ALLOWED_HOSTS
-    ],
-
-)
+CSRF_TRUSTED_ORIGINS = [
+    h if h.startswith(("http://", "https://")) else f"https://{h}"
+    for h in ALLOWED_HOSTS
+]
 
 ROOT_URLCONF = "Rahim_Online_ClothesStore.urls"
 ASGI_APPLICATION = "Rahim_Online_ClothesStore.asgi.application"
@@ -99,7 +56,6 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-    "django.contrib.humanize",
 
     "channels",
     "product_app",
@@ -114,14 +70,12 @@ INSTALLED_APPS = [
     "utilities",
     "rest_framework",
     "apis.apps.ApisConfig",
-    "dashboards",
     "django_extensions",
-    "payments",
 ]
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
-    "whitenoise.middleware.WhiteNoiseMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",  # static in prod
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -129,21 +83,6 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "core.middleware.PermissionsPolicyMiddleware",
-    "core.middleware.RequestIDMiddleware",
-]
-
-try:
-    import corsheaders  # noqa
-except ImportError:  # pragma: no cover
-    corsheaders = None
-
-if corsheaders:
-    INSTALLED_APPS += ["corsheaders"]
-    MIDDLEWARE.insert(1, "corsheaders.middleware.CorsMiddleware")
-
-AUTHENTICATION_BACKENDS = [
-    "users.backends.EmailOrUsernameModelBackend",
-    "django.contrib.auth.backends.ModelBackend",
 ]
 
 # ------------------------- Templates --------------------------
@@ -165,107 +104,50 @@ TEMPLATES = [
 ]
 
 # -------------------------- Database --------------------------
-
-DATABASES = {
-    "default": dj_database_url.config(
-        default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
-        conn_max_age=600,
-        ssl_require=not DEBUG,
-    )
-}
-
-# -------------------------- Channels --------------------------
-REDIS_URL = env("REDIS_URL", default="redis://127.0.0.1:6379/0")
-REDIS_SSL = REDIS_URL.startswith("rediss://")
-
-CHANNEL_LAYERS = {
-    "default": {
-        "BACKEND": "channels_redis.core.RedisChannelLayer",
-        "CONFIG": {
-            "hosts": [REDIS_URL],
-            "ssl": REDIS_SSL,
-        },
-    }
-}
-
-# Prefer DATABASE_URL (Supabase/Render). Fallback to SQLite for local dev.
-DATABASE_URL = env("DATABASE_URL", default=None)
-
-if DATABASE_URL:
-    DATABASES = {
-        "default": dj_database_url.parse(
-            DATABASE_URL,
-            conn_max_age=600,
-            ssl_require=True,  # enforces sslmode=require
-        )
-    }
+# Prefer DATABASE_URL (Supabase Session Pooler). Fallback to SQLite locally.
+db_default = dj_database_url.config(
+    default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
+    conn_max_age=600,
+    ssl_require=False,  # add ssl only for Postgres below
+)
+engine = (db_default.get("ENGINE") or "").lower()
+if engine.endswith(("postgresql", "postgresql_psycopg2")) and not DEBUG:
+    opts = db_default.get("OPTIONS") or {}
+    opts.setdefault("sslmode", "require")
+    db_default["OPTIONS"] = opts
 else:
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.sqlite3",
-            "NAME": BASE_DIR / "db.sqlite3",
-        }
-    }
+    db_default.pop("OPTIONS", None)
+
+DATABASES = {"default": db_default}
 
 # -------------------------- Channels --------------------------
-REDIS_URL = env("REDIS_URL", default=None)
-if REDIS_URL:
-    # If your Redis is TLS (rediss://), channels_redis detects it via URL
-    CHANNEL_LAYERS = {
-        "default": {
+REDIS_URL = os.getenv("REDIS_URL")
+CHANNEL_LAYERS = {
+    "default": (
+        {
             "BACKEND": "channels_redis.core.RedisChannelLayer",
             "CONFIG": {"hosts": [REDIS_URL]},
         }
-    }
-    CACHES = {
-        "default": {
-            "BACKEND": "django.core.cache.backends.redis.RedisCache",
-            "LOCATION": REDIS_URL,
-            "TIMEOUT": None,
-        }
-    }
-else:
-    # Safe fallback for environments without Redis
-    CHANNEL_LAYERS = {
-        "default": {"BACKEND": "channels.layers.InMemoryChannelLayer"}
-    }
-    CACHES = {
-        "default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}
-    }
-
-
-CACHES = {
-    "default": {
-        "BACKEND": "django.core.cache.backends.redis.RedisCache",
-        "LOCATION": REDIS_URL,
-        "TIMEOUT": None,
-        "OPTIONS": {
-            "ssl": REDIS_SSL,
-        },
-    }
+        if REDIS_URL
+        else {"BACKEND": "channels.layers.InMemoryChannelLayer"}
+    )
 }
-CHANNEL_LAYERS = {
-    "default": {
-        "BACKEND": "channels.layers.InMemoryChannelLayer",
-    }
-}
+
 # ------------------------- Auth / API -------------------------
+AUTHENTICATION_BACKENDS = [
+    "users.backends.EmailOrUsernameModelBackend",
+    "django.contrib.auth.backends.ModelBackend",
+]
+
 REST_FRAMEWORK = {
-    "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "rest_framework_simplejwt.authentication.JWTAuthentication",
-        "rest_framework.authentication.SessionAuthentication",
     ],
 }
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=60),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=1),
 }
-
-AUTH_USER_MODEL = "users.CustomUser"
-
-LOGIN_REDIRECT_URL = "/dashboard/"
-LOGOUT_REDIRECT_URL = "/accounts/login/"
 
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
@@ -274,18 +156,24 @@ AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
 
+AUTH_USER_MODEL = "users.CustomUser"
+
 # ------------------------ I18N / Time -------------------------
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = "Africa/Nairobi"
 USE_I18N = True
 USE_TZ = True
 
-# --------------------- Static & Media (WhiteNoise) ------------
+# --------------------- Static & Media (Django 5) --------------
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 STATICFILES_DIRS = [BASE_DIR / "static"]
+
+MEDIA_URL = "media/"
+MEDIA_ROOT = BASE_DIR / "mediafiles"
+
 STORAGES = {
-    "default": {
+    "default": {  # <-- required; fixes InvalidStorageError
         "BACKEND": "django.core.files.storage.FileSystemStorage",
     },
     "staticfiles": {
@@ -296,139 +184,63 @@ STORAGES = {
         ),
     },
 }
-MEDIA_URL = "media/"
-MEDIA_ROOT = BASE_DIR / "mediafiles"
 
 # -------------------------- Security --------------------------
-
-ENV = os.getenv("ENV", "dev").lower()     # dev | staging | prod
-DEBUG = os.getenv("DEBUG", "1") == "1"
-IS_PROD = ENV == "prod"
-
-# --- Redirects / proxy trust ---
-SECURE_SSL_REDIRECT = IS_PROD                # only force HTTPS in prod
-SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https') if IS_PROD else None
-USE_X_FORWARDED_HOST = IS_PROD
-
-# --- HSTS (never in dev) ---
-SECURE_HSTS_SECONDS = 60 * 60 * 24 * 14 if IS_PROD else 0
-SECURE_HSTS_INCLUDE_SUBDOMAINS = IS_PROD
-SECURE_HSTS_PRELOAD = IS_PROD
-
-# --- Cookies (secure only when using HTTPS) ---
-
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
-SECURE_SSL_REDIRECT = IS_PROD
+USE_X_FORWARDED_HOST = True
 
-SESSION_COOKIE_SECURE = IS_PROD
-CSRF_COOKIE_SECURE = IS_PROD
+SECURE_SSL_REDIRECT = not DEBUG
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
 SESSION_COOKIE_SAMESITE = "Lax"
 CSRF_COOKIE_SAMESITE = "Lax"
 
-
-# Optional: set a canonical host in prod to avoid odd redirects
-ALLOWED_HOSTS = ["127.0.0.1", "localhost"] if not IS_PROD else ["yourdomain.com"]
-
-
-
-CORS_ALLOWED_ORIGINS = env.list("CORS_ALLOWED_ORIGINS", default=[])
+SECURE_HSTS_SECONDS = 60 * 60 * 24 * 14 if not DEBUG else 0
+SECURE_HSTS_INCLUDE_SUBDOMAINS = not DEBUG
+SECURE_HSTS_PRELOAD = not DEBUG
 
 # -------------------- Third-party / Payments -------------------
-# Geoapify
-GEOAPIFY_API_KEY = env("GEOAPIFY_API_KEY", default=None)
+GEOAPIFY_API_KEY = os.getenv("GEOAPIFY_API_KEY")
 GEOCODING_TIMEOUT = 6
 GEOCODING_USER_AGENT = "RahimOnline/1.0 (contact: admin@example.com)"
 
-# M-PESA
-MPESA_ENVIRONMENT = env("MPESA_ENVIRONMENT", default="sandbox")
-MPESA_CONSUMER_KEY = env("MPESA_CONSUMER_KEY", default=None)
-MPESA_CONSUMER_SECRET = env("MPESA_CONSUMER_SECRET", default=None)
-MPESA_SHORTCODE = env("MPESA_SHORTCODE", default=None)
-MPESA_EXPRESS_SHORTCODE = env("MPESA_EXPRESS_SHORTCODE", default=None)
-MPESA_SHORTCODE_TYPE = env("MPESA_SHORTCODE_TYPE", default="paybill")
-MPESA_PASSKEY = env("MPESA_PASS_KEY", default=None)
+MPESA_ENVIRONMENT = os.getenv("MPESA_ENVIRONMENT", "sandbox")
+MPESA_CONSUMER_KEY = os.getenv("MPESA_CONSUMER_KEY")
+MPESA_CONSUMER_SECRET = os.getenv("MPESA_CONSUMER_SECRET")
+MPESA_SHORTCODE = os.getenv("MPESA_SHORTCODE")
+MPESA_EXPRESS_SHORTCODE = os.getenv("MPESA_EXPRESS_SHORTCODE")
+MPESA_SHORTCODE_TYPE = os.getenv("MPESA_SHORTCODE_TYPE", "paybill")
+MPESA_PASSKEY = os.getenv("MPESA_PASS_KEY")
 
-# Stripe
-STRIPE_SECRET_KEY = env("STRIPE_SECRET_KEY", default=None)
-STRIPE_PUBLISHABLE_KEY = env("STRIPE_PUBLISHABLE_KEY", default=None)
-STRIPE_WEBHOOK_SECRET = env("STRIPE_WEBHOOK_SECRET", default=None)
+STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY")
+STRIPE_PUBLISHABLE_KEY = os.getenv("STRIPE_PUBLISHABLE_KEY")
+STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET")
 
-# PayPal
-PAYPAL_CLIENT_ID = env("PAYPAL_CLIENT_ID", default=None)
-PAYPAL_CLIENT_SECRET = env("PAYPAL_CLIENT_SECRET", default=None)
-PAYPAL_MODE = env("PAYPAL_MODE", default="sandbox")
+PAYPAL_CLIENT_ID = os.getenv("PAYPAL_CLIENT_ID")
+PAYPAL_CLIENT_SECRET = os.getenv("PAYPAL_CLIENT_SECRET")
+PAYPAL_MODE = os.getenv("PAYPAL_MODE", "sandbox")
 
-
-PAYSTACK_PUBLIC_KEY = env("PAYSTACK_PUBLIC_KEY", default=None)
-PAYSTACK_SECRET_KEY = env("PAYSTACK_SECRET_KEY", default=None)
-
-# Fail fast in production if Paystack keys are missing
-
-if not DEBUG:
-
-if IS_PROD:
-
-    missing = [k for k, v in {
-        "PAYSTACK_PUBLIC_KEY": PAYSTACK_PUBLIC_KEY,
-        "PAYSTACK_SECRET_KEY": PAYSTACK_SECRET_KEY,
-    }.items() if not v]
-    if missing:
-        raise RuntimeError(f"Missing required Paystack envs: {', '.join(missing)}")
-
-
-# Optional: short prefix logs in DEBUG only (remove after verifying)
-
-# Optional: short prefix logs in DEBUG only
-
-if DEBUG:
-    print("PAYSTACK_PUBLIC_KEY:", (PAYSTACK_PUBLIC_KEY or "")[:6], "…")
-    print("PAYSTACK_SECRET_KEY:", (PAYSTACK_SECRET_KEY or "")[:6], "…")
+PAYSTACK_PUBLIC_KEY = os.getenv("PAYSTACK_PUBLIC_KEY")
+PAYSTACK_SECRET_KEY = os.getenv("PAYSTACK_SECRET_KEY")
 
 # ---------------------------- Email ----------------------------
-def _env_bool(key: str, default: bool = False) -> bool:
-    v = os.getenv(key)
-    return default if v is None else str(v).lower() in {"1", "true", "yes", "on"}
-
-def _env_str(key: str, default: str = "") -> str:
-    # Strip whitespace and surrounding quotes copied from dashboards
-    v = os.getenv(key, default)
-    return (v or "").strip().strip('"').strip("'")
-
-EMAIL_BACKEND = _env_str("EMAIL_BACKEND", "django.core.mail.backends.smtp.EmailBackend")
-EMAIL_HOST = _env_str("EMAIL_HOST", "smtp.gmail.com")
+EMAIL_BACKEND = os.getenv("EMAIL_BACKEND", "django.core.mail.backends.smtp.EmailBackend")
+EMAIL_HOST = os.getenv("EMAIL_HOST", "")
 EMAIL_PORT = int(os.getenv("EMAIL_PORT", "587"))
-EMAIL_USE_TLS = _env_bool("EMAIL_USE_TLS", True)
-EMAIL_USE_SSL = _env_bool("EMAIL_USE_SSL", False)
+EMAIL_USE_TLS = env_bool("EMAIL_USE_TLS", True)
+EMAIL_USE_SSL = env_bool("EMAIL_USE_SSL", False)
 if EMAIL_USE_SSL:
-    EMAIL_USE_TLS = False  # never both
-
-EMAIL_HOST_USER = _env_str("EMAIL_HOST_USER")
-EMAIL_HOST_PASSWORD = _env_str("EMAIL_HOST_PASSWORD")
+    EMAIL_USE_TLS = False
+EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
 EMAIL_TIMEOUT = int(os.getenv("EMAIL_TIMEOUT", "10"))
-
-
-_default_from = _env_str("DEFAULT_FROM_EMAIL") or EMAIL_HOST_USER or "no-reply@codealpa.shop"
-DEFAULT_FROM_EMAIL = _default_from
-SERVER_EMAIL = _env_str("SERVER_EMAIL") or DEFAULT_FROM_EMAIL
-EMAIL_SUBJECT_PREFIX = _env_str("EMAIL_SUBJECT_PREFIX", "[CodeAlpa] ")
-
-# In dev with no SMTP host, fall back to console backend
+DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", EMAIL_HOST_USER or "no-reply@codealpa.shop")
+SERVER_EMAIL = os.getenv("SERVER_EMAIL", DEFAULT_FROM_EMAIL)
+EMAIL_SUBJECT_PREFIX = os.getenv("EMAIL_SUBJECT_PREFIX", "[CodeAlpa] ")
+_admins = os.getenv("DJANGO_ADMINS", "")
+ADMINS = [tuple(item.split(":", 1)) for item in _admins.split(",") if ":" in item]
 if DEBUG and not EMAIL_HOST:
     EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
-
-# Fail fast in production if using SMTP without proper creds
-
-if not DEBUG and EMAIL_BACKEND.endswith("smtp.EmailBackend"):
-
-if IS_PROD and EMAIL_BACKEND.endswith("smtp.EmailBackend"):
-
-    missing = []
-    if not EMAIL_HOST_USER:
-        missing.append("EMAIL_HOST_USER")
-    if not EMAIL_HOST_PASSWORD:
-        missing.append("EMAIL_HOST_PASSWORD")
-    if missing:
-        raise RuntimeError(f"Missing required email envs: {', '.join(missing)}")
 
 # --------------------------- UI bits ---------------------------
 CRISPY_ALLOWED_TEMPLATE_PACKS = "bootstrap5"
@@ -456,5 +268,4 @@ LOGGING = {
 
 # ---------------------------- Misc -----------------------------
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
-from django.db.models.functions import Length  # noqa: E402
-models.CharField.register_lookup(Length)
+CharField.register_lookup(Length)
