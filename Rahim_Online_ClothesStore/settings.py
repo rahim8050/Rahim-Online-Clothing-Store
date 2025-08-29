@@ -33,6 +33,9 @@ ALLOWED_HOSTS = env.list(
     default=["codealpa-online-clothesstore.onrender.com"]
 )
 
+if DEBUG:
+    ALLOWED_HOSTS += ["127.0.0.1", "localhost"]
+
 # Render dynamic hostname support
 RENDER_HOST = os.getenv("RENDER_EXTERNAL_HOSTNAME")
 if RENDER_HOST and RENDER_HOST not in ALLOWED_HOSTS:
@@ -45,6 +48,12 @@ CSRF_TRUSTED_ORIGINS = env.list(
     "CSRF_TRUSTED_ORIGINS",
     default=[_with_scheme(h) for h in ALLOWED_HOSTS]
 )
+
+if DEBUG:
+    CSRF_TRUSTED_ORIGINS += ["https://127.0.0.1:8000", "https://localhost:8000"]
+
+if DEBUG:
+    CORS_ALLOWED_ORIGINS = ["https://127.0.0.1:8000", "https://localhost:8000"]
 
 ROOT_URLCONF = "Rahim_Online_ClothesStore.urls"
 ASGI_APPLICATION = "Rahim_Online_ClothesStore.asgi.application"
@@ -230,8 +239,8 @@ SECURE_HSTS_SECONDS = (60 * 60 * 24 * 14) if IS_PROD else 0
 SECURE_HSTS_INCLUDE_SUBDOMAINS = IS_PROD
 SECURE_HSTS_PRELOAD = IS_PROD
 
-SESSION_COOKIE_SECURE = IS_PROD
-CSRF_COOKIE_SECURE = IS_PROD
+SESSION_COOKIE_SECURE = True
+CSRF_COOKIE_SECURE = True
 SESSION_COOKIE_SAMESITE = "Lax"
 CSRF_COOKIE_SAMESITE = "Lax"
 
