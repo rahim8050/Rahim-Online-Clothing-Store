@@ -9,6 +9,7 @@ from datetime import timedelta
 import dj_database_url
 from django.contrib import messages
 from django.db.models import CharField
+from csp.constants import SELF, NONCE
 from django.db.models.functions import Length  # for CharField lookup
 
 # ---------------------------- Core ----------------------------
@@ -85,10 +86,70 @@ INSTALLED_APPS = [
     "django_daraja",
     "Mpesa",
 ]
-CSP_DEFAULT_SRC = ("'self'",)
-CSP_IMG_SRC = ("'self'", "data:", "blob:",
-               "https://tile.openstreetmap.org", "https://*.tile.openstreetmap.org")
-CSP_CONNECT_SRC = ("'self'", "ws:", "wss:")
+
+  
+
+ 
+
+CONTENT_SECURITY_POLICY = {
+    # Optional: don't send CSP headers on specific paths
+    # "EXCLUDE_URL_PREFIXES": ["/admin"],
+
+    "DIRECTIVES": {
+        # Baseline
+        "default-src": [SELF],
+
+        # WebSockets for Channels/Daphne
+        "connect-src": [SELF, "ws:", "wss:"],
+
+        # Scripts: local + nonced inline + CDNs you use
+        "script-src": [
+            SELF,
+            NONCE,                         # allow your small inline bootstraps with a nonce
+            "https://unpkg.com",           # Leaflet CDN
+            "https://js.stripe.com",       # Stripe.js (if used)
+            "https://*.stripe.com",
+            "https://js.paystack.co",      # Paystack inline
+            "https://*.paystack.co",
+            "https://*.paystack.com",
+        ],
+
+        # Styles: local + Leaflet + (optional) Google Fonts CSS
+        "style-src": [
+            SELF,
+            "https://unpkg.com",
+            "https://fonts.googleapis.com",
+        ],
+
+        # Fonts (if you use Google Fonts)
+        "font-src": [SELF, "https://fonts.gstatic.com", "data:"],
+
+        # Images: local + data/blob + OSM tiles
+        "img-src": [
+            SELF,
+            "data:",
+            "blob:",
+            "https://tile.openstreetmap.org",
+            "https://*.tile.openstreetmap.org",
+        ],
+
+        # Payment iframes/popups
+        "frame-src": [
+            "https://js.stripe.com",
+            "https://*.stripe.com",
+            "https://js.paystack.co",
+            "https://*.paystack.co",
+            "https://*.paystack.com",
+        ],
+
+        # Workers (if you use any blob workers)
+        "worker-src": [SELF, "blob:"],
+
+        # Click-jacking protection (only allow your own pages to frame yours)
+        "frame-ancestors": [SELF],
+    },
+}
+
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",  # static in dev/prod
