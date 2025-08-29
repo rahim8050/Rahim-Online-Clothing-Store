@@ -3,6 +3,7 @@ from django.urls import path
 from .views import (
     order_create,
     order_confirmation,
+    order_edit,
     stripe_checkout,
     paystack_checkout,
     paypal_checkout,
@@ -31,6 +32,7 @@ app_name = "orders"
 urlpatterns = [
     path('create', order_create, name="order_create"),
     path("confirmation/<int:order_id>", order_confirmation, name="order_confirmation"),
+    path("edit/<int:order_id>", order_edit, name="order_edit"),
     # Reverse geocode API
     path('api/reverse-geocode/', get_location_info, name='reverse_geocode'),
     path("api/geo/autocomplete/", geo_autocomplete, name="geo-autocomplete"),
