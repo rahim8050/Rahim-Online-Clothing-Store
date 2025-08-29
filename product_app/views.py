@@ -13,6 +13,7 @@ from .models import Category,Product
 
 
 def product_list(request, category_slug=None):
+    print("🔥 product_list view triggered")
     categories = Category.objects.all()
     category = None
 

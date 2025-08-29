@@ -153,7 +153,7 @@
   </div>
 </nav>
 <!-- CSRF Token & External JS -->
-<script>
+<script nonce="{{ request.csp_nonce }}">
   window.CSRF_TOKEN = "{{ csrf_token }}";
 </script>
 <script src="{% static 'js/vue/navbar.js' %}" defer></script>

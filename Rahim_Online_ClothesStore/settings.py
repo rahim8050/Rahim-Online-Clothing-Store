@@ -1,11 +1,9 @@
 """
 Production settings for Rahim_Online_ClothesStore (Render).
 """
-
-# ---------------------------- Core ----------------------------
 from pathlib import Path
-import os
 from datetime import timedelta
+import os
 from django.core.management.utils import get_random_secret_key
 import environ
 import dj_database_url
@@ -14,22 +12,22 @@ from django.db import models
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# Single source of truth for env vars
+# ---------------------------- Env -----------------------------
 env = environ.Env(DEBUG=(bool, False))
-# Locally this reads .env; on Render you use dashboard env vars (safe to keep here)
 environ.Env.read_env(BASE_DIR / ".env")
 
 DEBUG = env.bool("DEBUG", False)
+ENV = env("ENV", default=("prod" if not DEBUG else "dev")).lower()
+IS_PROD = not DEBUG
 
 SECRET_KEY = env("SECRET_KEY", default=None)
-
 if not SECRET_KEY:
-    if DEBUG:  # local/dev only
+    if DEBUG:
         SECRET_KEY = "django-insecure-" + get_random_secret_key()
     else:
         raise RuntimeError("SECRET_KEY is not set in environment.")
-    
 
+# ------------------------ Hosts / CSRF ------------------------
 ALLOWED_HOSTS = env.list(
     "ALLOWED_HOSTS",
     default=["codealpa-online-clothesstore.onrender.com"]
@@ -40,14 +38,12 @@ RENDER_HOST = os.getenv("RENDER_EXTERNAL_HOSTNAME")
 if RENDER_HOST and RENDER_HOST not in ALLOWED_HOSTS:
     ALLOWED_HOSTS.append(RENDER_HOST)
 
-STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "")
-PAYSTACK_SECRET_KEY = os.getenv("PAYSTACK_SECRET_KEY", "")
-SENTRY_DSN = os.getenv("SENTRY_DSN", "")
+def _with_scheme(host: str) -> str:
+    return host if host.startswith(("http://", "https://")) else f"https://{host}"
 
-# CSRF needs absolute origins with scheme
 CSRF_TRUSTED_ORIGINS = env.list(
     "CSRF_TRUSTED_ORIGINS",
-    default=[f"https://{h}" if not h.startswith(("http://", "https://")) else h for h in ALLOWED_HOSTS]
+    default=[_with_scheme(h) for h in ALLOWED_HOSTS]
 )
 
 ROOT_URLCONF = "Rahim_Online_ClothesStore.urls"
@@ -66,6 +62,7 @@ INSTALLED_APPS = [
     "django.contrib.humanize",
 
     "channels",
+    "csp",  # <-- CSP v4
     "product_app",
     "cart.apps.CartConfig",
     "orders.apps.OrdersConfig",
@@ -85,6 +82,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "csp.middleware.CSPMiddleware",            # CSP early
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -96,14 +94,14 @@ MIDDLEWARE = [
     "core.middleware.RequestIDMiddleware",
 ]
 
+# Optional CORS (if installed)
 try:
-    import corsheaders  # noqa
-except ImportError:  # pragma: no cover
-    corsheaders = None
-
-if corsheaders:
+    import corsheaders  # noqa: F401
     INSTALLED_APPS += ["corsheaders"]
-    MIDDLEWARE.insert(1, "corsheaders.middleware.CorsMiddleware")
+    # place CORS high, before CommonMiddleware
+    MIDDLEWARE.insert(3, "corsheaders.middleware.CorsMiddleware")
+except Exception:
+    pass
 
 AUTHENTICATION_BACKENDS = [
     "users.backends.EmailOrUsernameModelBackend",
@@ -133,39 +131,47 @@ DATABASES = {
     "default": dj_database_url.config(
         default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
         conn_max_age=600,
-        ssl_require=not DEBUG,
+        ssl_require=IS_PROD,
     )
 }
 
+# -------------------------- Sessions --------------------------
+SESSION_ENGINE = "django.contrib.sessions.backends.db"
+SESSION_SERIALIZER = "django.contrib.sessions.serializers.JSONSerializer"
+
 # -------------------------- Channels --------------------------
-REDIS_URL = env("REDIS_URL", default="redis://127.0.0.1:6379/0")
-REDIS_SSL = REDIS_URL.startswith("rediss://")
+REDIS_URL = env("REDIS_URL", default="")
+USE_REDIS = bool(REDIS_URL)
 
-CHANNEL_LAYERS = {
-    "default": {
-        "BACKEND": "channels_redis.core.RedisChannelLayer",
-        "CONFIG": {
-            "hosts": [REDIS_URL],
-            "ssl": REDIS_SSL,
-        },
-    }
-}
+if IS_PROD and not USE_REDIS:
+    raise RuntimeError("REDIS_URL is required in production for Channels & cache.")
 
-CACHES = {
-    "default": {
-        "BACKEND": "django.core.cache.backends.redis.RedisCache",
-        "LOCATION": REDIS_URL,
-        "TIMEOUT": None,
-        "OPTIONS": {
-            "ssl": REDIS_SSL,
-        },
+if USE_REDIS:
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels_redis.core.RedisChannelLayer",
+            "CONFIG": {"hosts": [REDIS_URL]},
+        }
     }
-}
-CHANNEL_LAYERS = {
-    "default": {
-        "BACKEND": "channels.layers.InMemoryChannelLayer",
+else:
+    # Dev-only fallback
+    from channels.layers import InMemoryChannelLayer  # noqa
+    CHANNEL_LAYERS = {"default": {"BACKEND": "channels.layers.InMemoryChannelLayer"}}
+
+# --------------------------- Caches ---------------------------
+if USE_REDIS:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.redis.RedisCache",
+            "LOCATION": REDIS_URL,  # use rediss://... for SSL if needed
+            "TIMEOUT": None,
+        }
     }
-}
+else:
+    CACHES = {
+        "default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}
+    }
+
 # ------------------------- Auth / API -------------------------
 REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
@@ -180,7 +186,6 @@ SIMPLE_JWT = {
 }
 
 AUTH_USER_MODEL = "users.CustomUser"
-
 LOGIN_REDIRECT_URL = "/dashboard/"
 LOGOUT_REDIRECT_URL = "/accounts/login/"
 
@@ -197,50 +202,38 @@ TIME_ZONE = "Africa/Nairobi"
 USE_I18N = True
 USE_TZ = True
 
-# --------------------- Static & Media (WhiteNoise) ------------
+# --------------------- Static / Media -------------------------
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 STATICFILES_DIRS = [BASE_DIR / "static"]
+
 STORAGES = {
-    "default": {
-        "BACKEND": "django.core.files.storage.FileSystemStorage",
-    },
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
     "staticfiles": {
         "BACKEND": (
             "whitenoise.storage.CompressedManifestStaticFilesStorage"
-            if not DEBUG
+            if IS_PROD
             else "whitenoise.storage.CompressedStaticFilesStorage"
         ),
     },
 }
+
 MEDIA_URL = "media/"
 MEDIA_ROOT = BASE_DIR / "mediafiles"
 
 # -------------------------- Security --------------------------
-ENV = os.getenv("ENV", "dev").lower()     # dev | staging | prod
-DEBUG = os.getenv("DEBUG", "1") == "1"
-IS_PROD = ENV == "prod"
-
-# --- Redirects / proxy trust ---
-SECURE_SSL_REDIRECT = IS_PROD                # only force HTTPS in prod
-SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https') if IS_PROD else None
+SECURE_SSL_REDIRECT = IS_PROD
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https") if IS_PROD else None
 USE_X_FORWARDED_HOST = IS_PROD
 
-# --- HSTS (never in dev) ---
-SECURE_HSTS_SECONDS = 60 * 60 * 24 * 14 if IS_PROD else 0
+SECURE_HSTS_SECONDS = (60 * 60 * 24 * 14) if IS_PROD else 0
 SECURE_HSTS_INCLUDE_SUBDOMAINS = IS_PROD
 SECURE_HSTS_PRELOAD = IS_PROD
 
-# --- Cookies (secure only when using HTTPS) ---
 SESSION_COOKIE_SECURE = IS_PROD
 CSRF_COOKIE_SECURE = IS_PROD
 SESSION_COOKIE_SAMESITE = "Lax"
 CSRF_COOKIE_SAMESITE = "Lax"
-
-# Optional: set a canonical host in prod to avoid odd redirects
-ALLOWED_HOSTS = ["127.0.0.1", "localhost"] if not IS_PROD else ["yourdomain.com"]
-
-CORS_ALLOWED_ORIGINS = env.list("CORS_ALLOWED_ORIGINS", default=[])
 
 # -------------------- Third-party / Payments -------------------
 # Geoapify
@@ -262,17 +255,14 @@ STRIPE_SECRET_KEY = env("STRIPE_SECRET_KEY", default=None)
 STRIPE_PUBLISHABLE_KEY = env("STRIPE_PUBLISHABLE_KEY", default=None)
 STRIPE_WEBHOOK_SECRET = env("STRIPE_WEBHOOK_SECRET", default=None)
 
-# PayPal
 PAYPAL_CLIENT_ID = env("PAYPAL_CLIENT_ID", default=None)
 PAYPAL_CLIENT_SECRET = env("PAYPAL_CLIENT_SECRET", default=None)
 PAYPAL_MODE = env("PAYPAL_MODE", default="sandbox")
 
-# Paystack (✅ these are the ones you need)
+# Paystack (required in prod)
 PAYSTACK_PUBLIC_KEY = env("PAYSTACK_PUBLIC_KEY", default=None)
 PAYSTACK_SECRET_KEY = env("PAYSTACK_SECRET_KEY", default=None)
-
-# Fail fast in production if Paystack keys are missing
-if not DEBUG:
+if IS_PROD:
     missing = [k for k, v in {
         "PAYSTACK_PUBLIC_KEY": PAYSTACK_PUBLIC_KEY,
         "PAYSTACK_SECRET_KEY": PAYSTACK_SECRET_KEY,
@@ -280,7 +270,6 @@ if not DEBUG:
     if missing:
         raise RuntimeError(f"Missing required Paystack envs: {', '.join(missing)}")
 
-# Optional: short prefix logs in DEBUG only (remove after verifying)
 if DEBUG:
     print("PAYSTACK_PUBLIC_KEY:", (PAYSTACK_PUBLIC_KEY or "")[:6], "…")
     print("PAYSTACK_SECRET_KEY:", (PAYSTACK_SECRET_KEY or "")[:6], "…")
@@ -291,7 +280,6 @@ def _env_bool(key: str, default: bool = False) -> bool:
     return default if v is None else str(v).lower() in {"1", "true", "yes", "on"}
 
 def _env_str(key: str, default: str = "") -> str:
-    # Strip whitespace and surrounding quotes copied from dashboards
     v = os.getenv(key, default)
     return (v or "").strip().strip('"').strip("'")
 
@@ -301,24 +289,21 @@ EMAIL_PORT = int(os.getenv("EMAIL_PORT", "587"))
 EMAIL_USE_TLS = _env_bool("EMAIL_USE_TLS", True)
 EMAIL_USE_SSL = _env_bool("EMAIL_USE_SSL", False)
 if EMAIL_USE_SSL:
-    EMAIL_USE_TLS = False  # never both
+    EMAIL_USE_TLS = False
 
 EMAIL_HOST_USER = _env_str("EMAIL_HOST_USER")
 EMAIL_HOST_PASSWORD = _env_str("EMAIL_HOST_PASSWORD")
 EMAIL_TIMEOUT = int(os.getenv("EMAIL_TIMEOUT", "10"))
 
-# Prefer a branded From that matches the authenticated account
 _default_from = _env_str("DEFAULT_FROM_EMAIL") or EMAIL_HOST_USER or "no-reply@codealpa.shop"
 DEFAULT_FROM_EMAIL = _default_from
 SERVER_EMAIL = _env_str("SERVER_EMAIL") or DEFAULT_FROM_EMAIL
 EMAIL_SUBJECT_PREFIX = _env_str("EMAIL_SUBJECT_PREFIX", "[CodeAlpa] ")
 
-# In dev with no SMTP host, fall back to console backend
 if DEBUG and not EMAIL_HOST:
     EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 
-# Fail fast in production if using SMTP without proper creds
-if not DEBUG and EMAIL_BACKEND.endswith("smtp.EmailBackend"):
+if IS_PROD and EMAIL_BACKEND.endswith("smtp.EmailBackend"):
     missing = []
     if not EMAIL_HOST_USER:
         missing.append("EMAIL_HOST_USER")
@@ -327,6 +312,52 @@ if not DEBUG and EMAIL_BACKEND.endswith("smtp.EmailBackend"):
     if missing:
         raise RuntimeError(f"Missing required email envs: {', '.join(missing)}")
 
+# ------------------------------ CSP ---------------------------
+# CSP v4 format
+from csp.constants import SELF, NONCE
+
+CONTENT_SECURITY_POLICY = {
+    "DIRECTIVES": {
+        "default-src": [SELF],
+        "connect-src": [SELF, "ws:", "wss:", "https://api.cloudinary.com"],
+        "script-src": [
+            SELF,
+            NONCE,
+            "https://cdn.tailwindcss.com",
+            "https://cdn.jsdelivr.net",
+            "https://unpkg.com",
+            "https://widget.cloudinary.com",
+            "https://js.stripe.com",
+            "https://*.stripe.com",
+            "https://js.paystack.co",
+            "https://*.paystack.co",
+            "https://*.paystack.com",
+        ],
+        "style-src": [
+            SELF,
+            "https://cdnjs.cloudflare.com",
+            "https://unpkg.com",
+            "https://fonts.googleapis.com",
+        ],
+        "font-src": [SELF, "https://fonts.gstatic.com", "https://cdnjs.cloudflare.com", "data:"],
+        "img-src": [
+            SELF,
+            "data:", "blob:",
+            "https://res.cloudinary.com",
+            "https://tile.openstreetmap.org",
+            "https://*.tile.openstreetmap.org",
+        ],
+        "frame-src": [
+            "https://js.stripe.com",
+            "https://*.stripe.com",
+            "https://js.paystack.co",
+            "https://*.paystack.co",
+            "https://*.paystack.com",
+        ],
+        "worker-src": [SELF, "blob:"],
+        "frame-ancestors": [SELF],
+    },
+}
 
 # --------------------------- UI bits ---------------------------
 CRISPY_ALLOWED_TEMPLATE_PACKS = "bootstrap5"

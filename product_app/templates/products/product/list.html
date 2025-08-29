@@ -4,7 +4,7 @@
 
 {% block content %}
 
-<script>
+<script nonce="{{ request.csp_nonce }}">
 window.initialData = {
     products: {{ products|safe }},
     categories: {{ categories|safe }},
@@ -67,7 +67,7 @@ window.initialData = {
 
 <script src="https://cdn.jsdelivr.net/npm/vue@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/vue@2"></script>
-<script>
+<script nonce="{{ request.csp_nonce }}">
 function capitalizeWords(text) {
     return text ? text.toLowerCase().split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') : '';
 }
