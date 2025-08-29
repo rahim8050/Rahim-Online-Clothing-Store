@@ -29,7 +29,8 @@
                 <li class="flex flex-col md:flex-row items-start md:items-center justify-between p-4 border rounded-lg">
                     <div class="flex-1 mb-2 md:mb-0">
                         <div class="flex items-center space-x-4">
-                            {% if item.product.image %}
+                            {# keep code, but only render images when show_images=True #}
+                            {% if show_images and item.product.image %}
                                 <img src="{{ item.product.image.url }}"
                                      alt="{{ item.product.name }}"
                                      class="w-16 h-16 object-cover rounded-lg">
@@ -68,12 +69,18 @@
         <div class="bg-gray-50 p-6 rounded-lg">
             <h4 class="font-semibold mb-4">Order Status</h4>
             <div class="flex items-center mb-2">
-                {% if order.payment.status == "PAID" %}
+                {% if ui_payment_status == "PAID" %}
                     <span class="w-3 h-3 bg-green-500 rounded-full mr-2"></span>
                     <span class="text-green-600 font-medium">Paid</span>
-                {% elif order.payment.status == "PENDING" %}
+                {% elif ui_payment_status == "PENDING" %}
                     <span class="w-3 h-3 bg-yellow-400 rounded-full mr-2"></span>
-                    <span class="text-yellow-500 font-medium">Pending</span>
+                    <span class="text-yellow-500 font-medium">Payment Processing</span>
+                {% elif ui_payment_status == "FAILED" %}
+                    <span class="w-3 h-3 bg-red-500 rounded-full mr-2"></span>
+                    <span class="text-red-600 font-medium">Payment Failed</span>
+                {% elif ui_payment_status == "CANCELLED" %}
+                    <span class="w-3 h-3 bg-gray-400 rounded-full mr-2"></span>
+                    <span class="text-gray-600 font-medium">Payment Cancelled</span>
                 {% else %}
                     <span class="w-3 h-3 bg-red-500 rounded-full mr-2"></span>
                     <span class="text-red-600 font-medium">Not Paid</span>
@@ -99,34 +106,41 @@
     <!-- Payment Section -->
     <div class="mt-8 space-y-6">
 
-       {% if order.payment.status != "PAID" %}
-    {% if order.payment_method == 'card' or order.payment_method == 'mpesa' %}
-    <!-- Paystack Payment Button -->
-    <div class="flex justify-center">
-        <a href="{% url 'orders:paystack_checkout' order.id %}?payment_method={{ order.payment_method }}"
-           class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-6 py-3 rounded-lg shadow-md">
-            Pay with {% if order.payment_method == "mpesa" %}M-Pesa{% else %}Card{% endif %}
-        </a>
-    </div>
-      {% elif order.payment_method == "paypal" %}
-      <!-- PayPal temporarily removed -->
-      {#
-      <!-- PayPal Payment Button -->
-      <div class="flex justify-center">
-          <a href="{% url 'orders:paypal_checkout' order.id %}"
-             class="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-3 rounded-lg shadow-md">
-              Pay with PayPal
+       {% if order.is_editable %}
+        <div class="flex justify-center">
+          <a href="{% url 'orders:order_edit' order.id %}"
+             class="inline-block bg-yellow-500 hover:bg-yellow-600 text-white font-semibold px-6 py-3 rounded-lg shadow-md mr-3">
+            Edit Order
           </a>
-      </div>
-      #}
-      {% endif %}
-{% else %}
-    <!-- Payment Already Done -->
-    <div class="text-center text-green-600 font-semibold">
-        ✅ Payment received. Thank you!
-    </div>
-{% endif %}
+        </div>
+       {% endif %}
 
+       {% if ui_payment_status != "PAID" %}
+           {% if order.payment_method == 'card' or order.payment_method == 'mpesa' %}
+           <!-- Paystack Payment Button -->
+           <div class="flex justify-center">
+               <a href="{% url 'orders:paystack_checkout' order.id %}?payment_method={{ order.payment_method }}"
+                  class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-6 py-3 rounded-lg shadow-md">
+                   Pay with {% if order.payment_method == "mpesa" %}M-Pesa{% else %}Card{% endif %}
+               </a>
+           </div>
+
+           {% elif order.payment_method == "paypal" and False %}
+           {# Branch intentionally disabled; keep code here without rendering #}
+           <!-- PayPal Payment Button -->
+           <div class="flex justify-center">
+               <a href="{% url 'orders:paypal_checkout' order.id %}"
+                  class="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-3 rounded-lg shadow-md">
+                   Pay with PayPal
+               </a>
+           </div>
+           {% endif %}
+       {% else %}
+           <!-- Payment Already Done -->
+           <div class="text-center text-green-600 font-semibold">
+               ✅ Payment received. Thank you!
+           </div>
+       {% endif %}
 
         <!-- Continue Shopping Link -->
         <div class="flex justify-center mt-6">

@@ -101,6 +101,11 @@ class Order(models.Model):
     def __str__(self):
         return f"Order #{self.id} for {self.full_name}"
 
+    @property
+    def is_editable(self) -> bool:
+        """Allow editing only while unpaid and stock not reserved."""
+        return (not self.paid) and (not self.stock_updated)
+
 
 class OrderItem(models.Model):
     DELIVERY_STATUS_CHOICES = [
