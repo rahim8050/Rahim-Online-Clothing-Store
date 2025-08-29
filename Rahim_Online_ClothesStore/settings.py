@@ -230,6 +230,11 @@ STORAGES = {
 MEDIA_URL = "media/"
 MEDIA_ROOT = BASE_DIR / "mediafiles"
 
+# Ensure Whitenoise uses finders in development so /static/* is served
+# directly from app/static and STATICFILES_DIRS without collectstatic.
+if not IS_PROD:
+    WHITENOISE_USE_FINDERS = True
+
 # -------------------------- Security --------------------------
 SECURE_SSL_REDIRECT = IS_PROD
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https") if IS_PROD else None
@@ -342,11 +347,19 @@ CONTENT_SECURITY_POLICY = {
             "https://*.paystack.co",
             "https://*.paystack.com",
         ],
+        # Allow external stylesheets as before and permit nonced <style> tags.
+        # Inline style attributes remain blocked by default; see style-src-attr below.
         "style-src": [
             SELF,
+            NONCE,
             "https://cdnjs.cloudflare.com",
             "https://unpkg.com",
             "https://fonts.googleapis.com",
+        ],
+        # Permit style attributes set by trusted JS (e.g., Leaflet, minor UI tweaks)
+        # without allowing arbitrary <style> elements.
+        "style-src-attr": [
+            "'unsafe-inline'",
         ],
         "font-src": [SELF, "https://fonts.gstatic.com", "https://cdnjs.cloudflare.com", "data:"],
         "img-src": [
