@@ -6,8 +6,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, shrink-to-fit=no" />
     <meta http-equiv="X-UA-Compatible" content="ie=edge" />
 
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Tailwind CSS (local build) -->
+    <link rel="stylesheet" href="{% static 'dist/styles.css' %}">
 
 
     <!-- Font Awesome -->
@@ -21,7 +21,7 @@
 
 
 
-   <script>
+   <script nonce="{{ request.csp_nonce }}">
   window.CSRF_TOKEN = "{{ csrf_token }}";
 </script>
 
@@ -72,7 +72,7 @@
     </footer>
 
     <!-- Flash Message Script -->
-    <script>
+    <script nonce="{{ request.csp_nonce }}">
         document.addEventListener('DOMContentLoaded', function () {
             const flashMessages = document.querySelectorAll('.flash-message');
 

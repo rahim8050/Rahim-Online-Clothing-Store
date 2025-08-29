@@ -74,14 +74,14 @@
 </div>
 
 <!-- Product JSON injection -->
-<script id="product-data" type="application/json">
+<script id="product-data" type="application/json" nonce="{{ request.csp_nonce }}">
   {{ product_json|safe }}
 </script>
 {% endblock %}
 
 {% block extra_js %}
 <script src="https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.prod.js"></script>
-<script>
+<script nonce="{{ request.csp_nonce }}">
 const { createApp } = Vue;
 
 function capitalizeWords(text) {

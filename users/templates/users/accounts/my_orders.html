@@ -85,7 +85,7 @@
 <script src="https://unpkg.com/leaflet/dist/leaflet.js" defer></script>
 <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js" defer></script>
 
-<script>
+<script nonce="{{ request.csp_nonce }}">
 (function () {
   const wsScheme = location.protocol === 'https:' ? 'wss' : 'ws';
   const TICK_SNAP_NEAREST_EVERY = 5;
