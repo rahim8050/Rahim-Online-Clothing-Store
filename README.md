@@ -15,7 +15,8 @@ python manage.py assign_warehouses_to_items
 Quick manual test from the browser console:
 
 ```javascript
-const ws = new WebSocket('ws://127.0.0.1:8000/ws/delivery/track/DELIVERY_ID/');
+const wsScheme = location.protocol === "https:" ? "wss" : "ws";
+const ws = new WebSocket(`${wsScheme}://${location.host}/ws/delivery/track/DELIVERY_ID/`);
 ws.onmessage = (e) => console.log(JSON.parse(e.data));
 ```
 
