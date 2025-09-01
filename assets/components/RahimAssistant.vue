@@ -69,7 +69,7 @@ export default {
   props: {
     endpoint: { type: String, default: '/api/assistant/ask/' },
     title: { type: String, default: 'Rahim Assistant' },
-    subtitle: { type: String, default: 'Powered by your store & wallet data' },
+    subtitle: { type: String, default: 'Powered by Rahim online cloth store' },
     beta: { type: Boolean, default: true },
     suggestions: {
       type: Array,
