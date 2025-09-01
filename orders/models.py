@@ -347,6 +347,26 @@ class DeliveryPing(models.Model):
                 setattr(self, f, Decimal(v).quantize(Q6, rounding=ROUND_HALF_UP))
         return super().save(*args, **kwargs)
 
+
+class DeliveryEvent(models.Model):
+    TYPE_CHOICES = (
+        ("assign", "Assigned"),
+        ("unassign", "Unassigned"),
+        ("picked", "Picked up"),
+        ("en_route", "En route"),
+        ("delivered", "Delivered"),
+        ("position", "Position"),
+    )
+    delivery = models.ForeignKey('orders.Delivery', on_delete=models.CASCADE, related_name='events')
+    actor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+    type = models.CharField(max_length=20, choices=TYPE_CHOICES)
+    at = models.DateTimeField(auto_now_add=True)
+    note = models.JSONField(null=True, blank=True)
+
+    class Meta:
+        indexes = [Index(fields=["delivery", "at"]), Index(fields=["at"]) ]
+
+
 # =========================
 # Payments / Events
 # =========================

@@ -225,6 +225,12 @@ class DeliveryTrackerConsumer(AsyncJsonWebsocketConsumer):
                 DeliveryPing.objects.create(delivery=d, lat=lat, lng=lng)
             except Exception:
                 pass
+            # best-effort audit
+            try:
+                DeliveryEvent = apps.get_model("orders", "DeliveryEvent")
+                DeliveryEvent.objects.create(delivery=d, actor_id=user_id, type="position", note={"lat": float(lat), "lng": float(lng)})
+            except Exception:
+                pass
         return changed, new_status
 
     @database_sync_to_async

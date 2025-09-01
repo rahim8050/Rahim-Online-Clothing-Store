@@ -58,3 +58,9 @@ urlpatterns = [
 router = DefaultRouter()
 router.register(r"deliveries", DeliveryViewSet, basename="driver-deliveries-v2")
 urlpatterns += router.urls
+
+# Vendor deliveries (read-only list)
+from apis.views import VendorDeliveriesAPI
+urlpatterns += [
+    path("vendor/deliveries/", VendorDeliveriesAPI.as_view(), name="vendor-deliveries"),
+]

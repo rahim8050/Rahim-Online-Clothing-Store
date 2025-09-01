@@ -40,6 +40,7 @@ from product_app.queries import shopable_products_q
 from product_app.models import Product
 from product_app.utils import get_vendor_field
 from orders.models import Delivery, OrderItem
+from orders.models import DeliveryEvent
 from users.constants import VENDOR, VENDOR_STAFF, DRIVER
 from users.models import VendorStaff  # <-- FIX: was missing
 from rest_framework import permissions
@@ -183,6 +184,47 @@ class DriverDeliveriesAPI(APIView):
         return Response(serializer.data)
 
 
+class VendorDeliveriesAPI(APIView):
+    permission_classes = [IsAuthenticated, IsVendorOrVendorStaff]
+
+    def get(self, request):
+        # Resolve owner context safely
+        raw_owner = request.query_params.get("owner_id")
+        try:
+            owner_id = resolve_vendor_owner_for(request.user, raw_owner)
+        except ValueError as e:
+            return Response({"owner_id": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Deliveries whose order contains at least one product for this owner
+        Delivery = apps.get_model("orders", "Delivery")
+        Product = apps.get_model("product_app", "Product")
+        from product_app.utils import get_vendor_field
+        field = get_vendor_field(Product)  # e.g., "owner" or "vendor"
+        vendor_field = f"order__items__product__{field}_id"
+
+        qs = (
+            Delivery.objects
+            .filter(**{vendor_field: owner_id})
+            .select_related("order", "driver")
+            .distinct()
+            .order_by("-updated_at")
+        )
+
+        data = [{
+            "id": d.id,
+            "order_id": d.order_id,
+            "driver_id": d.driver_id,
+            "status": d.status,
+            "assigned_at": d.assigned_at and d.assigned_at.isoformat(),
+            "picked_up_at": d.picked_up_at and d.picked_up_at.isoformat(),
+            "delivered_at": d.delivered_at and d.delivered_at.isoformat(),
+            "last_lat": float(d.last_lat) if d.last_lat is not None else None,
+            "last_lng": float(d.last_lng) if d.last_lng is not None else None,
+            "last_ping_at": d.last_ping_at and d.last_ping_at.isoformat(),
+        } for d in qs[:300]]
+        return Response(data)
+
+
 class DeliveryAssignAPI(APIView):
     permission_classes = [IsAuthenticated, InGroups]
     required_groups = [VENDOR, VENDOR_STAFF]
@@ -194,6 +236,10 @@ class DeliveryAssignAPI(APIView):
         driver = get_object_or_404(User, pk=ser.validated_data["driver_id"])
         delivery.mark_assigned(driver)
         delivery.save(update_fields=["driver", "status", "assigned_at"])
+        try:
+            DeliveryEvent.objects.create(delivery=delivery, actor=request.user, type="assign", note={"driver_id": driver.id})
+        except Exception:
+            pass
         _publish_delivery(delivery, "assign", {"driver_id": driver.id})
         return Response(
             DeliverySerializer(delivery, context={"request": request}).data
@@ -210,6 +256,10 @@ class DeliveryUnassignAPI(APIView):
         delivery.status = Delivery.Status.PENDING
         delivery.assigned_at = None
         delivery.save(update_fields=["driver", "status", "assigned_at"])
+        try:
+            DeliveryEvent.objects.create(delivery=delivery, actor=request.user, type="unassign")
+        except Exception:
+            pass
         _publish_delivery(delivery, "unassign", {"driver_id": None})
         return Response(
             DeliverySerializer(delivery, context={"request": request}).data
@@ -242,8 +292,16 @@ class DeliveryStatusAPI(APIView):
         delivery.status = new_status
         if new_status == Delivery.Status.PICKED_UP:
             delivery.picked_up_at = timezone.now()
+            try:
+                DeliveryEvent.objects.create(delivery=delivery, actor=request.user, type="picked")
+            except Exception:
+                pass
         if new_status == Delivery.Status.DELIVERED:
             delivery.delivered_at = timezone.now()
+            try:
+                DeliveryEvent.objects.create(delivery=delivery, actor=request.user, type="delivered")
+            except Exception:
+                pass
         delivery.save(update_fields=["status", "picked_up_at", "delivered_at"])
         _publish_delivery(delivery, "status", {"status": new_status})
         return Response(
@@ -482,15 +540,28 @@ class VendorApplyAPI(APIView):
 
 
 class VendorStaffListCreateView(APIView):
-    permission_classes = [permissions.IsAuthenticated]  # add IsVendorOwner for prod
+    permission_classes = [permissions.IsAuthenticated, IsVendorOwner]
 
     def get(self, request):
-        # Usually you filter by the current owner; keep simple for now
-        qs = VendorStaff.objects.all()
+        # List staff for the resolved owner context only
+        raw_owner = request.query_params.get("owner_id")
+        try:
+            owner_id = resolve_vendor_owner_for(request.user, raw_owner)
+        except ValueError as e:
+            return Response({"owner_id": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        qs = VendorStaff.objects.filter(owner_id=owner_id).order_by("-id")
         return Response(VendorStaffOutSerializer(qs, many=True).data)
 
     def post(self, request):
-        ser = VendorStaffCreateSerializer(data=request.data, context={"request": request})
+        # Force owner_id to resolved owner context; ignore client-supplied owner_id
+        raw_owner = request.data.get("owner_id")
+        try:
+            owner_id = resolve_vendor_owner_for(request.user, raw_owner)
+        except ValueError as e:
+            return Response({"owner_id": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        payload = dict(request.data)
+        payload["owner_id"] = owner_id
+        ser = VendorStaffCreateSerializer(data=payload, context={"request": request})
         ser.is_valid(raise_exception=True)
         row = ser.save()
         return Response(VendorStaffOutSerializer(row).data, status=status.HTTP_201_CREATED)
