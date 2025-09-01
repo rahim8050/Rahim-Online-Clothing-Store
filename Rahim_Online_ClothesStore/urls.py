@@ -34,6 +34,7 @@ urlpatterns = [
 
     # API prefix (align with your frontend: use /apis/... in fetch)
     path('apis/', include('apis.urls')),
+    path('api/assistant/', include('assistant.urls')),
 
 
     path('payments/checkout/', CheckoutView.as_view(), name='payments_checkout'),

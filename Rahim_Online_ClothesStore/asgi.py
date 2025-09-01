@@ -1,14 +1,21 @@
+# Rahim_Online_ClothesStore/asgi.py
 import os
+import django
 from django.core.asgi import get_asgi_application
-from channels.routing import ProtocolTypeRouter, URLRouter
-from channels.auth import AuthMiddlewareStack
-import orders.routing
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "Rahim_Online_ClothesStore.settings")
+django.setup()  # <-- ensure settings are loaded before any app imports
 
 django_asgi_app = get_asgi_application()
 
+# Import AFTER setup
+from channels.routing import ProtocolTypeRouter, URLRouter
+from channels.auth import AuthMiddlewareStack
+import orders.routing  # this imports your consumers safely now
+
 application = ProtocolTypeRouter({
     "http": django_asgi_app,
-    "websocket": AuthMiddlewareStack(URLRouter(orders.routing.websocket_urlpatterns)),
+    "websocket": AuthMiddlewareStack(
+        URLRouter(orders.routing.websocket_urlpatterns)
+    ),
 })
