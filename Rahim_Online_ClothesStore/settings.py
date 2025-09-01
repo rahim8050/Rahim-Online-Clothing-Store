@@ -87,6 +87,7 @@ INSTALLED_APPS = [
     "dashboards",
     "django_extensions",
     "payments",
+    "assistant",
 ]
 
 MIDDLEWARE = [
@@ -150,10 +151,14 @@ SESSION_SERIALIZER = "django.contrib.sessions.serializers.JSONSerializer"
 
 # -------------------------- Channels --------------------------
 REDIS_URL = env("REDIS_URL", default="")
+
 USE_REDIS = bool(REDIS_URL)
+REDIS_SSL = bool(REDIS_URL) and REDIS_URL.startswith("rediss://")
+
 
 if IS_PROD and not USE_REDIS:
     raise RuntimeError("REDIS_URL is required in production for Channels & cache.")
+
 
 if USE_REDIS:
     CHANNEL_LAYERS = {
@@ -177,8 +182,30 @@ if USE_REDIS:
         }
     }
 else:
+    # Fallback: in‑memory cache (sufficient for local dev & throttling)
     CACHES = {
-        "default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "rahim-local",
+            "TIMEOUT": None,
+        }
+    }
+
+# Cache: prefer Redis only when explicitly enabled (prod), otherwise use local memory
+USE_REDIS_CACHE = env.bool("USE_REDIS_CACHE", default=False)
+if USE_REDIS_CACHE and REDIS_URL:
+    _cache_options = {}
+    if REDIS_SSL:
+        # Only include the ssl flag for rediss:// URLs to avoid client kwarg errors
+        _cache_options["ssl"] = True
+
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.redis.RedisCache",
+            "LOCATION": REDIS_URL,
+            "TIMEOUT": None,
+            "OPTIONS": _cache_options,
+        }
     }
 
 # ------------------------- Auth / API -------------------------
@@ -188,6 +215,12 @@ REST_FRAMEWORK = {
         "rest_framework_simplejwt.authentication.JWTAuthentication",
         "rest_framework.authentication.SessionAuthentication",
     ],
+    "DEFAULT_THROTTLE_CLASSES": [
+        "rest_framework.throttling.UserRateThrottle",
+    ],
+    "DEFAULT_THROTTLE_RATES": {
+        "user": "120/min",
+    },
 }
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=60),

@@ -271,6 +271,29 @@ class Delivery(models.Model):
 
 
 # =========================
+# Delivery history (optional trail)
+# =========================
+class DeliveryPing(models.Model):
+    delivery = models.ForeignKey(Delivery, related_name="pings", on_delete=models.CASCADE)
+    lat = models.DecimalField(max_digits=9, decimal_places=6)
+    lng = models.DecimalField(max_digits=9, decimal_places=6)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            Index(fields=["delivery", "created_at"]),
+            Index(fields=["created_at"]),
+        ]
+
+    def save(self, *args, **kwargs):
+        # normalize to 6 dp
+        for f in ("lat", "lng"):
+            v = getattr(self, f, None)
+            if v is not None:
+                setattr(self, f, Decimal(v).quantize(Q6, rounding=ROUND_HALF_UP))
+        return super().save(*args, **kwargs)
+
+# =========================
 # Payments / Events
 # =========================
 class Transaction(models.Model):
