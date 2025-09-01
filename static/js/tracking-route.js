@@ -142,7 +142,7 @@
           return;
         }
 
-        if (data.type === "status") {
+        if (data.type === "status" || data.type === "status_update") {
           updateStatus(data.status);
           return;
         }

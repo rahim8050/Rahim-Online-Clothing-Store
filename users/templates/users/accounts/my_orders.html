@@ -227,7 +227,7 @@
         const d = JSON.parse(evt.data);
 
         // Status broadcasts
-        if (d.type === 'status') {
+        if (d.type === 'status' || d.type === 'status_update') {
           noteDiv && (noteDiv.textContent = `Status: ${d.status}`);
           return;
         }
