@@ -28,6 +28,8 @@ from rest_framework import generics, permissions
 from django.utils.timezone import now
 from django.contrib.auth.models import Group
 from rest_framework.exceptions import ValidationError
+from django.db.models import Prefetch
+from orders.models import Order, OrderItem, Delivery, Transaction 
 
 from orders.models import Order
 from product_app.utils import get_vendor_field
@@ -53,25 +55,75 @@ def geoapify_test(request):
     return render(request, "users/accounts/dev.html", {
         "GEOAPIFY_API_KEY": api_key,
     })
+# users/views.py
+
+
+# users/views.py
+from django.contrib.auth.decorators import login_required
+from django.db.models import Count, OuterRef, Subquery
+from django.shortcuts import render
+from django.conf import settings
+
+from orders.models import Order, OrderItem, Delivery, Transaction  # adjust paths
+
 @login_required
 def my_orders(request):
-    orders = (
-        Order.objects
-        .filter(user=request.user)
-        .order_by('-created_at')
-        .prefetch_related('items__product', 'items__warehouse', 'deliveries')
-        .annotate(delivery_count=Count('deliveries'))
+    # Subquery: id of the latest transaction per order (works even if related_name is "", "+", or missing)
+    latest_tx_id = Subquery(
+        Transaction.objects
+        .filter(order_id=OuterRef("pk"))
+        .order_by("-id")
+        .values("id")[:1]
     )
 
-    # Attach last transaction per order (used by template to show verified status)
+    orders_qs = (
+        Order.objects
+        .filter(user=request.user)
+        .order_by("-created_at")
+        .annotate(delivery_count=Count("deliveries", distinct=True),
+                  last_tx_id=latest_tx_id)
+        .prefetch_related(
+            # keep your other prefetches
+            # Using select_related on the item query avoids extra hits for product/warehouse
+            # If your related_name differs, adjust accordingly.
+        )
+    )
+
+    # Evaluate and attach last_tx objects in a single extra query
+    orders = list(orders_qs)
+    tx_ids = [o.last_tx_id for o in orders if o.last_tx_id]
+    tx_map = {
+        tx.id: tx
+        for tx in Transaction.objects.filter(id__in=tx_ids)
+        .only("id", "order_id", "callback_received", "created_at")
+    }
     for o in orders:
-        o.last_tx = o.transaction_set.order_by('-id').first()
+        o.last_tx = tx_map.get(o.last_tx_id)  # <- preserves template usage: order.last_tx.callback_received
 
     return render(
         request,
-        'users/accounts/my_orders.html',
-        {'orders': orders},
+        "users/accounts/my_orders.html",
+        {"orders": orders, "WS_ORIGIN": getattr(settings, "WS_ORIGIN", "")},
     )
+
+#debug
+# users/debug_ws.py  (new)
+from django.http import JsonResponse, HttpResponseForbidden
+from django.contrib.admin.views.decorators import staff_member_required
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
+
+
+@staff_member_required
+def debug_ws_push(request, delivery_id: int):
+    lat = float(request.GET.get("lat", "-1.303"))
+    lng = float(request.GET.get("lng", "36.807"))
+    layer = get_channel_layer()
+    async_to_sync(layer.group_send)(
+        f"delivery.track.{delivery_id}",
+        {"type": "broadcast", "payload": {"type": "position_update", "lat": lat, "lng": lng}},
+    )
+    return JsonResponse({"ok": True, "delivery": delivery_id, "lat": lat, "lng": lng})
 
 
 # -------------------- Auth Views --------------------
