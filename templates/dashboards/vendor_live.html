@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+<div class="p-4">
+  <h2 class="text-xl font-semibold mb-3">Vendor Live Deliveries</h2>
+  <div id="board" class="rounded-2xl border bg-white shadow-sm overflow-hidden">
+    <table class="min-w-full text-sm">
+      <thead class="bg-gray-50 text-gray-700">
+        <tr>
+          <th class="px-3 py-2 text-left">Delivery</th>
+          <th class="px-3 py-2 text-left">Order</th>
+          <th class="px-3 py-2 text-left">Status</th>
+          <th class="px-3 py-2 text-left">Driver</th>
+          <th class="px-3 py-2 text-left">Last Ping</th>
+          <th class="px-3 py-2 text-left">Actions</th>
+        </tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function(){
+  const rows = document.getElementById('rows');
+  const qs = new URLSearchParams(location.search);
+  const owner = qs.get('owner_id');
+
+  function cell(html){ const td=document.createElement('td'); td.className='px-3 py-2 border-t'; td.innerHTML=html; return td; }
+
+  async function refresh(){
+    const url = new URL('/apis/vendor/deliveries/', location.origin);
+    if (owner) url.searchParams.set('owner_id', owner);
+    const r = await fetch(url, { credentials: 'same-origin' });
+    if (!r.ok) return;
+    const arr = await r.json();
+    rows.innerHTML='';
+    arr.forEach(d => {
+      const tr = document.createElement('tr');
+      tr.appendChild(cell('#'+d.id));
+      tr.appendChild(cell('#'+d.order_id));
+      tr.appendChild(cell(d.status));
+      tr.appendChild(cell(d.driver_id || '-'));
+      tr.appendChild(cell(d.last_ping_at ? new Date(d.last_ping_at).toLocaleString() : '-'));
+      tr.appendChild(cell(`<a class="text-blue-600 underline" href="/orders/orders/${d.order_id}/track/">Track</a>`));
+      rows.appendChild(tr);
+    });
+  }
+
+  refresh();
+  setInterval(refresh, 15000);
+})();
+</script>
+{% endblock %}
+
