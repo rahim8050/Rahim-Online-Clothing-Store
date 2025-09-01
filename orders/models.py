@@ -154,6 +154,17 @@ class OrderItem(models.Model):
 # =========================
 # Delivery
 # =========================
+# imports you need at top of models.py
+from uuid import uuid4
+from decimal import Decimal, ROUND_HALF_UP
+from django.conf import settings
+from django.db import models, transaction
+from django.db.models import Q, CheckConstraint, Index
+from django.utils import timezone
+
+Q6 = Decimal("0.000001")  # 6 dp for coord quantization
+
+
 def channel_key_default() -> str:
     return uuid4().hex  # 32 chars
 
@@ -169,11 +180,8 @@ class Delivery(models.Model):
 
     order = models.ForeignKey("orders.Order", related_name="deliveries", on_delete=models.CASCADE)
     driver = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        null=True,
-        blank=True,
-        related_name="deliveries",
-        on_delete=models.SET_NULL,
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        related_name="deliveries", on_delete=models.SET_NULL,
     )
 
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING, db_index=True)
@@ -181,30 +189,18 @@ class Delivery(models.Model):
     picked_up_at = models.DateTimeField(null=True, blank=True)
     delivered_at = models.DateTimeField(null=True, blank=True)
 
-    origin_lat = models.DecimalField(
-        max_digits=9, decimal_places=6, null=True, blank=True,
-        validators=[MinValueValidator(-90), MaxValueValidator(90)],
-    )
-    origin_lng = models.DecimalField(
-        max_digits=9, decimal_places=6, null=True, blank=True,
-        validators=[MinValueValidator(-180), MaxValueValidator(180)],
-    )
-    dest_lat = models.DecimalField(
-        max_digits=9, decimal_places=6, null=True, blank=True,
-        validators=[MinValueValidator(-90), MaxValueValidator(90)],
-    )
-    dest_lng = models.DecimalField(
-        max_digits=9, decimal_places=6, null=True, blank=True,
-        validators=[MinValueValidator(-180), MaxValueValidator(180)],
-    )
-    last_lat = models.DecimalField(
-        max_digits=9, decimal_places=6, null=True, blank=True,
-        validators=[MinValueValidator(-90), MaxValueValidator(90)],
-    )
-    last_lng = models.DecimalField(
-        max_digits=9, decimal_places=6, null=True, blank=True,
-        validators=[MinValueValidator(-180), MaxValueValidator(180)],
-    )
+    origin_lat = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True,
+                                     validators=[MinValueValidator(-90), MaxValueValidator(90)])
+    origin_lng = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True,
+                                     validators=[MinValueValidator(-180), MaxValueValidator(180)])
+    dest_lat   = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True,
+                                     validators=[MinValueValidator(-90), MaxValueValidator(90)])
+    dest_lng   = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True,
+                                     validators=[MinValueValidator(-180), MaxValueValidator(180)])
+    last_lat   = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True,
+                                     validators=[MinValueValidator(-90), MaxValueValidator(90)])
+    last_lng   = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True,
+                                     validators=[MinValueValidator(-180), MaxValueValidator(180)])
     last_ping_at = models.DateTimeField(null=True, blank=True)
 
     channel_key = models.CharField(max_length=32, unique=True, default=channel_key_default, editable=False)
@@ -214,12 +210,10 @@ class Delivery(models.Model):
 
     class Meta:
         constraints = [
-            # when "moving", driver must be set
             CheckConstraint(
                 name="delivery_driver_required_when_moving",
                 check=Q(status__in=["pending", "delivered", "cancelled"]) | Q(driver__isnull=False),
             ),
-            # allow NULL or valid range for all coords
             CheckConstraint(
                 name="delivery_dest_lat_range_or_null",
                 check=Q(dest_lat__isnull=True) | (Q(dest_lat__gte=-90) & Q(dest_lat__lte=90)),
@@ -258,48 +252,55 @@ class Delivery(models.Model):
             self.origin_lat = wh.latitude
             self.origin_lng = wh.longitude
 
+    # ---------- state transitions (idempotent + persisted) ----------
     @transaction.atomic
     def mark_assigned(self, driver, when=None):
-        """Assign a driver. Idempotent: preserves first assigned_at.
-        """
+        """pending/assigned -> assigned; forbid after delivered/cancelled."""
         when = when or timezone.now()
+        if self.status in (self.Status.DELIVERED, self.Status.CANCELLED):
+            raise ValueError("Cannot assign a delivered or cancelled delivery")
         self.driver = driver
         if not self.assigned_at:
             self.assigned_at = when
         self.status = self.Status.ASSIGNED
+        self.save(update_fields=["driver", "assigned_at", "status", "updated_at"])
 
     @transaction.atomic
     def mark_picked_up(self, by=None, when=None):
-        """ASSIGNED -> PICKED_UP. Idempotent: preserves first picked_up_at."""
+        """assigned -> picked_up (idempotent)."""
         when = when or timezone.now()
         if self.status not in {self.Status.ASSIGNED, self.Status.PICKED_UP}:
-            raise ValueError("Invalid transition: can only pick up from ASSIGNED")
+            raise ValueError("Can only pick up from ASSIGNED")
         if not self.picked_up_at:
             self.picked_up_at = when
         self.status = self.Status.PICKED_UP
+        self.save(update_fields=["picked_up_at", "status", "updated_at"])
 
     @transaction.atomic
     def mark_en_route(self, by=None, when=None):
-        """ASSIGNED/PICKED_UP -> EN_ROUTE. Set picked_up_at if missing."""
+        """assigned/picked_up -> en_route; set picked_up_at if missing."""
         when = when or timezone.now()
         if self.status not in {self.Status.ASSIGNED, self.Status.PICKED_UP, self.Status.EN_ROUTE}:
-            raise ValueError("Invalid transition: can only go en_route from ASSIGNED/PICKED_UP")
+            raise ValueError("Can only go EN_ROUTE from ASSIGNED/PICKED_UP")
         if not self.picked_up_at:
             self.picked_up_at = when
         self.status = self.Status.EN_ROUTE
+        self.save(update_fields=["picked_up_at", "status", "updated_at"])
 
     @transaction.atomic
     def mark_delivered(self, by=None, when=None):
-        """EN_ROUTE -> DELIVERED. Idempotent."""
+        """picked_up/en_route -> delivered (idempotent)."""
         when = when or timezone.now()
         if self.status not in {self.Status.PICKED_UP, self.Status.EN_ROUTE, self.Status.DELIVERED}:
-            raise ValueError("Invalid transition: can only deliver from EN_ROUTE/PICKED_UP")
+            raise ValueError("Can only DELIVER from PICKED_UP/EN_ROUTE")
         if not self.picked_up_at:
             self.picked_up_at = when
         if not self.delivered_at:
             self.delivered_at = when
         self.status = self.Status.DELIVERED
+        self.save(update_fields=["picked_up_at", "delivered_at", "status", "updated_at"])
 
+    # ---------- location hygiene ----------
     def _norm_pair(self, lat, lng):
         if lat is None or lng is None:
             return lat, lng
@@ -307,23 +308,20 @@ class Delivery(models.Model):
             lat = float(lat); lng = float(lng)
         except Exception:
             return lat, lng
-        # If swapped, fix obvious swap
-        if abs(lat) > 90 and abs(lng) <= 180:
+        if abs(lat) > 90 and abs(lng) <= 180:  # obvious swap
             lat, lng = lng, lat
-        # Clamp ranges
         lat = max(-90.0, min(90.0, lat))
         lng = max(-180.0, min(180.0, lng))
-        # Quantize to 6 dp
         lat = Decimal(str(lat)).quantize(Q6, rounding=ROUND_HALF_UP)
         lng = Decimal(str(lng)).quantize(Q6, rounding=ROUND_HALF_UP)
         return lat, lng
 
     def save(self, *args, **kwargs):
-        # Normalize coordinate pairs
         self.origin_lat, self.origin_lng = self._norm_pair(self.origin_lat, self.origin_lng)
-        self.dest_lat, self.dest_lng = self._norm_pair(self.dest_lat, self.dest_lng)
-        self.last_lat, self.last_lng = self._norm_pair(self.last_lat, self.last_lng)
+        self.dest_lat,   self.dest_lng   = self._norm_pair(self.dest_lat, self.dest_lng)
+        self.last_lat,   self.last_lng   = self._norm_pair(self.last_lat, self.last_lng)
         super().save(*args, **kwargs)
+
 
 
 # =========================

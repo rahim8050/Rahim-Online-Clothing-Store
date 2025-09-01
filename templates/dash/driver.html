@@ -3,7 +3,10 @@
 
 {% block content %}
 <div class="p-4">
-  <h2 class="text-xl font-semibold mb-3">My Deliveries</h2>
+  <h2 class="text-xl font-semibold mb-3">
+    My Deliveries
+    <small class="text-gray-500 ml-2">({{ request.user.username }})</small>
+  </h2>
   <div id="driver-app"></div>
 </div>
 
@@ -16,8 +19,8 @@
   window.DELIVERY_API = {
     list: "{% url 'orders:driver-deliveries-api' %}",
     routePattern: "{% url 'orders:driver-route-api' 0 %}",  // -> /orders/apis/driver/route/0/
-    pickupPattern: "/api/deliveries/0/pickup/",              // replaced at runtime with id
-    deliverPattern: "/api/deliveries/0/deliver/"             // replaced at runtime with id
+    pickupPattern: "/apis/deliveries/0/pickup/",              // replaced at runtime with id
+    deliverPattern: "/apis/deliveries/0/deliver/"             // replaced at runtime with id
   };
 </script>
 
@@ -26,21 +29,18 @@
 (function () {
   // --- knobs ---
   const ACTIVE = ["assigned", "picked_up", "en_route"];
-  const SPEED_KMPH = 30;    // fallback ETA if route API not used/slow
-  const MIN_PING_MS = 8000; // throttle driver pings
-  const MIN_MOVE_M = 25;    // only ping if moved > X meters
+  const SPEED_KMPH = 30;
+  const MIN_PING_MS = 8000;
+  const MIN_MOVE_M = 25;
 
   // --- helpers ---
   const num = (v) => v == null || v === "" ? null : Number(v);
   const latlngFixed = (lat, lng) => {
     lat = num(lat); lng = num(lng);
     if (lat == null || lng == null) return { lat: null, lng: null };
-    // If someone swapped them (e.g., 36.8, -1.29), fix it.
     if (Math.abs(lat) > 90 && Math.abs(lng) <= 180) { const t = lat; lat = lng; lng = t; }
     return { lat, lng };
   };
-
-  // Pure Haversine (used by chooseBestDest and component)
   function haversineKm(a, b) {
     const R = 6371;
     const dLat = (b.lat - a.lat) * Math.PI / 180;
@@ -49,31 +49,22 @@
                Math.cos(a.lat * Math.PI / 180) * Math.cos(b.lat * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
     return 2 * R * Math.asin(Math.sqrt(s1));
   }
-
-  // Choose the destination orientation (as-is vs swapped) that is closer to the driver
   const chooseBestDest = (driver, dest) => {
-    if (!driver || driver.lat == null || driver.lng == null ||
-        !dest || dest.lat == null || dest.lng == null) return dest;
-
+    if (!driver || driver.lat == null || driver.lng == null || !dest || dest.lat == null || dest.lng == null) return dest;
     const dAsIs = haversineKm(driver, dest);
     const dSwap = haversineKm(driver, { lat: dest.lng, lng: dest.lat });
-    return (isFinite(dAsIs) && isFinite(dSwap) && dSwap + 0.1 < dAsIs)
-      ? { lat: dest.lng, lng: dest.lat }
-      : dest;
+    return (isFinite(dAsIs) && isFinite(dSwap) && dSwap + 0.1 < dAsIs) ? { lat: dest.lng, lng: dest.lat } : dest;
   };
-
   const hasGeoAPI = () =>
     typeof navigator !== "undefined" &&
     navigator.geolocation &&
     typeof navigator.geolocation.watchPosition === "function";
 
-  // Leaflet icon
   function iconTruck() {
     return L.divIcon({
       className: "driver-truck-icon",
       html: '<div style="display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:#2563eb;color:white;box-shadow:0 1px 4px rgba(0,0,0,.25)"><img src="/favicon.ico" alt="driver" style="width:16px;height:16px;border-radius:3px"/></div>',
-      iconSize: [26, 26],
-      iconAnchor: [13, 13]
+      iconSize: [26, 26], iconAnchor: [13, 13]
     });
   }
 
@@ -86,8 +77,7 @@
         deliveries: [],
         activeId: null,
 
-        // filters + styling helpers
-        statusFilter: "all", // all | pending | assigned | picked_up | en_route | delivered | cancelled
+        statusFilter: "all",
 
         // geo + websocket
         watchId: null,
@@ -95,18 +85,15 @@
         wsReady: false,
         outbox: [],
 
-        // throttling
         lastSentAt: 0,
         lastSent: null,
 
-        // map state
         map: null,
         driverMarker: null,
         destMarker: null,
         routeLine: null,
         etaText: "—",
 
-        // route throttling
         lastRouteKey: null,
         lastRouteAt: 0,
 
@@ -138,12 +125,12 @@
       // ---------- UI meta ----------
       statusMeta(s) {
         const meta = {
-          pending:    { label: "Pending",    cls: "bg-gray-100 text-gray-800", pct: 10 },
-          assigned:   { label: "Assigned",   cls: "bg-amber-100 text-amber-800", pct: 25 },
-          picked_up:  { label: "Picked up",  cls: "bg-blue-100 text-blue-800",   pct: 60 },
+          pending:    { label: "Pending",    cls: "bg-gray-100 text-gray-800",     pct: 10 },
+          assigned:   { label: "Assigned",   cls: "bg-amber-100 text-amber-800",   pct: 25 },
+          picked_up:  { label: "Picked up",  cls: "bg-blue-100 text-blue-800",     pct: 60 },
           en_route:   { label: "En route",   cls: "bg-indigo-100 text-indigo-800", pct: 80 },
           delivered:  { label: "Delivered",  cls: "bg-emerald-100 text-emerald-800", pct: 100 },
-          cancelled:  { label: "Cancelled",  cls: "bg-red-100 text-red-800", pct: 0 },
+          cancelled:  { label: "Cancelled",  cls: "bg-red-100 text-red-800",       pct: 0 },
         };
         return meta[s] || { label: s, cls: "bg-gray-100 text-gray-800", pct: 0 };
       },
@@ -156,9 +143,7 @@
           const r = await fetch(window.DELIVERY_API.list, { credentials: "same-origin" });
           if (!r.ok) return;
           const arr = await r.json();
-
           this.deliveries = arr.map(d => {
-            // normalize coords + pick best dest orientation
             const last = latlngFixed(d.last_lat, d.last_lng);
             let dest   = latlngFixed(d.dest_lat, d.dest_lng);
             if (last.lat != null && last.lng != null && dest.lat != null && dest.lng != null) {
@@ -169,10 +154,7 @@
               dest_lat: dest.lat, dest_lng: dest.lng
             });
           });
-
           if (!this.activeId && this.activeList.length) this.activeId = this.activeList[0].id;
-
-          // keep map marker in sync with snapshot
           if (this.map && this.active && this.active.last_lat != null) {
             this._updateDriver(this.active.last_lat, this.active.last_lng);
           }
@@ -196,8 +178,20 @@
         const m = document.cookie.match('(^|;)\\s*csrftoken\\s*=\\s*([^;]+)'); return m ? m.pop() : "";
       },
       _isoFrom(dateStr, timeStr) {
-        if (!dateStr || !timeStr) return null; // Today | Now -> backend uses now()
+        if (!dateStr || !timeStr) return null;
         return new Date(`${dateStr}T${timeStr}`).toISOString();
+      },
+
+      // Small helpers to avoid nested backticks in template
+      clearPickup(id) {
+        const d = document.getElementById('pick-date-' + id);
+        const t = document.getElementById('pick-time-' + id);
+        if (d) d.value = ''; if (t) t.value = '';
+      },
+      clearDelivered(id) {
+        const d = document.getElementById('deliv-date-' + id);
+        const t = document.getElementById('deliv-time-' + id);
+        if (d) d.value = ''; if (t) t.value = '';
       },
 
       // ---------- Tracking ----------
@@ -208,11 +202,7 @@
           this._closeWS();
         }
         this.activeId = id;
-
-        this.$nextTick(() => {
-          this._ensureMap();
-          this._ensureWS();
-        });
+        this.$nextTick(() => { this._ensureMap(); this._ensureWS(); });
 
         if (!hasGeoAPI()) return;
         this._stopGeoWatch();
@@ -223,11 +213,7 @@
         );
       },
 
-      stopTracking() {
-        this._stopGeoWatch();
-        this._closeWS();
-      },
-
+      stopTracking() { this._stopGeoWatch(); this._closeWS(); },
       _stopGeoWatch() {
         if (this.watchId != null && hasGeoAPI() && typeof navigator.geolocation.clearWatch === "function") {
           try { navigator.geolocation.clearWatch(this.watchId); } catch (_) {}
@@ -246,29 +232,22 @@
           this.wsReady = true;
           while (this.outbox.length) this.ws.send(JSON.stringify(this.outbox.shift()));
         };
-
-        // Route all messages through a single handler
-        this._wireWS(this.ws);
-
-        this.ws.onclose = () => {
+        this.ws.onerror = (e) => console.error("WS error", e);
+        this.ws.onclose = (e) => {
           this.wsReady = false;
+          console.warn("WS closed", e.code, e.reason);
           setTimeout(() => { if (this.activeId) this._ensureWS(); }, 1500);
         };
+        this._wireWS(this.ws);
       },
-
       _wireWS(ws) {
-        ws.onmessage = (e) => {
-          const msg = JSON.parse(e.data || "{}");
-          this._onWSMessage(msg);
-        };
+        ws.onmessage = (e) => { const msg = JSON.parse(e.data || "{}"); this._onWSMessage(msg); };
       },
-
       _onWSMessage(msg) {
         if (msg.type === "position_update") {
           const p = latlngFixed(msg.lat, msg.lng);
           if (p.lat != null) this._updateDriver(p.lat, p.lng);
         } else if (msg.type === "status_update") {
-          // expected: {type, id, status, picked_up_at?, delivered_at?}
           const i = this.deliveries.findIndex(x => x.id === msg.id);
           if (i >= 0) {
             const cur = this.deliveries[i];
@@ -281,45 +260,31 @@
           }
           if (this.activeId === msg.id) this._paintStatic();
         } else if (msg.type === "status") {
-          // legacy: {type:"status", status: "..."} for current active
           const d = this.deliveries.find(x => x.id === this.activeId);
           if (d && msg.status) d.status = msg.status;
         }
       },
-
-      _closeWS() {
-        if (this.ws) { try { this.ws.close(); } catch (_) {} }
-        this.ws = null;
-        this.wsReady = false;
-        this.outbox = [];
-      },
+      _closeWS() { if (this.ws) { try { this.ws.close(); } catch (_) {} } this.ws = null; this.wsReady = false; this.outbox = []; },
 
       _sendPing(lat, lng) {
         lat = num(lat); lng = num(lng);
         if (lat == null || lng == null) return;
-
         const now = Date.now();
         const movedEnough = !this.lastSent || (haversineKm(this.lastSent, { lat, lng }) * 1000) > MIN_MOVE_M;
-        if (now - this.lastSentAt < MIN_PING_MS || !movedEnough) {
-          this._updateDriver(lat, lng);
-          return;
-        }
+        if (now - this.lastSentAt < MIN_PING_MS || !movedEnough) { this._updateDriver(lat, lng); return; }
         this.lastSentAt = now; this.lastSent = { lat, lng };
-
         const packet = { type: "position_update", lat, lng };
-        if (this.wsReady) this.ws.send(JSON.stringify(packet));
-        else this.outbox.push(packet);
-
+        if (this.wsReady) this.ws.send(JSON.stringify(packet)); else this.outbox.push(packet);
         this._updateDriver(lat, lng);
       },
 
-      // ---------- Status actions (POST to API + optional WS broadcast) ----------
+      // ---------- Status actions ----------
       async markPickedUp() {
         if (!this.activeId) return;
         const id = this.activeId;
-        const dateEl = document.getElementById(`pick-date-${id}`);
-        const timeEl = document.getElementById(`pick-time-${id}`);
-        const whenISO = this._isoFrom(dateEl?.value, timeEl?.value);
+        const dateEl = document.getElementById('pick-date-' + id);
+        const timeEl = document.getElementById('pick-time-' + id);
+        const whenISO = (dateEl && timeEl && dateEl.value && timeEl.value) ? this._isoFrom(dateEl.value, timeEl.value) : null;
 
         const url = window.DELIVERY_API.pickupPattern.replace("/0/", `/${id}/`);
         try {
@@ -339,9 +304,9 @@
       async markDelivered() {
         if (!this.activeId) return;
         const id = this.activeId;
-        const dateEl = document.getElementById(`deliv-date-${id}`);
-        const timeEl = document.getElementById(`deliv-time-${id}`);
-        const whenISO = this._isoFrom(dateEl?.value, timeEl?.value);
+        const dateEl = document.getElementById('deliv-date-' + id);
+        const timeEl = document.getElementById('deliv-time-' + id);
+        const whenISO = (dateEl && timeEl && dateEl.value && timeEl.value) ? this._isoFrom(dateEl.value, timeEl.value) : null;
 
         const url = window.DELIVERY_API.deliverPattern.replace("/0/", `/${id}/`);
         try {
@@ -363,7 +328,6 @@
       _ensureMap() {
         const shell = this.$el.querySelector("#map-shell");
         if (!shell) return;
-
         if (!this.map) {
           const c = this._center();
           this.map = L.map(shell).setView([c.lat, c.lng], (c.lat === 0 && c.lng === 0) ? 2 : 13);
@@ -373,14 +337,12 @@
         }
         this._paintStatic();
       },
-
       _center() {
         const a = this.active || {};
         if (a.last_lat != null) return { lat: a.last_lat, lng: a.last_lng };
         if (a.dest_lat != null) return { lat: a.dest_lat, lng: a.dest_lng };
         return { lat: 0, lng: 0 };
       },
-
       _resetMapOverlays() {
         if (this.routeLine) { try { this.map.removeLayer(this.routeLine); } catch (_) {} this.routeLine = null; }
         if (this.driverMarker) { try { this.map.removeLayer(this.driverMarker); } catch (_) {} this.driverMarker = null; }
@@ -389,31 +351,21 @@
         this.lastRouteKey = null;
         this.lastRouteAt = 0;
       },
-
       _paintStatic() {
         const a = this.active; if (!a) return;
-
         if (a.dest_lat != null) {
           const pt = [a.dest_lat, a.dest_lng];
-          if (!this.destMarker)
-            this.destMarker = L.marker(pt, { title: "Destination" }).addTo(this.map);
-          else
-            this.destMarker.setLatLng(pt);
+          if (!this.destMarker) this.destMarker = L.marker(pt, { title: "Destination" }).addTo(this.map);
+          else this.destMarker.setLatLng(pt);
         }
-
-        if ((a.last_lat != null || this.driverMarker) && a.dest_lat != null) {
-          this._drawRoadRoute();
-        }
+        if ((a.last_lat != null || this.driverMarker) && a.dest_lat != null) this._drawRoadRoute();
       },
-
       async _drawRoadRoute() {
         const a = this.active; if (!a || a.dest_lat == null) return;
-
         const lat = (this.driverMarker ? this.driverMarker.getLatLng().lat : a.last_lat);
         const lng = (this.driverMarker ? this.driverMarker.getLatLng().lng : a.last_lng);
         if (lat == null || lng == null) return;
 
-        // throttle expensive route call
         const key = `${this.activeId}:${lat.toFixed(5)},${lng.toFixed(5)}:${a.dest_lat.toFixed(5)},${a.dest_lng.toFixed(5)}`;
         const now = Date.now();
         if (this.lastRouteKey === key && now - this.lastRouteAt < 60_000) return;
@@ -424,11 +376,9 @@
         if (!r.ok) return;
         const j = await r.json();
 
-        // accept multiple shapes from the API
         let coords = j.coords || [];
         if (!coords.length && j.geometry && Array.isArray(j.geometry.coordinates)) {
-          // GeoJSON: [lon, lat] -> [lat, lng]
-          coords = j.geometry.coordinates.map(([x, y]) => [y, x]);
+          coords = j.geometry.coordinates.map(([x, y]) => [y, x]); // GeoJSON lon,lat -> lat,lng
         }
         if (!coords.length) return;
 
@@ -442,12 +392,10 @@
         const b = this.routeLine.getBounds();
         if (b && b.isValid()) this.map.fitBounds(b, { padding: [20, 20] });
       },
-
       _updateDriver(lat, lng) {
         if (!this.map) return;
         lat = num(lat); lng = num(lng);
         if (lat == null || lng == null) return;
-
         if (!this.driverMarker)
           this.driverMarker = L.marker([lat, lng], { icon: iconTruck(), zIndexOffset: 500 }).addTo(this.map);
         else
@@ -506,7 +454,6 @@
                   </div>
                 </div>
 
-                <!-- Progress bar -->
                 <div class="mt-3 h-2 rounded-full bg-gray-100 overflow-hidden">
                   <div class="h-2 bg-black transition-all" :style="{ width: progressPct(d)+'%' }"></div>
                 </div>
@@ -518,14 +465,13 @@
                   [[ activeId===d.id ? 'Tracking' : 'Track' ]]
                 </button>
 
-                <!-- Only for the active card: date/time controls -->
                 <div v-if="activeId===d.id" class="mt-1 grid grid-cols-1 gap-2 text-[11px]">
                   <div class="border rounded-xl p-2">
                     <div class="font-semibold mb-1">Picked up at</div>
                     <div class="flex items-center gap-1">
-                      <input :id="`pick-date-${d.id}`" type="date" class="border rounded px-2 py-1">
-                      <input :id="`pick-time-${d.id}`" type="time" class="border rounded px-2 py-1">
-                      <button class="px-2 py-1 rounded border" @click="$event.target.closest('div').querySelector(`#pick-date-${d.id}`).value=''; $event.target.closest('div').querySelector(`#pick-time-${d.id}`).value=''">Today/Now</button>
+                      <input :id="'pick-date-' + d.id" type="date" class="border rounded px-2 py-1">
+                      <input :id="'pick-time-' + d.id" type="time" class="border rounded px-2 py-1">
+                      <button class="px-2 py-1 rounded border" @click="clearPickup(d.id)">Today/Now</button>
                       <button class="px-2 py-1 rounded bg-blue-600 text-white" @click="markPickedUp()">Save</button>
                     </div>
                   </div>
@@ -533,9 +479,9 @@
                   <div class="border rounded-xl p-2">
                     <div class="font-semibold mb-1">Delivered at</div>
                     <div class="flex items-center gap-1">
-                      <input :id="`deliv-date-${d.id}`" type="date" class="border rounded px-2 py-1">
-                      <input :id="`deliv-time-${d.id}`" type="time" class="border rounded px-2 py-1">
-                      <button class="px-2 py-1 rounded border" @click="$event.target.closest('div').querySelector(`#deliv-date-${d.id}`).value=''; $event.target.closest('div').querySelector(`#deliv-time-${d.id}`).value=''">Today/Now</button>
+                      <input :id="'deliv-date-' + d.id" type="date" class="border rounded px-2 py-1">
+                      <input :id="'deliv-time-' + d.id" type="time" class="border rounded px-2 py-1">
+                      <button class="px-2 py-1 rounded border" @click="clearDelivered(d.id)">Today/Now</button>
                       <button class="px-2 py-1 rounded bg-green-600 text-white" @click="markDelivered()">Save</button>
                     </div>
                   </div>
@@ -546,7 +492,6 @@
         </ul>
         <div v-else class="text-gray-600">No deliveries.</div>
 
-        <!-- Map/ETA panel -->
         <div v-if="active" class="rounded-2xl border bg-white shadow-sm">
           <div class="p-2 text-sm text-gray-600">
             Tracking delivery #[[ active.id ]] · ETA: [[ etaText ]]
