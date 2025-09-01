@@ -2,7 +2,7 @@ from django.contrib import admin
 from django.urls import include, path
 from django.conf import settings
 from django.conf.urls.static import static
-
+from users.views import debug_ws_push
 from product_app import views as product_views
 from users import views as user_views
 from payments.views import (
@@ -15,7 +15,7 @@ from core.views import healthz
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-
+    path("debug/ws-push/<int:delivery_id>/", debug_ws_push, name="debug-ws-push"),
     path('utilities/', include('utilities.urls')),
     path('cart/', include('cart.urls')),
     path('orders/', include(('orders.urls', 'orders'), namespace='orders')),
