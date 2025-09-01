@@ -36,6 +36,13 @@ ALLOWED_HOSTS = env.list(
 if DEBUG:
     ALLOWED_HOSTS += ["127.0.0.1", "localhost"]
 
+# Helpful defaults for local development
+if DEBUG:
+    for h in ["127.0.0.1", "localhost", "[::1]"]:
+        if h not in ALLOWED_HOSTS:
+            ALLOWED_HOSTS.append(h)
+
+
 # Render dynamic hostname support
 RENDER_HOST = os.getenv("RENDER_EXTERNAL_HOSTNAME")
 if RENDER_HOST and RENDER_HOST not in ALLOWED_HOSTS:
@@ -259,6 +266,19 @@ STORAGES = {
         ),
     },
 }
+
+
+# ------------------------ Security (prod) ---------------------
+if not DEBUG:
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SESSION_COOKIE_HTTPONLY = True
+    SECURE_HSTS_SECONDS = 31536000
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+    SECURE_REFERRER_POLICY = "same-origin"
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    X_FRAME_OPTIONS = "DENY"
 
 MEDIA_URL = "media/"
 MEDIA_ROOT = BASE_DIR / "mediafiles"

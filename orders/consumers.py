@@ -1,19 +1,26 @@
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
 from channels.db import database_sync_to_async
 from django.utils import timezone
+from django.core.cache import cache
+from django.apps import apps
 from decimal import Decimal, ROUND_HALF_UP, InvalidOperation
 import math
 
-from .models import Delivery, DeliveryPing
-
 class DeliveryTrackerConsumer(AsyncJsonWebsocketConsumer):
     async def connect(self):
-        self.delivery_id = self.scope["url_route"]["kwargs"]["delivery_id"]
-        # Align with Delivery.ws_group (e.g., "delivery.123")
+        user = self.scope.get("user")
+        if not user or not user.is_authenticated:
+            await self.close()
+            return
+        self.delivery_id = int(self.scope["url_route"]["kwargs"]["delivery_id"])
+        # Allow both the assigned driver and the order owner to subscribe (view-only for owner)
+        if not await self._can_subscribe(self.delivery_id, user.id):
+            await self.close()
+            return
         self.group_name = f"delivery.{self.delivery_id}"
         await self.channel_layer.group_add(self.group_name, self.channel_name)
         await self.accept()
-        # per-connection throttle state
+        # per-connection throttle state (for DB writes)
         self._last_saved_at = 0
         self._last_saved_ll = None  # (lat, lng) floats
 
@@ -70,7 +77,15 @@ class DeliveryTrackerConsumer(AsyncJsonWebsocketConsumer):
                 await self.send_json({"type": "error", "error": "out_of_range"})
                 return
 
-            # Throttle DB writes per connection
+            # Throttle incoming WS globally per (driver, delivery) by 5s (cache)
+            cache_key = f"ws:last:{user.id}:{self.delivery_id}"
+            last = cache.get(cache_key)
+            now_ms = int(timezone.now().timestamp() * 1000)
+            if last and (now_ms - int(last)) < 5000:
+                return
+            cache.set(cache_key, now_ms, timeout=30)
+
+            # Additional per-connection throttle for DB writes
             now_ms = int(timezone.now().timestamp() * 1000)
             due = (now_ms - self._last_saved_at) >= 8000  # 8s
             moved_enough = True
@@ -92,13 +107,9 @@ class DeliveryTrackerConsumer(AsyncJsonWebsocketConsumer):
             return
 
         if msg_type == "status":
-            # Only drivers can set status
-            user = self.scope.get("user")
-            if not getattr(user, "is_authenticated", False):
-                return
+            # WS status does not mutate DB — only broadcast as a hint to UIs
             status_new = content.get("status")
-            ok = await self._update_status(self.delivery_id, user.id, status_new)
-            if ok:
+            if isinstance(status_new, str) and status_new:
                 await self.channel_layer.group_send(
                     self.group_name,
                     {"type": "delivery.event", "kind": "status", "status": status_new},
@@ -129,6 +140,18 @@ class DeliveryTrackerConsumer(AsyncJsonWebsocketConsumer):
             await self.send_json({"type": "status", "status": event.get("status")})
             return
 
+    async def status_update(self, event):
+        # Emitted by post_save signal via group_send type="status.update"
+        payload = {
+            "type": "status_update",
+            "id": event.get("id"),
+            "status": event.get("status"),
+            "assigned_at": event.get("assigned_at"),
+            "picked_up_at": event.get("picked_up_at"),
+            "delivered_at": event.get("delivered_at"),
+        }
+        await self.send_json(payload)
+
     # Back-compat for older senders using type="tracker.update"
     async def tracker_update(self, event):
         data = event.get("data", {})
@@ -152,15 +175,27 @@ class DeliveryTrackerConsumer(AsyncJsonWebsocketConsumer):
     @database_sync_to_async
     def _is_owner_driver(self, delivery_id: int | str, user_id: int) -> bool:
         try:
+            Delivery = apps.get_model("orders", "Delivery")
             return Delivery.objects.filter(pk=int(delivery_id), driver_id=user_id).exists()
         except Exception:
             return False
+
+    @database_sync_to_async
+    def _can_subscribe(self, delivery_id: int | str, user_id: int) -> bool:
+        Delivery = apps.get_model("orders", "Delivery")
+        try:
+            d = Delivery.objects.select_related("order").get(pk=int(delivery_id))
+        except Delivery.DoesNotExist:
+            return False
+        return (d.driver_id == user_id) or (getattr(d.order, "user_id", None) == user_id)
 
     @database_sync_to_async
     def _save_position(self, delivery_id: int | str, user_id: int, lat: Decimal, lng: Decimal):
         """
         Persist position for the assigned driver. Returns (changed: bool, new_status: str|None)
         """
+        Delivery = apps.get_model("orders", "Delivery")
+        DeliveryPing = apps.get_model("orders", "DeliveryPing")
         try:
             d = Delivery.objects.get(pk=int(delivery_id), driver_id=user_id)
         except Delivery.DoesNotExist:
@@ -194,6 +229,7 @@ class DeliveryTrackerConsumer(AsyncJsonWebsocketConsumer):
 
     @database_sync_to_async
     def _update_status(self, delivery_id: int | str, user_id: int, status_new: str) -> bool:
+        Delivery = apps.get_model("orders", "Delivery")
         try:
             d = Delivery.objects.get(pk=int(delivery_id), driver_id=user_id)
         except Delivery.DoesNotExist:
