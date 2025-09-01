@@ -494,4 +494,4 @@ def driver_live(request, delivery_id: int):
         "start_lat": getattr(d, "last_lat", None) or getattr(getattr(d, "warehouse", None), "latitude", None),
         "start_lng": getattr(d, "last_lng", None) or getattr(getattr(d, "warehouse", None), "longitude", None),
     }
-    return render(request, "users/accoonts/driver_live.html", ctx)
+    return render(request, "users/accounts/driver_live.html", ctx)

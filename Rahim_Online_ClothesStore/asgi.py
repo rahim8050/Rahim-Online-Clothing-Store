@@ -1,15 +1,20 @@
 # Rahim_Online_ClothesStore/asgi.py
 import os
+import django
 from django.core.asgi import get_asgi_application
+
 from django.conf import settings
 from channels.routing import ProtocolTypeRouter, URLRouter
 from channels.auth import AuthMiddlewareStack
 from channels.security.websocket import AllowedHostsOriginValidator, OriginValidator
 import orders.routing  # make sure orders/routing.py defines websocket_urlpatterns
 
+
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "Rahim_Online_ClothesStore.settings")
+django.setup()  # <-- ensure settings are loaded before any app imports
 
 django_asgi_app = get_asgi_application()
+
 
 # Origins allowed to load your page and open the WS (Origin header)
 # Use http/https here (NOT ws://); this checks the page's origin, not the socket scheme.

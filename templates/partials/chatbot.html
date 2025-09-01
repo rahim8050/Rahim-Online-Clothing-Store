@@ -1,0 +1,28 @@
+{% load static %}
+{% if request.user.is_authenticated %}
+<div id="rahim-assistant" class="fixed bottom-4 right-4 z-40">
+  <div id="assistant-panel" class="hidden w-80 max-w-[92vw] rounded-xl shadow-xl border bg-white flex flex-col overflow-hidden">
+    <div class="px-3 py-2 bg-blue-600 text-white flex items-center justify-between">
+      <div class="font-semibold">Rahim Assistant</div>
+      <button id="assistant-close" class="text-white/90 hover:text-white">×</button>
+    </div>
+    <div id="assistant-messages" class="p-3 space-y-2 h-72 overflow-y-auto text-sm"></div>
+    <div class="border-t p-2 flex items-center gap-2">
+      <input id="assistant-input" class="flex-1 border rounded px-2 py-1 text-sm" placeholder="Try: list orders" />
+      <button id="assistant-send" class="px-3 py-1 rounded bg-blue-600 text-white text-sm">Send</button>
+    </div>
+  </div>
+
+  <button id="assistant-toggle" class="rounded-full w-12 h-12 bg-blue-600 text-white shadow-lg flex items-center justify-center">
+    <span class="text-xl">💬</span>
+  </button>
+</div>
+<script defer src="{% static 'js/chatbot.js' %}"></script>
+{% else %}
+<div class="fixed bottom-4 right-4 z-40">
+  <div class="rounded-lg bg-white border shadow p-3 text-sm">
+    Please log in to use Rahim Assistant.
+  </div>
+  </div>
+{% endif %}
+

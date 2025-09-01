@@ -18,7 +18,17 @@
 
   // ---- Leaflet map bootstrap ----
   const mapDiv = document.getElementById("map");
-  let map = null, marker = null, trail = null;
+  let map = null, marker = null, trail = null, routeLine = null;
+  const etaBadge = document.querySelector('[data-eta-badge]');
+
+  function iconTruck() {
+    return L.divIcon({
+      className: "customer-truck-icon",
+      html: '<div style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:#2563eb;color:white;box-shadow:0 1px 4px rgba(0,0,0,.25)"><i class="fa-solid fa-truck" style="font-size:13px"></i></div>',
+      iconSize: [24, 24],
+      iconAnchor: [12, 12]
+    });
+  }
 
   function ensureMap() {
     if (!mapDiv || typeof L === "undefined") return null;
@@ -44,6 +54,10 @@
     console.log("status:", status);
   }
 
+  function setETA(text) {
+    if (etaBadge) etaBadge.textContent = text;
+  }
+
   function updateMarker(lat, lng) {
     const latN = Number(lat), lngN = Number(lng);
     if (!Number.isFinite(latN) || !Number.isFinite(lngN)) return;
@@ -52,8 +66,8 @@
     const ll = [latN, lngN];
 
     if (!marker) {
-      marker = L.marker(ll).addTo(m).bindTooltip("Driver");
-      trail = L.polyline([ll], { weight: 3 }).addTo(m);
+      marker = L.marker(ll, { icon: iconTruck(), zIndexOffset: 500 }).addTo(m).bindTooltip("Driver");
+      trail = L.polyline([ll], { weight: 3, color: '#2563eb' }).addTo(m);
       try { m.setView(ll, 15); } catch {}
     } else {
       marker.setLatLng(ll);
@@ -62,6 +76,40 @@
         if (m.getCenter().distanceTo(L.latLng(ll)) > 30) m.panTo(ll, { animate: true });
       } catch {}
     }
+
+    // Update ETA (quick haversine fallback)
+    try {
+      const dest = CTX.destination;
+      if (dest && Number.isFinite(dest.lat) && Number.isFinite(dest.lng)) {
+        const km = haversineKm({lat: latN, lng: lngN}, dest);
+        const SPEED_KMPH = 30;
+        const etaMin = Math.max(1, Math.round((km / SPEED_KMPH) * 60));
+        if (isFinite(etaMin)) setETA(`${km.toFixed(2)} km ~ ${etaMin} min`);
+      }
+    } catch {}
+  }
+
+  function haversineKm(a, b) {
+    const R = 6371;
+    const dLat = (b.lat - a.lat) * Math.PI/180;
+    const dLng = (b.lng - a.lng) * Math.PI/180;
+    const s1 = Math.sin(dLat/2)**2 + Math.cos(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.sin(dLng/2)**2;
+    return 2 * R * Math.asin(Math.sqrt(s1));
+  }
+
+  async function fetchHistoryTrail() {
+    try {
+      if (!deliveryId) return;
+      const r = await fetch(`/orders/apis/delivery/${deliveryId}/pings/?limit=200`, { credentials: 'same-origin' });
+      if (!r.ok) return;
+      const j = await r.json();
+      if (Array.isArray(j.coords) && j.coords.length) {
+        const m = ensureMap(); if (!m) return;
+        if (trail) try { m.removeLayer(trail); } catch {}
+        trail = L.polyline(j.coords, { weight: 3, color: '#2563eb' }).addTo(m);
+        try { m.fitBounds(trail.getBounds(), { padding: [20,20] }); } catch {}
+      }
+    } catch {}
   }
 
   function connect() {
@@ -122,6 +170,8 @@
     };
 
     open();
+    // Seed trail from server history (best effort)
+    fetchHistoryTrail();
   }
 
   connect();

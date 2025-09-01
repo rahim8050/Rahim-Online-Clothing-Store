@@ -25,6 +25,7 @@ from .views import (
     driver_location_api,
     driver_action_api,
     driver_route_api,
+    delivery_pings_api,
 )
 
 app_name = "orders"
@@ -61,5 +62,6 @@ urlpatterns = [
     path("apis/driver/location/", driver_location_api, name="driver-location-api"), 
      path("apis/driver/action/",     driver_action_api,     name="driver-action-api"),
      path("apis/driver/route/<int:delivery_id>/", driver_route_api, name="driver-route-api"),
+     path("apis/delivery/<int:delivery_id>/pings/", delivery_pings_api, name="delivery-pings-api"),
 
 ]

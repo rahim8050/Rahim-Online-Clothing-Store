@@ -5,14 +5,21 @@
   <div class="max-w-5xl mx-auto p-4">
     <h2 class="text-xl font-semibold mb-2">Order {{ order.id }} Tracking</h2>
 
-    <div class="text-sm text-gray-600 mb-3">
-      Status:
+    <div class="text-sm text-gray-600 mb-3 flex items-center gap-3">
+      <span>
+        Status:
       <span data-status-chip class="inline-flex items-center rounded px-2 py-0.5 bg-gray-100">
         {% if delivery %}
           {{ delivery.get_status_display|default_if_none:delivery.status }}
         {% else %}
           -
         {% endif %}
+      </span>
+      </span>
+      <span class="hidden md:inline">•</span>
+      <span>
+        ETA:
+        <span data-eta-badge class="inline-flex items-center rounded px-2 py-0.5 bg-orange-100 text-orange-700">-</span>
       </span>
     </div>
 
