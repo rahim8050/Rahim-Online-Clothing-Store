@@ -76,6 +76,7 @@ INSTALLED_APPS = [
     "dashboards",
     "django_extensions",
     "payments",
+    "assistant",
 ]
 
 MIDDLEWARE = [
@@ -133,8 +134,8 @@ DATABASES = {
 }
 
 # -------------------------- Channels --------------------------
-REDIS_URL = env("REDIS_URL", default="redis://127.0.0.1:6379/0")
-REDIS_SSL = REDIS_URL.startswith("rediss://")
+REDIS_URL = env("REDIS_URL", default="")
+REDIS_SSL = bool(REDIS_URL) and REDIS_URL.startswith("rediss://")
 
 CHANNEL_LAYERS = {
     "default": {
@@ -146,16 +147,31 @@ CHANNEL_LAYERS = {
     }
 }
 
-CACHES = {
-    "default": {
-        "BACKEND": "django.core.cache.backends.redis.RedisCache",
-        "LOCATION": REDIS_URL,
-        "TIMEOUT": None,
-        "OPTIONS": {
-            "ssl": REDIS_SSL,
-        },
+# Cache: prefer Redis only when explicitly enabled (prod), otherwise use local memory
+USE_REDIS_CACHE = env.bool("USE_REDIS_CACHE", default=False)
+if USE_REDIS_CACHE and REDIS_URL:
+    _cache_options = {}
+    if REDIS_SSL:
+        # Only include the ssl flag for rediss:// URLs to avoid client kwarg errors
+        _cache_options["ssl"] = True
+
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.redis.RedisCache",
+            "LOCATION": REDIS_URL,
+            "TIMEOUT": None,
+            "OPTIONS": _cache_options,
+        }
     }
-}
+else:
+    # Fallback: in‑memory cache (sufficient for local dev & throttling)
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "rahim-local",
+            "TIMEOUT": None,
+        }
+    }
 CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels.layers.InMemoryChannelLayer",
@@ -168,6 +184,12 @@ REST_FRAMEWORK = {
         "rest_framework_simplejwt.authentication.JWTAuthentication",
         "rest_framework.authentication.SessionAuthentication",
     ],
+    "DEFAULT_THROTTLE_CLASSES": [
+        "rest_framework.throttling.UserRateThrottle",
+    ],
+    "DEFAULT_THROTTLE_RATES": {
+        "user": "120/min",
+    },
 }
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=60),

@@ -31,7 +31,7 @@ import math
 import time
 from decimal import Decimal, ROUND_HALF_UP, InvalidOperation
 
-from .models import Delivery, Transaction, EmailDispatchLog, PaymentEvent
+from .models import Delivery, Transaction, EmailDispatchLog, PaymentEvent, DeliveryPing
 
 # Configure Stripe and PayPal with keys from settings
 stripe.api_key = settings.STRIPE_SECRET_KEY
@@ -1130,7 +1130,6 @@ def track_order(request, order_id: int):
         "destination": {"lat": float(order.dest_lat), "lng": float(order.dest_lng)},
         "wsUrl": f"/ws/delivery/track/{delivery.id}/" if delivery else "",
     }
-    route_ctx_json = json.dumps(route_ctx)
     return render(
         request,
         "orders/track.html",
@@ -1138,6 +1137,35 @@ def track_order(request, order_id: int):
             "order": order,
             "delivery": delivery,
             "ws_path": route_ctx["wsUrl"],
-            "route_ctx": route_ctx_json,
+            "route_ctx": route_ctx,
         },
     )
+
+
+# ---------- API: get recent delivery pings (for trail) ----------
+@login_required
+def delivery_pings_api(request, delivery_id: int):
+    DeliveryModel = apps.get_model("orders", "Delivery")
+    PingModel = apps.get_model("orders", "DeliveryPing")
+    d = get_object_or_404(DeliveryModel.objects.select_related("order"), pk=delivery_id)
+    is_owner = d.order.user_id == request.user.id
+    if not (is_owner or is_vendor_or_staff(request.user)):
+        return HttpResponseForbidden("Not allowed")
+
+    qs = (
+        PingModel.objects
+        .filter(delivery=d)
+        .order_by("-created_at")
+    )
+    # limit for payload size
+    limit = int(request.GET.get("limit", 200))
+    limit = max(10, min(limit, 1000))
+    rows = list(qs.values_list("lat", "lng", "created_at")[:limit])
+    rows.reverse()  # chronological
+    data = {
+        "delivery": d.pk,
+        "count": len(rows),
+        "coords": [[float(lat), float(lng)] for (lat, lng, _ts) in rows],
+        "ts": [ts.isoformat() for (_lat, _lng, ts) in rows],
+    }
+    return JsonResponse(data)
