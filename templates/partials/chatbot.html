@@ -1,28 +1,70 @@
 {% load static %}
 {% if request.user.is_authenticated %}
-<div id="rahim-assistant" class="fixed bottom-4 right-4 z-40">
-  <div id="assistant-panel" class="hidden w-80 max-w-[92vw] rounded-xl shadow-xl border bg-white flex flex-col overflow-hidden">
-    <div class="px-3 py-2 bg-blue-600 text-white flex items-center justify-between">
-      <div class="font-semibold">Rahim Assistant</div>
-      <button id="assistant-close" class="text-white/90 hover:text-white">×</button>
+<div id="rahim-assistant" class="fixed bottom-4 right-4 z-50">
+  <!-- Panel -->
+  <div id="assistant-panel"
+       class="hidden w-[360px] max-w-[92vw] rounded-2xl shadow-2xl border border-white/10
+              bg-gradient-to-b from-[#0b1b29] via-[#0a1320] to-[#090c13] text-white
+              overflow-hidden backdrop-blur">
+    <!-- Header -->
+    <div class="px-4 py-3 bg-gradient-to-r from-blue-600/70 to-indigo-600/70 flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <div class="w-7 h-7 rounded-full bg-white/10 grid place-items-center ring-2 ring-blue-400/60">
+          <span class="text-blue-300">🤖</span>
+        </div>
+        <div class="leading-tight">
+          <div class="font-semibold">Rahim Assistant <span class="ml-1 text-[10px] px-1.5 py-0.5 rounded bg-black/30">Beta</span></div>
+          <div class="text-[11px] text-white/70">Powered by Rahim Online store </div>
+        </div>
+      </div>
+      <button id="assistant-close" class="text-white/80 hover:text-white text-xl leading-none">×</button>
     </div>
-    <div id="assistant-messages" class="p-3 space-y-2 h-72 overflow-y-auto text-sm"></div>
-    <div class="border-t p-2 flex items-center gap-2">
-      <input id="assistant-input" class="flex-1 border rounded px-2 py-1 text-sm" placeholder="Try: list orders" />
-      <button id="assistant-send" class="px-3 py-1 rounded bg-blue-600 text-white text-sm">Send</button>
+
+    <!-- Welcome / suggestions -->
+    <div id="assistant-welcome" class="px-4 pt-3 pb-2 text-xs text-white/80 border-b border-white/10">
+      Hey, I'm Rahim! My goal is to make your orders, deliveries, and payments simple. I can view your data to help, but I can’t move your funds. You’re always in control. 👍
+      <div id="assistant-suggestions" class="mt-2 flex flex-wrap gap-2">
+        <button class="chip">What is my latest order?</button>
+        <button class="chip">Track my delivery</button>
+        <button class="chip">Payment status for #123</button>
+        <button class="chip">How do refunds work?</button>
+      </div>
+    </div>
+
+    <!-- Messages -->
+    <div id="assistant-messages" class="p-4 space-y-2 h-80 overflow-y-auto text-[13px] bg-transparent"></div>
+
+    <!-- Input row -->
+    <div class="border-t border-white/10 p-2">
+      <div class="flex items-end gap-2">
+        {% comment %} <button id="assistant-topics" class="px-2 py-1 rounded-md bg-white/5 hover:bg-white/10 text-xs">Topics</button> {% endcomment %}
+        <div class="flex-1 bg-white/5 rounded-xl flex items-center px-3 py-2 ring-1 ring-white/10 focus-within:ring-blue-400/50">
+          <input id="assistant-input"
+                 class="flex-1 bg-transparent outline-none placeholder:text-white/40 text-sm"
+                 placeholder="Ask me anything…" />
+          <button id="assistant-send"
+                  class="ml-2 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm disabled:opacity-50">
+            Send
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 
-  <button id="assistant-toggle" class="rounded-full w-12 h-12 bg-blue-600 text-white shadow-lg flex items-center justify-center">
-    <span class="text-xl">💬</span>
+  <!-- Launcher -->
+  <button id="assistant-toggle"
+          class="rounded-full w-14 h-14 bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-2xl
+                 flex items-center justify-center ring-2 ring-white/10 hover:scale-105 transition">
+    <span class="text-2xl">💬</span>
   </button>
 </div>
+
+<link rel="stylesheet" href="{% static 'css/rahim-assistant.css' %}">
 <script defer src="{% static 'js/chatbot.js' %}"></script>
 {% else %}
 <div class="fixed bottom-4 right-4 z-40">
-  <div class="rounded-lg bg-white border shadow p-3 text-sm">
+  <div class="rounded-xl bg-white border shadow p-3 text-sm">
     Please log in to use Rahim Assistant.
   </div>
-  </div>
+</div>
 {% endif %}
-
