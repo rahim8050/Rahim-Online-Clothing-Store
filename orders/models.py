@@ -6,6 +6,7 @@ from django.core.validators import MinValueValidator, MaxValueValidator
 from django.db import models
 from django.db.models import CheckConstraint, Index, Q
 from django.utils import timezone
+from django.db import transaction
 
 from product_app.models import Product, Warehouse
 
@@ -257,16 +258,71 @@ class Delivery(models.Model):
             self.origin_lat = wh.latitude
             self.origin_lng = wh.longitude
 
-    def mark_assigned(self, driver):
+    @transaction.atomic
+    def mark_assigned(self, driver, when=None):
+        """Assign a driver. Idempotent: preserves first assigned_at.
+        """
+        when = when or timezone.now()
         self.driver = driver
+        if not self.assigned_at:
+            self.assigned_at = when
         self.status = self.Status.ASSIGNED
-        self.assigned_at = timezone.now()
+
+    @transaction.atomic
+    def mark_picked_up(self, by=None, when=None):
+        """ASSIGNED -> PICKED_UP. Idempotent: preserves first picked_up_at."""
+        when = when or timezone.now()
+        if self.status not in {self.Status.ASSIGNED, self.Status.PICKED_UP}:
+            raise ValueError("Invalid transition: can only pick up from ASSIGNED")
+        if not self.picked_up_at:
+            self.picked_up_at = when
+        self.status = self.Status.PICKED_UP
+
+    @transaction.atomic
+    def mark_en_route(self, by=None, when=None):
+        """ASSIGNED/PICKED_UP -> EN_ROUTE. Set picked_up_at if missing."""
+        when = when or timezone.now()
+        if self.status not in {self.Status.ASSIGNED, self.Status.PICKED_UP, self.Status.EN_ROUTE}:
+            raise ValueError("Invalid transition: can only go en_route from ASSIGNED/PICKED_UP")
+        if not self.picked_up_at:
+            self.picked_up_at = when
+        self.status = self.Status.EN_ROUTE
+
+    @transaction.atomic
+    def mark_delivered(self, by=None, when=None):
+        """EN_ROUTE -> DELIVERED. Idempotent."""
+        when = when or timezone.now()
+        if self.status not in {self.Status.PICKED_UP, self.Status.EN_ROUTE, self.Status.DELIVERED}:
+            raise ValueError("Invalid transition: can only deliver from EN_ROUTE/PICKED_UP")
+        if not self.picked_up_at:
+            self.picked_up_at = when
+        if not self.delivered_at:
+            self.delivered_at = when
+        self.status = self.Status.DELIVERED
+
+    def _norm_pair(self, lat, lng):
+        if lat is None or lng is None:
+            return lat, lng
+        try:
+            lat = float(lat); lng = float(lng)
+        except Exception:
+            return lat, lng
+        # If swapped, fix obvious swap
+        if abs(lat) > 90 and abs(lng) <= 180:
+            lat, lng = lng, lat
+        # Clamp ranges
+        lat = max(-90.0, min(90.0, lat))
+        lng = max(-180.0, min(180.0, lng))
+        # Quantize to 6 dp
+        lat = Decimal(str(lat)).quantize(Q6, rounding=ROUND_HALF_UP)
+        lng = Decimal(str(lng)).quantize(Q6, rounding=ROUND_HALF_UP)
+        return lat, lng
 
     def save(self, *args, **kwargs):
-        for f in ("origin_lat", "origin_lng", "dest_lat", "dest_lng", "last_lat", "last_lng"):
-            v = getattr(self, f, None)
-            if v is not None:
-                setattr(self, f, Decimal(v).quantize(Q6, rounding=ROUND_HALF_UP))
+        # Normalize coordinate pairs
+        self.origin_lat, self.origin_lng = self._norm_pair(self.origin_lat, self.origin_lng)
+        self.dest_lat, self.dest_lng = self._norm_pair(self.dest_lat, self.dest_lng)
+        self.last_lat, self.last_lng = self._norm_pair(self.last_lat, self.last_lng)
         super().save(*args, **kwargs)
 
 

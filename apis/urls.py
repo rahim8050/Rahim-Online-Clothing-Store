@@ -22,6 +22,8 @@ from apis.views import (
     VendorStaffRemoveAPI,
     # VendorStaffToggleActiveAPI,  # uncomment if you implemented it in apis.views
 )
+from rest_framework.routers import DefaultRouter
+from orders.api_driver import DeliveryViewSet
 
 urlpatterns = [
     # Auth
@@ -51,3 +53,8 @@ urlpatterns = [
     path("vendor/staff/<int:staff_id>/remove/", VendorStaffRemoveAPI.as_view(), name="vendor-staff-remove"),
     # path("vendor/staff/<int:staff_id>/toggle/", VendorStaffToggleActiveAPI.as_view(), name="vendor-staff-toggle"),
 ]
+
+# Driver delivery actions
+router = DefaultRouter()
+router.register(r"deliveries", DeliveryViewSet, basename="driver-deliveries-v2")
+urlpatterns += router.urls
