@@ -1,0 +1,7 @@
+<!-- templates/emails/generic.html -->
+<!doctype html><meta charset="utf-8">
+<div style="font-family:system-ui,Segoe UI,Roboto,Arial;">
+  <h2>{{ title }}</h2>
+  <p>{{ message|linebreaksbr }}</p>
+  {% if cta_url %}<p><a href="{{ cta_url }}">Open</a></p>{% endif %}
+</div>

@@ -83,6 +83,7 @@ INSTALLED_APPS = [
     "django_extensions",
     "payments",
     "assistant",
+    "core",
 ]
 
 MIDDLEWARE = [
@@ -131,13 +132,28 @@ TEMPLATES = [
 ]
 
 # -------------------------- Database --------------------------
+import dj_database_url
+
 DATABASES = {
     "default": dj_database_url.config(
         default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
-        conn_max_age=600,
-        ssl_require=not DEBUG,
+        conn_max_age=600,          # keep connections warm
+        ssl_require=not DEBUG,     # mainly affects Postgres; harmless otherwise
     )
 }
+
+# If env points to MySQL, add safe session settings (no tz tables needed)
+if DATABASES["default"].get("ENGINE") == "django.db.backends.mysql":
+    DATABASES["default"].setdefault("OPTIONS", {})
+    # strict mode + keep DB session in UTC to bypass MySQL tz tables
+    DATABASES["default"]["OPTIONS"].update({
+        "init_command": "SET sql_mode='STRICT_TRANS_TABLES', time_zone='+00:00'",
+        "charset": "utf8mb4",
+        "use_unicode": True,
+    })
+    # (optional) Django 4.2+: auto ping to avoid stale connections
+    DATABASES["default"]["CONN_HEALTH_CHECKS"] = True
+
 
 # -------------------------- Channels --------------------------
 REDIS_URL = env("REDIS_URL", default="")
