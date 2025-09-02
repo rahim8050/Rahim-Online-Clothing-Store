@@ -1,10 +1,11 @@
-"""Admin configuration for users app."""
-
+# users/admin.py
 from django import forms
 from django.conf import settings
 from django.contrib import admin, messages
 from django.contrib.auth.admin import UserAdmin
 from django.core.mail import send_mail
+from django.utils import timezone
+from django.contrib.admin.helpers import ActionForm  # ✅ import this
 
 from .models import CustomUser, VendorApplication, VendorStaff
 from users.services import deactivate_staff as deactivate_vendor_staff
@@ -13,9 +14,8 @@ from users.services import deactivate_staff as deactivate_vendor_staff
 admin.site.register(CustomUser, UserAdmin)
 
 
-class VendorApplicationActionForm(forms.Form):
+class VendorApplicationActionForm(ActionForm):  # ✅ subclass ActionForm (has `action`)
     """Extra field for reject action."""
-
     note = forms.CharField(
         required=False,
         label="Rejection note",
@@ -40,7 +40,7 @@ class VendorApplicationAdmin(admin.ModelAdmin):
     autocomplete_fields = ("user",)
     date_hierarchy = "created_at"
 
-    action_form = VendorApplicationActionForm
+    action_form = VendorApplicationActionForm  # ✅ keep using our subclass
     actions = ("approve_selected", "reject_selected")
 
     @admin.action(description="Approve selected applications")

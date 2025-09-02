@@ -62,6 +62,7 @@ class VendorStaff(models.Model):
     owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name="vendor_staff_owned")
     staff = models.ForeignKey(User, on_delete=models.CASCADE, related_name="vendor_staff_memberships")
     role = models.CharField(max_length=10, choices=Role.choices, default=Role.STAFF)
+    scopes = models.JSONField(default=list, blank=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 

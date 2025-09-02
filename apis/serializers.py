@@ -294,6 +294,57 @@ class VendorApplySerializer(serializers.ModelSerializer):
         return VendorApplication.objects.create(user=user, status="pending", **validated)
 
 
+# ------------------------
+# KYC apply (required)
+# ------------------------
+import re
+
+KRA_PIN_RE = re.compile(r"^[A-Z]\d{9}[A-Z]$", re.I)
+
+
+class VendorApplicationCreateSerializer(serializers.ModelSerializer):
+    company_name = serializers.CharField(max_length=120, allow_blank=False, required=True)
+    phone = serializers.CharField(max_length=32, allow_blank=False, required=True)
+    kra_pin = serializers.CharField(max_length=32, allow_blank=False, required=True)
+    national_id = serializers.CharField(max_length=32, allow_blank=False, required=True)
+    document = serializers.FileField(required=True)
+    note = serializers.CharField(allow_blank=True, required=False)
+
+    class Meta:
+        model = VendorApplication
+        fields = [
+            "company_name",
+            "phone",
+            "kra_pin",
+            "national_id",
+            "document",
+            "note",
+        ]
+
+    def validate_company_name(self, v):
+        v = (v or "").strip()
+        if not v:
+            raise serializers.ValidationError("Company name is required.")
+        return v
+
+    def validate_kra_pin(self, v):
+        v = (v or "").strip().upper()
+        if not KRA_PIN_RE.match(v):
+            raise serializers.ValidationError("KRA PIN must look like A123456789B.")
+        return v
+
+    def validate_phone(self, v):
+        v = (v or "").strip()
+        if len(v) < 7:
+            raise serializers.ValidationError("Phone number looks too short.")
+        return v
+
+    def validate_document(self, f):
+        if getattr(f, "size", 0) > 5 * 1024 * 1024:
+            raise serializers.ValidationError("File too large (max 5MB).")
+        return f
+
+
 # ----------------------------------------
 # Product read-out with stocks (safe even if related_name differs)
 # ----------------------------------------

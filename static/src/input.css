@@ -1,1 +1,14 @@
 @import "tailwindcss";
+
+
+
+/* Tell Tailwind where to scan (paths are relative to THIS file) */
+@source "../../templates/**/*.html";
+@source "../../templates/**/*.js";
+@source "../js/**/*.js";
+
+/* Optional design tokens */
+@theme {
+  --font-sans: ui-sans-serif, system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+}
+

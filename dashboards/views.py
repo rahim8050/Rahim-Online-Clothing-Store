@@ -4,7 +4,7 @@ from django.apps import apps
 from django.http import HttpResponseForbidden
 
 from users.constants import VENDOR
-from users.utils import is_vendor_or_staff
+from users.utils import is_vendor_or_staff, resolve_vendor_owner_for
 
 def _vendor_id_for(user):
     """Return vendor_id for a Vendor or VendorStaff user; else None."""
@@ -71,3 +71,14 @@ def vendor_dashboard(request):
         "order_items": order_items,
         "note": "",
     })
+
+
+@login_required
+def vendor_live(request):
+    """Simple live board that polls vendor deliveries API and renders a table.
+    Requires vendor or staff role. Owner context resolved in the client via owner_id param if needed.
+    """
+    u = request.user
+    if not is_vendor_or_staff(u):
+        return HttpResponseForbidden("Insufficient role")
+    return render(request, "dashboards/vendor_live.html", {})
