@@ -17,7 +17,7 @@ from django.contrib.sites.shortcuts import get_current_site
 from django.core.exceptions import FieldError
 from django.core.mail import EmailMessage
 from django.db.models import Q, Count
-from django.http import HttpResponse, HttpResponseForbidden
+from django.http import HttpResponse, HttpResponseForbidden, HttpResponseRedirect
 from django.shortcuts import render, redirect
 from django.template.loader import render_to_string
 from django.urls import reverse, reverse_lazy
@@ -344,7 +344,26 @@ def after_login(request):
         return redirect("vendor_dashboard")
     if _is_driver(u):
         return redirect("driver_dashboard")
-    return render(request, "dash/customer.html")
+    # Vendor application status for customer dashboard
+    from users.models import VendorApplication
+
+    def _current_vendor_app_status(user):
+        if not getattr(user, "is_authenticated", False):
+            return "none"
+        if VendorApplication.objects.filter(user=user, status=VendorApplication.PENDING).exists():
+            return "pending"
+        last = VendorApplication.objects.filter(user=user).order_by("-created_at").first()
+        return (last and last.status) or "none"
+
+    user_is_vendor = u.groups.filter(name="Vendor").exists()
+    from users.models import VendorStaff
+    user_is_vendor_staff = VendorStaff.objects.filter(staff=u, is_active=True).exists()
+    ctx = {
+        "user_is_vendor": user_is_vendor,
+        "user_is_vendor_staff": user_is_vendor_staff,
+        "vendor_app_status": _current_vendor_app_status(u),
+    }
+    return render(request, "dash/customer.html", ctx)
 
 
 class VendorApplyAPI(generics.CreateAPIView):
@@ -484,3 +503,14 @@ def driver_live(request, delivery_id: int):
         "start_lng": getattr(d, "last_lng", None) or getattr(getattr(d, "warehouse", None), "longitude", None),
     }
     return render(request, "users/accounts/driver_live.html", ctx)
+
+
+# --- Deprecated: /users/vendor-applications/ -> /apis/vendor/apply/
+def vendor_apply_deprecated(request):
+    resp = HttpResponseRedirect("/apis/vendor/apply/")
+    resp["Deprecation"] = "true"
+    resp["Link"] = "</apis/vendor/apply/>; rel=\"successor-version\""
+    # Preserve method for non-GET
+    if request.method != "GET":
+        resp.status_code = 307
+    return resp

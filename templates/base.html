@@ -1,4 +1,5 @@
 {% load static %}
+
 <!doctype html>
 <html lang="en">
 <head>
@@ -7,8 +8,8 @@
     <meta http-equiv="X-UA-Compatible" content="ie=edge" />
 
     <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-
+    {% comment %} <script src="https://cdn.tailwindcss.com"></script> {% endcomment %}
+<link rel="stylesheet" href="{% static 'css/app.css' %}">
 
     <!-- Font Awesome -->
 <link
@@ -92,6 +93,27 @@
                 }, 20000);
             });
         });
+        (function(){
+  if (!("WebSocket" in window)) return;
+  const proto = location.protocol === "https:" ? "wss" : "ws";
+  const ws = new WebSocket(proto + "://" + location.host + "/ws/notifications/");
+  ws.onmessage = (e) => {
+    const data = JSON.parse(e.data);
+    toast(data.title, data.message, data.level);
+  };
+  function toast(title, msg, level){
+    const wrap = document.getElementById("toaster") || (()=> {
+      const d = document.createElement("div");
+      d.id="toaster"; d.className="fixed top-4 right-4 space-y-2 z-50";
+      document.body.appendChild(d); return d;
+    })();
+    const el = document.createElement("div");
+    el.className = "rounded-xl shadow px-4 py-3 bg-white border w-80";
+    el.innerHTML = `<div class="font-semibold">${title}</div><div class="text-sm text-gray-700 mt-1">${msg}</div>`;
+    wrap.appendChild(el);
+    setTimeout(()=> el.remove(), 6000);
+  }
+})();
     </script>
 
 
