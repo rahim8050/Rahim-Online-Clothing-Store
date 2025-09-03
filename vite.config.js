@@ -11,7 +11,8 @@ export default defineConfig(({ command }) => ({
     origin: 'http://localhost:5173',
   },
   build: {
-    outDir: 'Rahim_Online_ClothesStore/static/dist',
+    // Output into top-level static so Django staticfiles can serve it
+    outDir: 'static/dist',
     emptyOutDir: true,
     rollupOptions: {
       input: 'assets/main.js',
