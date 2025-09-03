@@ -184,3 +184,31 @@ export default {
 .typing span:nth-child(3){animation-delay:.4s}
 @keyframes blink{0%,80%,100%{opacity:.2;transform:translateY(0)}40%{opacity:1;transform:translateY(-2px)}}
 </style>
+
+
+/* --- hard positioning/sizing so panel shows even without Tailwind utilities --- */
+.assistant {
+  position: fixed;        /* fullscreen by default (mobile) */
+  top: 0; left: 0; right: 0; bottom: 0;
+  z-index: 2147483000;    /* very high */
+  display: block;
+  pointer-events: none;   /* keep clicks for inner panel only */
+}
+.panel {
+  pointer-events: auto;
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 16px;
+}
+
+/* Desktop layout: float bottom-right */
+@media (min-width: 768px) {
+  .assistant {
+    top: auto; left: auto;
+    right: 16px; bottom: 16px;
+    width: 380px;
+    height: 560px;
+    max-height: 85vh;
+  }
+}

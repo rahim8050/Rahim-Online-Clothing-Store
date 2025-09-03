@@ -7,6 +7,7 @@ from django.apps import apps
 from django.utils import timezone
 
 from orders.utils import derive_ui_payment_status
+from orders.models import Order, OrderItem
 from .models import ToolCallLog, ChatSession
 
 
@@ -106,6 +107,40 @@ def order_list(user, limit: int = 5, session: ChatSession | None = None) -> str:
         status = derive_ui_payment_status(o, last_tx)
         lines.append(f"{o.id}: {_order_number(o)} — {status} ({_fmt_dt(o.created_at)})")
     return redact("\n".join(lines))
+
+
+def list_orders_table(user, limit: int = 10) -> dict:
+    """Structured table for recent orders used by the new ChatPanel.
+    Columns: [#, Order Code, Status, Item]
+    """
+    qs = Order.objects.filter(user=user).order_by("-created_at").only("id", "paid", "payment_status")[: max(1, min(50, int(limit)))]
+    ids = [o.id for o in qs]
+    first_items = {
+        it["order_id"]: it
+        for it in (OrderItem.objects.filter(order_id__in=ids)
+                   .select_related("product")
+                   .values("order_id", "product__name", "quantity")
+                   .order_by("order_id", "id"))
+    }
+    rows = []
+    for o in qs:
+        item = first_items.get(o.id)
+        item_str = f"{item['product__name']}:{item['quantity']}" if item else "-"
+        status = derive_ui_payment_status(o)
+        rows.append([o.id, f"RAH{o.id}", status, item_str])
+    return {
+        "title": "Recent orders",
+        "columns": ["#", "Order Code", "Status", "Item"],
+        "rows": rows,
+        "footnote": f"Showing latest {len(rows)}."
+    }
+
+# Minimal routing fallback for tests/new UI
+def route_message(msg: str, persona: str = "customer", user=None) -> str:
+    msg = (msg or "").strip().lower()
+    if msg.startswith("list orders"):
+        return order_list(user)
+    return "Try 'list orders', 'order status 123', 'payment status 123', 'delivery status 123'."
 
 
 def order_status(user, token: str, session: ChatSession | None = None) -> str:

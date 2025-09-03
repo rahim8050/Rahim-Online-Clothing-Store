@@ -1,0 +1,114 @@
+@import "../styles/m3-tokens.css";
+
+/* Base resets and typography glue for ChatPanel */
+:root {
+  color-scheme: light dark;
+}
+
+.m3-surface {
+  background: var(--m3-surface);
+  color: var(--m3-on-surface);
+}
+
+.m3-card {
+  background: var(--m3-surface);
+  color: var(--m3-on-surface);
+  border-radius: var(--m3-radius-lg);
+  box-shadow: var(--m3-elevation-2);
+  border: 1px solid var(--m3-outline-variant);
+}
+
+.m3-appbar {
+  background: var(--m3-primary);
+  color: var(--m3-on-primary);
+}
+
+html[data-theme='hybrid'] .m3-appbar {
+  background: var(--hybrid-appbar-gradient);
+}
+
+.m3-fab {
+  background: var(--m3-primary);
+  color: var(--m3-on-primary);
+  border-radius: 9999px;
+  box-shadow: var(--m3-elevation-3);
+}
+
+html[data-theme='hybrid'] .m3-fab {
+  background: var(--hybrid-fab-gradient);
+  box-shadow: var(--hybrid-shadow);
+}
+
+.m3-outline {
+  border: 1px solid var(--m3-outline);
+}
+
+.m3-focus-ring:focus-visible {
+  outline: none;
+  box-shadow: var(--m3-focus);
+}
+
+.m3-ripple {
+  position: relative;
+  overflow: hidden;
+}
+
+.m3-ripple::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: transparent;
+  pointer-events: none;
+  transition: background 180ms ease-out;
+}
+
+.m3-ripple:where(:hover)::-moz-focus-inner { border: 0; }
+.m3-ripple:hover::after { background: var(--m3-state-hover); }
+.m3-ripple:active::after { background: var(--m3-state-pressed); }
+.m3-ripple:focus-visible::after { background: var(--m3-state-focus); }
+
+/* Markdown table styling inside chat bubbles */
+.m3-chat .md table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 0.875rem;
+  border: 1px solid var(--m3-outline-variant);
+  border-radius: var(--m3-radius-md);
+  overflow: hidden;
+}
+.m3-chat .md thead th {
+  text-align: left;
+  font-weight: 600;
+  padding: 10px 12px;
+  background: color-mix(in srgb, var(--m3-primary) 14%, var(--m3-surface));
+  color: var(--m3-on-surface);
+  border-bottom: 1px solid var(--m3-outline-variant);
+}
+.m3-chat .md tbody td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--m3-outline-variant);
+}
+.m3-chat .md tbody tr:nth-child(odd) td {
+  background: color-mix(in srgb, var(--m3-surface) 96%, var(--m3-on-surface) 4%);
+}
+.m3-chat .md pre, .m3-chat .md code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 0.85em;
+}
+.m3-chat .md pre {
+  padding: 8px 10px;
+  border-radius: var(--m3-radius-md);
+  background: color-mix(in srgb, var(--m3-on-surface) 8%, var(--m3-surface));
+  overflow: auto;
+}
+
+/* Screen reader only */
+.sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0,0,0,0);
+  white-space: nowrap; border: 0;
+}
+
