@@ -80,7 +80,8 @@ export default {
         'How do refunds work?'
       ]
     },
-    autoOpen: { type: Boolean, default: true },
+    // Do not auto-open; panel opens only on user click
+    autoOpen: { type: Boolean, default: false },
     placeholder: { type: String, default: 'Ask me anything…' }
   },
   data(){
@@ -104,21 +105,23 @@ export default {
     }
   },
   mounted(){
-    // first-run auto-open (once per browser)
-    if (this.autoOpen) {
-      try {
-        if (!localStorage.getItem('rahim_assistant_seen')) {
-          this.open = true;
-          localStorage.setItem('rahim_assistant_seen', '1');
-        }
-      } catch {}
-    }
+    // Never auto-open; restore persisted content only
+    try {
+      const raw = localStorage.getItem('assistant_state_v1');
+      if (raw) {
+        const s = JSON.parse(raw);
+        if (Array.isArray(s.messages)) this.messages = s.messages;
+        if (typeof s.draft === 'string') this.draft = s.draft;
+      }
+    } catch {}
   },
   methods: {
     rotateTopics(){ this.chipPage = (this.chipPage + 1) % Math.ceil(this.suggestions.length / 4 || 1); },
     useSuggestion(s){ this.draft = s; this.send(); },
     addMessage(text, who){
+      if (typeof text === 'string' && /^Hi! Try:/i.test(text) && (this.messages||[]).length > 0) return;
       this.messages.push({ text, who });
+      try { localStorage.setItem('assistant_state_v1', JSON.stringify({ messages: this.messages, draft: this.draft })) } catch {}
       this.$nextTick(()=>{ const el = this.$refs.feed; if (el) el.scrollTop = el.scrollHeight; });
     },
     getSessionKey(){
@@ -141,6 +144,7 @@ export default {
       this.showWelcome = false;
       this.addMessage(msg, 'me');
       this.draft = '';
+      try { localStorage.setItem('assistant_state_v1', JSON.stringify({ messages: this.messages, draft: this.draft })) } catch {}
 
       this.pending = true; this.typing = true;
       const headers = { 'Content-Type': 'application/json' };

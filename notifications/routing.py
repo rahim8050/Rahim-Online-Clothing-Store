@@ -1,8 +1,8 @@
-from django.urls import re_path  # or: from django.urls import path
-from .consumers import NotificationConsumer
+# notifications/routing.py
+from django.urls import re_path
+from .consumers import NotificationsConsumer
 
 websocket_urlpatterns = [
-    re_path(r"^ws/notifications/$", NotificationConsumer.as_asgi()),
-    # OR using path():
-    # path("ws/notifications/", NotificationConsumer.as_asgi()),
+    # NOTE: no leading slash here; Channels matches 'ws/notifications/' as-is
+    re_path(r"^ws/notifications/$", NotificationsConsumer.as_asgi()),
 ]
