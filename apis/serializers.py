@@ -13,6 +13,38 @@ from users import services  # <-- correct: we now defined the functions here
 
 User = get_user_model()
 
+
+# ----------------------------------------
+# Auth / Me
+# ----------------------------------------
+class WhoAmISerializer(serializers.Serializer):
+    id = serializers.IntegerField(read_only=True)
+    email = serializers.EmailField(read_only=True, allow_null=True)
+    role = serializers.SerializerMethodField()
+    role_label = serializers.SerializerMethodField()
+
+    def get_role(self, obj):
+        try:
+            return getattr(obj, "effective_role", None) or getattr(obj, "role", None) or "customer"
+        except Exception:
+            return "customer"
+
+    def get_role_label(self, obj):
+        # Map code -> label using User.Role choices if available
+        code = self.get_role(obj)
+        try:
+            choices = dict(getattr(User, "Role").choices)
+            return choices.get(code, code)
+        except Exception:
+            labels = {
+                "customer": "Customer",
+                "vendor": "Vendor",
+                "vendor_staff": "Vendor Staff",
+                "driver": "Driver",
+                "admin": "Admin",
+            }
+            return labels.get(code, code)
+
 # ----------------------------------------
 # Helpers
 # ----------------------------------------

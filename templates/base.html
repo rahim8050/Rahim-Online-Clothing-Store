@@ -120,12 +120,13 @@
 
     {% block extra_js %}{% endblock %}
     <div id="rahim-assistant-mount"
-     data-role="{% if user_is_vendor %}vendor{% elif user_is_vendor_staff %}vendor_staff
+     data-role="{% if user_is_vendor %}vendor{% elif user_is_vendor_staff %}vendor_staff{% elif user_is_driver %}driver
                 {% elif request.user.is_staff %}admin
                 {% elif request.user.is_authenticated %}customer
                 {% else %}guest{% endif %}"
      data-vendor="{{ user_is_vendor|yesno:'1,0' }}"
-     data-vendor-staff="{{ user_is_vendor_staff|yesno:'1,0' }}">
+     data-vendor-staff="{{ user_is_vendor_staff|yesno:'1,0' }}"
+     data-driver="{{ user_is_driver|yesno:'1,0' }}">
 </div>
 {# Old chatbot disabled to avoid conflicts with new ChatPanel #}
 {# {% include 'partials/chatbot.html'%} #}

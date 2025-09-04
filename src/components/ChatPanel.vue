@@ -68,7 +68,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted, nextTick, watch } from 'vue'
 
 type Role = 'vendor'|'vendor_staff'|'customer'|'driver'|'admin'|'guest'
 const props = defineProps<{ apiUrl: string; role: Role }>()
@@ -86,7 +86,8 @@ const subtitle = CONFIG[role]?.subtitle ?? 'Assistant'
 const suggestions = CONFIG[role]?.suggestions ?? []
 const persona = CONFIG[role]?.persona ?? 'customer'
 
-const isOpen = ref(true)
+// Start closed by default; open only on user interaction
+const isOpen = ref(false)
 
 const messages = ref<Array<any>>([])
 const draft = ref('')
@@ -94,17 +95,41 @@ const listEl = ref<HTMLDivElement | null>(null)
 const taEl = ref<HTMLTextAreaElement | null>(null)
 const canSend = computed(() => draft.value.trim().length > 0)
 
+// Persist only content (messages, draft). Never persist open/closed state.
+const STORAGE_KEY = 'assistant_state_v1'
+function loadState(){
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (!raw) return
+    const s = JSON.parse(raw)
+    if (Array.isArray(s.messages)) messages.value = s.messages
+    if (typeof s.draft === 'string') draft.value = s.draft
+  } catch {}
+}
+function saveState(){
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ messages: messages.value, draft: draft.value })) } catch {}
+}
+
+// Restore persisted content on script setup (does not open panel)
+loadState()
+
+
 function pushText(who: 'you'|'bot', text: string) {
   messages.value.push({ kind: 'text', who, text })
   scrollToBottom()
+  saveState()
 }
 function pushTable(tbl: { title?:string; columns:string[]; rows:any[]; footnote?:string }) {
   messages.value.push({ kind: 'table', who: 'bot', table: tbl })
   scrollToBottom()
+  saveState()
 }
 function scrollToBottom() { nextTick(() => listEl.value?.scrollTo({ top: listEl.value.scrollHeight, behavior: 'smooth' })) }
 function autosize() { if (!taEl.value) return; taEl.value.style.height='0px'; taEl.value.style.height=Math.min(taEl.value.scrollHeight,112)+'px' }
-function useSuggestion(s: string) { draft.value = s; autosize() }
+function useSuggestion(s: string) { draft.value = s; saveState(); autosize() }
+
+// Persist draft updates as user types
+watch(draft, () => saveState())
 
 function normalizedRows(tbl: any): any[] { return (tbl.rows || []).map((r: any) => Array.isArray(r) ? r : Object.values(r)) }
 function toCSV(columns: string[], rows: any[][]): string { const data=[columns, ...rows]; return data.map(cols=>cols.map(v=>{ const s=v==null?'':String(v); return /[",\n]/.test(s)?`"${s.replace(/"/g,'""')}"`:s; }).join(',')).join('\n') }
@@ -145,7 +170,7 @@ async function submit() {
   }
 }
 
-onMounted(() => { pushText('bot', `Hi! Try: ${suggestions.slice(0,3).join(' • ')}`); nextTick(autosize) })
+onMounted(() => { nextTick(autosize) })
 </script>
 
 <style scoped>
@@ -212,3 +237,5 @@ table.nice tbody tr.odd { background: rgba(255,255,255,.03); }
 .send:hover { background:#1d4ed8; }
 .send:disabled { opacity:.5; cursor:not-allowed; }
 </style>
+
+

@@ -37,6 +37,7 @@
     row.appendChild(b);
     feed.appendChild(row);
     feed.scrollTop = feed.scrollHeight;
+    try {  } catch {}
   }
 
   function bubbleTyping(on=true){
@@ -95,6 +96,18 @@
     row.appendChild(wrap);
     feed.appendChild(row);
     feed.scrollTop = feed.scrollHeight;
+    try {  } catch {}
+  }
+
+  function readFeed(){
+    const rows = [];
+    feed.querySelectorAll('.text-left, .text-right').forEach(row => {
+      const bubble = row.querySelector('div');
+      if (!bubble) return;
+      const who = row.classList.contains('text-right') ? 'me' : 'bot';
+      rows.push({ kind: 'text', who, text: bubble.textContent || '' })
+    })
+    return rows;
   }
 
   /* ---------- parser for your current text ---------- */
@@ -134,9 +147,21 @@
   }
 
   /* ---------- toggle ---------- */
-  function togglePanel(){ panel.classList.toggle('hidden'); }
-  toggle?.addEventListener('click', togglePanel);
-  closeBtn?.addEventListener('click', togglePanel);
+  function openPanel(){
+    if (!panel) return;
+    panel.classList.remove('hidden');
+    // hydrate from persisted state
+    try {
+      const msgs = (window.AssistantState && window.AssistantState.getMessages()) || [];
+      const draft = (window.AssistantState && window.AssistantState.getDraft()) || '';
+      feed.innerHTML = '';
+      msgs.forEach(m => bubbleText(m.text||'', m.who||'bot'));
+      if (typeof draft === 'string') input.value = draft;
+    } catch {}
+  }
+  function closePanel(){ if (panel) panel.classList.add('hidden'); }
+  toggle?.addEventListener('click', ()=>{ if (panel?.classList.contains('hidden')) openPanel(); else closePanel(); });
+  closeBtn?.addEventListener('click', closePanel);
 
   /* ---------- suggestions ---------- */
   suggestions?.addEventListener('click', (e)=>{
@@ -175,8 +200,9 @@
     if (!msg || pending) return;
 
     welcome?.classList.add('hidden');      // hide welcome on first message
-    bubbleText(msg, 'me');
+    window.AssistantPushMessage({ who: 'me', text: msg });
     input.value = '';
+    try { window.AssistantState && window.AssistantState.setDraft('') } catch {}
     pending = true; send.disabled = true;
     bubbleTyping(true);
 
@@ -210,7 +236,7 @@
       if (parsed) {
         bubbleTable(parsed.columns, parsed.rows);
       } else {
-        bubbleText(j.reply || '…', 'bot');
+        window.AssistantPushMessage({ who: 'bot', text: (j.reply || '.') });
       }
     } catch (e) {
       bubbleTyping(false);
@@ -222,6 +248,7 @@
   }
 
   send?.addEventListener('click', ask);
+  input?.addEventListener('input', () => { try { window.AssistantState && window.AssistantState.setDraft(input.value||'') } catch {} });
   input?.addEventListener('keydown', (e) => { if (e.key === 'Enter') ask(); });
 
 })();

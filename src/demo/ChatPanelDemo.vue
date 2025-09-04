@@ -9,7 +9,7 @@
     </div>
     <p class="text-sm opacity-80">Toggle hybrid mode via html[data-theme="hybrid"]. Strict M3 is default.</p>
 
-    <ChatPanel :autoOpen="true" />
+    <ChatPanel />
   </div>
 </template>
 
@@ -35,4 +35,3 @@ function toggleDark() {
 body { background: var(--m3-surface); color: var(--m3-on-surface); }
 button { border-color: var(--m3-outline-variant); }
 </style>
-

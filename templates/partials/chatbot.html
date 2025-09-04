@@ -60,6 +60,8 @@
 </div>
 
 <link rel="stylesheet" href="{% static 'css/rahim-assistant.css' %}">
+<!-- Persist messages/draft only; panel never auto-opens -->
+<script defer src="{% static 'js/assistant-state.js' %}"></script>
 <script defer src="{% static 'js/chatbot.js' %}"></script>
 {% else %}
 <div class="fixed bottom-4 right-4 z-40">
