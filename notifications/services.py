@@ -2,8 +2,7 @@
 from django.template.loader import render_to_string
 from django.core.mail import send_mail
 from django.conf import settings
-from asgiref.sync import async_to_sync
-from channels.layers import get_channel_layer
+from .ws import push_to_user
 from .models import Notification
 
 def create_and_push(user, title, message, level="info", url=""):
@@ -19,13 +18,9 @@ def create_and_push(user, title, message, level="info", url=""):
         except Exception:
             pass
 
-    # WebSocket push
+    # WebSocket push (generic notification payload via per-user group)
     try:
-        channel_layer = get_channel_layer()
-        async_to_sync(channel_layer.group_send)(
-            f"user.notifications.{user.id}",
-            {"type": "notify", "title": title, "message": message, "level": level, "url": url},
-        )
+        push_to_user(user.id, {"type": "notify", "title": title, "message": message, "level": level, "url": url})
     except Exception:
         pass
 

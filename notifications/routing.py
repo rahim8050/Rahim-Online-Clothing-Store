@@ -2,7 +2,7 @@
 from django.urls import re_path
 from .consumers import NotificationsConsumer
 
+# Route for notifications WS. No leading slash per Channels convention.
 websocket_urlpatterns = [
-    # NOTE: no leading slash here; Channels matches 'ws/notifications/' as-is
-    re_path(r"^ws/notifications/$", NotificationsConsumer.as_asgi()),
+    re_path(r"^ws/notifications/?$", NotificationsConsumer.as_asgi()),
 ]
