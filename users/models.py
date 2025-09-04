@@ -102,6 +102,18 @@ class VendorApplication(models.Model):
     decided_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
+    def save(self, *args, **kwargs):
+        # Track status change for downstream signals, in addition to existing pre_save hook
+        try:
+            if self.pk:
+                prev = type(self).objects.only("status").get(pk=self.pk).status
+                self._status_changed = (prev != self.status)
+            else:
+                self._status_changed = True
+        except Exception:
+            self._status_changed = True
+        return super().save(*args, **kwargs)
+
     def approve(self, staff_user):
         from django.contrib.auth.models import Group
         self.status = self.APPROVED

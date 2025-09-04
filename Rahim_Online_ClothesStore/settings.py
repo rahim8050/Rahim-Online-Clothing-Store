@@ -156,6 +156,15 @@ if DATABASES["default"].get("ENGINE") == "django.db.backends.mysql":
     # (optional) Django 4.2+: auto ping to avoid stale connections
     DATABASES["default"]["CONN_HEALTH_CHECKS"] = True
 
+# Use in-memory SQLite for pytest to avoid external DB deps
+if os.environ.get("PYTEST_CURRENT_TEST"):
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": ":memory:",
+        }
+    }
+
 
 # -------------------------- Channels --------------------------
 REDIS_URL = env("REDIS_URL", default="")
