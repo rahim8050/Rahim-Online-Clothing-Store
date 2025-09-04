@@ -127,6 +127,7 @@ TEMPLATES = [
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
                 "cart.context_processors.cart_counter",
+                "assistant.context_processors.assistant_role",
             ],
         },
     },
@@ -239,7 +240,8 @@ USE_TZ = True
 TIME_ZONE = "UTC" 
 
 # --------------------- Static & Media (WhiteNoise) ------------
-STATIC_URL = "static/"
+# Use an absolute prefix so template {% static %} resolves to /static/... and not a relative path
+STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 STATICFILES_DIRS = [BASE_DIR / "static"]
 STORAGES = {
