@@ -358,6 +358,23 @@ def order_create(request):
     error_msg = None
     form = None
 
+    # Allow GET fallback with ?selected=1,2,3 when JS form submission is blocked
+    try:
+        if request.method == "GET" and cart:
+            sel = request.GET.get("selected", "").strip()
+            if sel:
+                ids = []
+                for part in sel.split(","):
+                    part = part.strip()
+                    if part.isdigit():
+                        ids.append(int(part))
+                if ids:
+                    cart.items.update(is_selected=False)
+                    cart.items.filter(product_id__in=ids).update(is_selected=True)
+    except Exception:
+        # Non-fatal: ignore malformed values
+        pass
+
     if request.method == "POST":
         selected_items = request.POST.getlist('selected_items')
         if selected_items:
