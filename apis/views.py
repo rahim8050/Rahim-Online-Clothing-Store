@@ -65,6 +65,7 @@ from .serializers import (
     VendorStaffOutSerializer,        # <-- used in VendorStaffListCreateView.get/response
     VendorStaffInviteSerializer,     # <-- now defined in apis/serializers.py
     VendorStaffRemoveSerializer,     # <-- now defined in apis/serializers.py
+    WhoAmISerializer,
 )
 
 
@@ -91,9 +92,11 @@ def _publish_delivery(delivery, kind: str, payload: dict | None = None):
 
 
 class WhoAmI(APIView):
-    permission_classes=[IsAuthenticated]
+    permission_classes = [IsAuthenticated]
+
     def get(self, request):
-        return Response({"id": request.user.id, "email": getattr(request.user, "email", None)})
+        ser = WhoAmISerializer(request.user)
+        return Response(ser.data)
 
 def orderitem_reverse_name() -> str:
     rel_name = OrderItem._meta.get_field("product").remote_field.related_name
