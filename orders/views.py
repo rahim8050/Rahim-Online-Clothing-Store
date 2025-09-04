@@ -419,6 +419,7 @@ def order_create(request):
                             OrderItem.objects.create(
                                 order=order,
                                 product=item.product,
+                                 product_version=getattr(item.product, "product_version", 1),
                                 price=item.product.price,
                                 quantity=item.quantity
                             )

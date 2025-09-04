@@ -2,6 +2,7 @@
 {% block title %}
     My Shopping Cart
 {% endblock %}
+{%load static%}
 {% block content %}
 
 <div class="container mx-auto p-4 lg:p-8 max-w-6xl">
@@ -11,7 +12,7 @@
         <div id="cart-container">
             <div class="mb-4 flex items-center space-x-4">
                 <label class="flex items-center">
-                    <input type="checkbox" id="select-all" class="mr-2 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded">
+                    <input type="checkbox" id="select-all" class="mr-2 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded" checked>
                     <span class="text-sm font-medium">Select All</span>
                 </label>
                 <span id="selected-count" class="text-sm text-gray-600">0 items selected</span>
@@ -22,11 +23,12 @@
                 <div class="flex flex-col md:flex-row items-start md:items-center p-4 border rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200 product-item">
                     <div class="flex items-center mr-4 mb-4 md:mb-0">
                         <input type="checkbox" 
-                               name="selected_items" 
-                               value="{{ item.product.id }}" 
-                               class="product-checkbox h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                               data-price="{{ item.product.price }}"
-                               data-quantity="{{ item.quantity }}">
+                                name="selected_items" 
+                                value="{{ item.product.id }}" 
+                                class="product-checkbox h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                                data-price="{{ item.product.price }}"
+                                data-quantity="{{ item.quantity }}"
+                                form="checkout-form">
                     </div>
 
                     {% if item.product.image %}
@@ -98,27 +100,27 @@
                         Cart Total: Ksh{{ total_price }}
                     </p>
                     <p id="selected-total" class="text-xl md:text-2xl font-semibold text-emerald-700">
-                        Selected: Ksh0
+                        Selected: Ksh{{ total_price }}
                     </p>
                 </div>
             </div>
 
             <div class="mt-8 text-right">
-                <button type="button"
-                        id="checkout-btn"
-                        disabled
-                        onclick="proceedToCheckout()"
-                        class="w-full md:w-auto bg-gray-400 text-white px-8 py-3 rounded-lg text-sm md:text-base cursor-not-allowed transition-colors duration-300">
-                    Proceed to Checkout (0 items)
-                </button>
+                <form id="checkout-form" action="{% url 'orders:order_create' %}" method="post" class="inline">
+                    {% csrf_token %}
+                    <input type="hidden" name="from_cart" value="true">
+                    <div id="selected-items-container" class="hidden"></div>
+                    <button type="submit"
+                            id="checkout-btn"
+                            data-order-create-url="{% url 'orders:order_create' %}"
+                            class="w-full md:w-auto bg-gray-400 text-white px-8 py-3 rounded-lg text-sm md:text-base cursor-not-allowed transition-colors duration-300">
+                        Proceed to Checkout (0 items)
+                    </button>
+                </form>
             </div>
         </div>
 
-        <form id="hidden-checkout-form" action="{% url 'orders:order_create' %}" method="post" style="display: none;">
-            {% csrf_token %}
-            <input type="hidden" name="from_cart" value="true">
-            <div id="selected-items-container"></div>
-        </form>
+        {# legacy hidden form removed; replaced by visible checkout-form above #}
 
     {% else %}
         <div class="text-center py-12">
@@ -133,87 +135,7 @@
     {% endif %}
 </div>
 
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    const selectAllCheckbox = document.getElementById('select-all');
-    const productCheckboxes = document.querySelectorAll('.product-checkbox');
-    const selectedCountSpan = document.getElementById('selected-count');
-    const selectedTotalSpan = document.getElementById('selected-total');
-    const checkoutBtn = document.getElementById('checkout-btn');
-
-    function updateUI() {
-        const checkedBoxes = document.querySelectorAll('.product-checkbox:checked');
-        const count = checkedBoxes.length;
-        let total = 0;
-
-        checkedBoxes.forEach(checkbox => {
-            const price = parseFloat(checkbox.dataset.price);
-            const quantity = parseInt(checkbox.dataset.quantity);
-            total += price * quantity;
-        });
-
-        selectedCountSpan.textContent = `${count} item${count !== 1 ? 's' : ''} selected`;
-        selectedTotalSpan.textContent = `Selected: Ksh${total.toFixed(2)}`;
-
-        if (count > 0) {
-            checkoutBtn.disabled = false;
-            checkoutBtn.classList.remove('bg-gray-400', 'cursor-not-allowed');
-            checkoutBtn.classList.add('bg-indigo-600', 'hover:bg-indigo-700');
-            checkoutBtn.textContent = `Proceed to Checkout (${count} item${count !== 1 ? 's' : ''})`;
-        } else {
-            checkoutBtn.disabled = true;
-            checkoutBtn.classList.add('bg-gray-400', 'cursor-not-allowed');
-            checkoutBtn.classList.remove('bg-indigo-600', 'hover:bg-indigo-700');
-            checkoutBtn.textContent = 'Proceed to Checkout (0 items)';
-        }
-
-        if (count === 0) {
-            selectAllCheckbox.indeterminate = false;
-            selectAllCheckbox.checked = false;
-        } else if (count === productCheckboxes.length) {
-            selectAllCheckbox.indeterminate = false;
-            selectAllCheckbox.checked = true;
-        } else {
-            selectAllCheckbox.indeterminate = true;
-        }
-    }
-
-    selectAllCheckbox.addEventListener('change', function() {
-        productCheckboxes.forEach(checkbox => {
-            checkbox.checked = this.checked;
-        });
-        updateUI();
-    });
-
-    productCheckboxes.forEach(checkbox => {
-        checkbox.addEventListener('change', updateUI);
-    });
-
-    window.proceedToCheckout = function() {
-        const checkedBoxes = document.querySelectorAll('.product-checkbox:checked');
-        if (checkedBoxes.length === 0) {
-            alert('Please select at least one item to checkout.');
-            return;
-        }
-
-        const selectedIds = Array.from(checkedBoxes).map(cb => cb.value);
-        sessionStorage.setItem('selectedItems', JSON.stringify(selectedIds));
-
-        const container = document.getElementById('selected-items-container');
-        container.innerHTML = '';
-        selectedIds.forEach(id => {
-            const input = document.createElement('input');
-            input.type = 'hidden';
-            input.name = 'selected_items';
-            input.value = id;
-            container.appendChild(input);
-        });
-
-        document.getElementById('hidden-checkout-form').submit();
-    };
-
-    updateUI();
-});
-</script>
+{# Use external hardened script to manage cart interactions #}
+<script src="{% static 'js/cart.js' %}" defer></script>
 
 {% endblock %}
