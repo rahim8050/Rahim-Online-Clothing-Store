@@ -449,6 +449,7 @@ def vendor_dashboard(request):
 
     return render(
         request,
+
         "dash/vendor.html",   # ✅ use your templates/dash/vendor.html
         {"products": products, "deliveries": deliveries, "status": request.GET.get("status", "all"), "totals": totals},
     )
@@ -514,3 +515,15 @@ def vendor_apply_deprecated(request):
     if request.method != "GET":
         resp.status_code = 307
     return resp
+
+        'users/accounts/my_orders.html',
+        {
+            'orders': orders,
+        },
+    )
+    
+def geoapify_test(request):
+    return render(request, "users/accounts/dev.html", {
+        "GEOAPIFY_API_KEY": settings.GEOAPIFY_API_KEY,
+    })    
+
