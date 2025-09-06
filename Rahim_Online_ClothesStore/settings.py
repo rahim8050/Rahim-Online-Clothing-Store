@@ -140,6 +140,7 @@ TEMPLATES = [
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
                 "cart.context_processors.cart_counter",
+                "assistant.context_processors.assistant_role",
             ],
         },
     },
@@ -173,6 +174,15 @@ if DATABASES["default"].get("ENGINE") == "django.db.backends.mysql":
     })
     # (optional) Django 4.2+: auto ping to avoid stale connections
     DATABASES["default"]["CONN_HEALTH_CHECKS"] = True
+
+# Use in-memory SQLite for pytest to avoid external DB deps
+if os.environ.get("PYTEST_CURRENT_TEST"):
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": ":memory:",
+        }
+    }
 
 
 
@@ -272,8 +282,13 @@ USE_I18N = True
 USE_TZ = True
 TIME_ZONE = "UTC" 
 
-# --------------------- Static / Media -------------------------
-STATIC_URL = "static/"
+
+
+
+# --------------------- Static & Media (WhiteNoise) ------------
+# Use an absolute prefix so template {% static %} resolves to /static/... and not a relative path
+STATIC_URL = "/static/"
+
 STATIC_ROOT = BASE_DIR / "staticfiles"
 STATICFILES_DIRS = [BASE_DIR / "static"]
 

@@ -2,7 +2,9 @@ from django.contrib.auth.signals import user_logged_in
 from django.dispatch import receiver
 from django.db.models.signals import pre_save, post_save
 from django.apps import apps
+from django.db import transaction
 from notifications.services import create_and_push
+from notifications.ws import push_to_user
 import logging; logger = logging.getLogger(__name__)
 @receiver(user_logged_in)
 def restore_cart_session(sender, request, user, **kwargs):
@@ -75,3 +77,27 @@ def notify_status(sender, instance, created, **kwargs):
             level="warning",
             url="/dashboard/",
         )
+
+
+# Additional structured WS event after commit for UI consumers
+@receiver(post_save, sender=VendorApplication)
+def vendor_application_status_push(sender, instance, created, **kwargs):
+    try:
+        user_id = instance.user_id
+    except Exception:
+        return
+    # Decide whether to emit
+    changed = created or getattr(instance, "_old_status", None) not in (None, instance.status)
+
+    if not changed:
+        return
+
+    def _after():
+        push_to_user(user_id, {
+            "type": "vendor_application.updated",
+            "application_id": instance.pk,
+            "status": instance.status,
+            "message": f"Your vendor application is now '{instance.status}'." if not created else "Application submitted and pending review.",
+        })
+
+    transaction.on_commit(_after)

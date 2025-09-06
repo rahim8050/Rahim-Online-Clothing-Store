@@ -32,6 +32,7 @@ class Product(models.Model):
     available = models.BooleanField(default=True)
     created = models.DateTimeField(auto_now_add=True)
     updated = models.DateTimeField(auto_now=True)
+    product_version = models.PositiveIntegerField(default=1) 
     image = models.ImageField(upload_to="products", blank=True, null=True)
 
     def __str__(self) -> str:
