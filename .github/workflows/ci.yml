@@ -1,0 +1,81 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, "fix/**" ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  lint-and-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        db: [ sqlite, postgres ]
+
+    services:
+      postgres:
+        image: postgres:14
+        env:
+          POSTGRES_DB: testdb
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install system deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libpq-dev build-essential libmysqlclient-dev
+
+      - name: Install Python deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Install Node deps
+        run: |
+          npm ci
+
+      - name: Env setup
+        run: |
+          echo "DJANGO_SETTINGS_MODULE=Rahim_Online_ClothesStore.settings" >> $GITHUB_ENV
+          echo "SECRET_KEY=test-secret" >> $GITHUB_ENV
+          echo "DEBUG=0" >> $GITHUB_ENV
+          echo "PAYSTACK_SECRET_KEY=placeholder" >> $GITHUB_ENV
+          echo "PAYSTACK_PUBLIC_KEY=placeholder" >> $GITHUB_ENV
+          echo "STRIPE_WEBHOOK_SECRET=whsec_test" >> $GITHUB_ENV
+          echo "EMAIL_HOST=localhost" >> $GITHUB_ENV
+          echo "EMAIL_BACKEND=django.core.mail.backends.console.EmailBackend" >> $GITHUB_ENV
+          if [ "${{ matrix.db }}" = "sqlite" ]; then
+            echo "DATABASE_URL=sqlite:///db.sqlite3" >> $GITHUB_ENV
+          else
+            echo "DATABASE_URL=postgres://postgres:postgres@localhost:5432/testdb" >> $GITHUB_ENV
+          fi
+
+      - name: Check Django deploy settings
+        run: python manage.py check --deploy
+
+      - name: Lint (ruff if available)
+        run: |
+          ruff check . || echo "ruff not installed / ignoring"
+          bandit -r . || true
+
+      - name: Run tests
+        run: pytest -q
+
+      - name: Collect static
+        run: python manage.py collectstatic --noinput
+

@@ -1,0 +1,28 @@
+diff --git a/Rahim_Online_ClothesStore/settings.py b/Rahim_Online_ClothesStore/settings.py
+index 3333333..4444444 100644
+--- a/Rahim_Online_ClothesStore/settings.py
++++ b/Rahim_Online_ClothesStore/settings.py
+@@ -246,9 +246,7 @@
+- LANGUAGE_CODE = "en-us"
+- TIME_ZONE = "Africa/Nairobi"
+- USE_I18N = True
+- USE_TZ = True
+- TIME_ZONE = "UTC" 
++ LANGUAGE_CODE = "en-us"
++ TIME_ZONE = "Africa/Nairobi"
++ USE_I18N = True
++ USE_TZ = True
+@@ -281,9 +279,8 @@
+- # -------------------------- Security --------------------------
+- ENV = os.getenv("ENV", "dev").lower()     # dev | staging | prod
+- DEBUG = os.getenv("DEBUG", "1") == "1"
+- IS_PROD = ENV == "prod"
++ # -------------------------- Security --------------------------
++ ENV = os.getenv("ENV", "dev").lower()     # dev | staging | prod
++ # Do NOT override DEBUG here; respect earlier env-based DEBUG
++ IS_PROD = ENV == "prod"
+@@ -305,7 +302,9 @@
+- ALLOWED_HOSTS = ["127.0.0.1", "localhost"] if not IS_PROD else ["yourdomain.com"]
++ # If env did not provide ALLOWED_HOSTS, use safe defaults in dev only
++ if not ALLOWED_HOSTS:
++     ALLOWED_HOSTS = ["127.0.0.1", "localhost"] if not IS_PROD else []

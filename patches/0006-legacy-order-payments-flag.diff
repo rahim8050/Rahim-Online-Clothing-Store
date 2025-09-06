@@ -1,0 +1,28 @@
+diff --git a/Rahim_Online_ClothesStore/settings.py b/Rahim_Online_ClothesStore/settings.py
+index 1020304..5060708 100644
+--- a/Rahim_Online_ClothesStore/settings.py
++++ b/Rahim_Online_ClothesStore/settings.py
+@@
+ CORS_ALLOWED_ORIGINS = env.list("CORS_ALLOWED_ORIGINS", default=[])
+ 
+ # Legacy Order payments/webhooks toggle (migration aid)
+ LEGACY_ORDER_PAYMENTS = env.bool("LEGACY_ORDER_PAYMENTS", default=True)
+diff --git a/orders/views.py b/orders/views.py
+index a1b2c3d..d4e5f6a 100644
+--- a/orders/views.py
++++ b/orders/views.py
+@@
+ @csrf_exempt
+ def stripe_webhook(request):
+     if not getattr(settings, 'LEGACY_ORDER_PAYMENTS', True):
+         return HttpResponse(status=410)
+@@
+ @csrf_exempt
+ def paystack_webhook(request):
+     if not getattr(settings, 'LEGACY_ORDER_PAYMENTS', True):
+         return HttpResponse(status=410)
+@@
+ @csrf_exempt
+ def paypal_webhook(request):
+     if not getattr(settings, 'LEGACY_ORDER_PAYMENTS', True):
+         return HttpResponse(status=410)

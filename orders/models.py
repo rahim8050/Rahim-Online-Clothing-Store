@@ -43,11 +43,20 @@ class Order(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     paid = models.BooleanField(default=False)
 
-    # MPESA specific fields
+    class PaymentMethod(models.TextChoices):
+        CARD = "card", "Card"
+        MPESA = "mpesa", "M-Pesa"
+        PAYPAL = "paypal", "PayPal"
+
+    # Payment specifics
     mpesa_checkout_request_id = models.CharField(max_length=100, blank=True, null=True)
     mpesa_phone_number = models.CharField(max_length=15, blank=True, null=True)
     mpesa_transaction_code = models.CharField(max_length=50, blank=True, null=True)
-    payment_method = models.CharField(max_length=20, default="MPESA")
+    payment_method = models.CharField(
+        max_length=20,
+        choices=PaymentMethod.choices,
+        default=PaymentMethod.MPESA,
+    )
     stock_updated = models.BooleanField(default=False)
 
     # Stripe specific fields

@@ -1,0 +1,8 @@
+diff --git a/src/components/ChatPanel.vue b/src/components/ChatPanel.vue
+index 5555555..6666666 100644
+--- a/src/components/ChatPanel.vue
++++ b/src/components/ChatPanel.vue
+@@
+-            <button class="send" :disabled="!canSend">Send</button>
++            <!-- Prevent cross-form submits -->
++            <button type="button" class="send" :disabled="!canSend" @click.stop.prevent="submit">Send</button>

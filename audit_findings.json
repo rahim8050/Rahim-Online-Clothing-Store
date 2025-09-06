@@ -1,0 +1,103 @@
+{
+  "score": 62,
+  "findings": [
+    {
+      "id": "CFG-CH-001",
+      "severity": "P0",
+      "component": "realtime",
+      "file": "Rahim_Online_ClothesStore/settings.py",
+      "line": 208,
+      "summary": "CHANNEL_LAYERS overridden to InMemory in production",
+      "impact": "WebSockets break under multiple workers/instances; no cross-process messaging",
+      "repro": [
+        "rg -n 'CHANNEL_LAYERS' Rahim_Online_ClothesStore/settings.py",
+        "python - <<<'import os; os.environ[\"REDIS_URL\"]=\"redis://localhost:6379/0\"; import Rahim_Online_ClothesStore.settings as s; print(s.CHANNEL_LAYERS)'"
+      ],
+      "proposed_diff": "See patches/0001-fix-channels-layer.diff",
+      "tests_added": ["tests_added/test_settings_channel_layer.py"],
+      "owner": "backend",
+      "eta_hours": 0.5
+    },
+    {
+      "id": "SEC-SE-002",
+      "severity": "P0",
+      "component": "security",
+      "file": ".env",
+      "line": 1,
+      "summary": "Secrets present in repository",
+      "impact": "Credential leakage; production/payments/email keys exposed",
+      "repro": [
+        "rg -n '^PAYSTACK|^STRIPE|^PAYPAL' .env"
+      ],
+      "proposed_diff": "Remove .env from repo; rotate secrets; not a code diff",
+      "tests_added": [],
+      "owner": "security",
+      "eta_hours": 2
+    },
+    {
+      "id": "CFG-ST-003",
+      "severity": "P1",
+      "component": "backend",
+      "file": "Rahim_Online_ClothesStore/settings.py",
+      "line": 249,
+      "summary": "Conflicting settings (TIME_ZONE/DEBUG/ALLOWED_HOSTS)",
+      "impact": "Non-deterministic behavior; wrong time zone in prod",
+      "repro": [
+        "rg -n '^TIME_ZONE|^DEBUG|ALLOWED_HOSTS =' Rahim_Online_ClothesStore/settings.py"
+      ],
+      "proposed_diff": "See patches/0002-sanitize-settings-duplicates.diff",
+      "tests_added": [],
+      "owner": "backend",
+      "eta_hours": 0.5
+    },
+    {
+      "id": "OBS-HC-004",
+      "severity": "P1",
+      "component": "devops",
+      "file": "core/views.py",
+      "line": 6,
+      "summary": "No readiness probe",
+      "impact": "LB cannot distinguish cold-start vs ready; noisy 5xx during deploys",
+      "repro": [
+        "curl -i /readyz => 404"
+      ],
+      "proposed_diff": "Add readyz in core/views.py and urls (applied)",
+      "tests_added": [],
+      "owner": "devops",
+      "eta_hours": 0.5
+    },
+    {
+      "id": "UX-CK-005",
+      "severity": "P1",
+      "component": "frontend",
+      "file": "src/components/ChatPanel.vue",
+      "line": 94,
+      "summary": "Assistant send button may interact with page forms",
+      "impact": "Checkout form submit could be intercepted in edge cases",
+      "repro": [
+        "Open ChatPanel, focus assistant, press Enter while checkout form exists"
+      ],
+      "proposed_diff": "See patches/0003-chatpanel-send-button.diff",
+      "tests_added": [],
+      "owner": "frontend",
+      "eta_hours": 0.5
+    },
+    {
+      "id": "PMT-DUP-006",
+      "severity": "P1",
+      "component": "payments",
+      "file": "orders/models.py",
+      "line": 401,
+      "summary": "Legacy Transaction overlaps with payments.Transaction",
+      "impact": "Two sources of truth for payments; reconciliation risk",
+      "repro": [
+        "rg -n 'class Transaction' orders/models.py payments/models.py"
+      ],
+      "proposed_diff": "Plan: migrate to payments.Transaction; update imports and add data migration",
+      "tests_added": ["payments/tests/test_payments.py"],
+      "owner": "backend",
+      "eta_hours": 10
+    }
+  ]
+}
+

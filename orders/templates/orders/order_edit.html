@@ -62,23 +62,26 @@
           {% endif %}
         {% endfor %}
 
-        {# Payment method (Card / M-Pesa only; no PayPal) #}
+        {# Payment method (Card / M-Pesa only; no PayPal). Hidden authoritative + visible alias. #}
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-2">
             Select Payment Method <span class="text-red-500">*</span>
           </label>
 
           {% with current=form.payment_method.value|default_if_none:order.payment_method %}
-          <div class="space-y-2">
-            <label class="flex items-center gap-3 p-3 border rounded-lg hover:bg-indigo-50 cursor-pointer">
-              <input type="radio" name="payment_method" value="card"
+          <input type="hidden" id="pm-hidden" name="payment_method" value="{{ current|default:'mpesa' }}">
+          <div id="pm-group" class="space-y-2">
+            <label for="pm-card"
+                   class="pm-option flex items-center gap-3 p-3 border rounded-lg hover:bg-indigo-50 cursor-pointer {% if current == 'card' %}border-indigo-400 bg-indigo-50{% else %}border-gray-300{% endif %}">
+              <input id="pm-card" type="radio" name="pm_choice" value="card"
                      class="h-4 w-4 text-indigo-600 focus:ring-indigo-500"
                      {% if current == "card" %}checked{% endif %}>
               <span>Card</span>
             </label>
 
-            <label class="flex items-center gap-3 p-3 border rounded-lg hover:bg-indigo-50 cursor-pointer">
-              <input type="radio" name="payment_method" value="mpesa"
+            <label for="pm-mpesa"
+                   class="pm-option flex items-center gap-3 p-3 border rounded-lg hover:bg-indigo-50 cursor-pointer {% if current == 'mpesa' %}border-indigo-400 bg-indigo-50{% else %}border-gray-300{% endif %}">
+              <input id="pm-mpesa" type="radio" name="pm_choice" value="mpesa"
                      class="h-4 w-4 text-indigo-600 focus:ring-indigo-500"
                      {% if current == "mpesa" %}checked{% endif %}>
               <span>M-Pesa</span>
@@ -136,6 +139,38 @@
 {% endblock %}
 
 {% block extra_js %}
+<script>
+// Payment selection for edit (always run)
+document.addEventListener('DOMContentLoaded', () => {
+  const form  = document.getElementById('edit-form');
+  const group = document.getElementById('pm-group');
+  const hidden = document.getElementById('pm-hidden');
+  if (!form || !group || !hidden) return;
+
+  // Defensive: ensure exactly one payment_method (hidden)
+  document.querySelectorAll('input[name="payment_method"]').forEach(el => {
+    if (el !== hidden) el.remove();
+  });
+
+  function refreshPM(){
+    group.querySelectorAll('.pm-option').forEach(opt => {
+      opt.classList.remove('border-indigo-400','bg-indigo-50','border-gray-300');
+      const r = opt.querySelector('input[type="radio"][name="pm_choice"]');
+      if (r && r.checked) { opt.classList.add('border-indigo-400','bg-indigo-50'); }
+      else { opt.classList.add('border-gray-300'); }
+    });
+  }
+  group.addEventListener('change', (e) => {
+    if (e.target.matches('input[type="radio"][name="pm_choice"]')) {
+      hidden.value = e.target.value;
+      refreshPM();
+    }
+  });
+  const checked = group.querySelector('input[type="radio"][name="pm_choice"]:checked');
+  if (checked) hidden.value = checked.value;
+  refreshPM();
+});
+</script>
 {% if GEOAPIFY_ENABLED %}
 <script>
 document.addEventListener('DOMContentLoaded', function () {

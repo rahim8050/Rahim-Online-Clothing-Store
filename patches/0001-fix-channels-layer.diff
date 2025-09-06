@@ -1,0 +1,35 @@
+diff --git a/Rahim_Online_ClothesStore/settings.py b/Rahim_Online_ClothesStore/settings.py
+index 1111111..2222222 100644
+--- a/Rahim_Online_ClothesStore/settings.py
++++ b/Rahim_Online_ClothesStore/settings.py
+@@ -169,16 +169,12 @@
+-# -------------------------- Channels --------------------------
+-REDIS_URL = env("REDIS_URL", default="")
+-REDIS_SSL = bool(REDIS_URL) and REDIS_URL.startswith("rediss://")
+-
+-CHANNEL_LAYERS = {
+-    "default": {
+-        "BACKEND": "channels_redis.core.RedisChannelLayer",
+-        "CONFIG": {
+-            "hosts": [REDIS_URL],
+-            "ssl": REDIS_SSL,
+-        },
+-    }
+-}
++# -------------------------- Channels --------------------------
++REDIS_URL = env("REDIS_URL", default="")
++REDIS_SSL = bool(REDIS_URL) and REDIS_URL.startswith("rediss://")
++# Use Redis in prod; fall back to InMemory only when REDIS_URL is unset (dev)
++CHANNEL_LAYERS = {
++    "default": {
++        "BACKEND": "channels_redis.core.RedisChannelLayer" if REDIS_URL else "channels.layers.InMemoryChannelLayer",
++        "CONFIG": ({"hosts": [REDIS_URL], "ssl": REDIS_SSL} if REDIS_URL else {}),
++    }
++}
+@@ -206,10 +202,6 @@
+-CHANNEL_LAYERS = {
+-    "default": {
+-        "BACKEND": "channels.layers.InMemoryChannelLayer",
+-    }
+-}
++# (removed) overriding CHANNEL_LAYERS to InMemory unconditionally

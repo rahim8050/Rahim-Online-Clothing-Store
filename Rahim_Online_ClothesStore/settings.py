@@ -170,13 +170,11 @@ if os.environ.get("PYTEST_CURRENT_TEST"):
 REDIS_URL = env("REDIS_URL", default="")
 REDIS_SSL = bool(REDIS_URL) and REDIS_URL.startswith("rediss://")
 
+# Use Redis for Channels when REDIS_URL is provided; this is required in prod.
 CHANNEL_LAYERS = {
     "default": {
-        "BACKEND": "channels_redis.core.RedisChannelLayer",
-        "CONFIG": {
-            "hosts": [REDIS_URL],
-            "ssl": REDIS_SSL,
-        },
+        "BACKEND": "channels_redis.core.RedisChannelLayer" if REDIS_URL else "channels.layers.InMemoryChannelLayer",
+        "CONFIG": ({"hosts": [REDIS_URL], "ssl": REDIS_SSL} if REDIS_URL else {}),
     }
 }
 
@@ -197,7 +195,7 @@ if USE_REDIS_CACHE and REDIS_URL:
         }
     }
 else:
-    # Fallback: in‑memory cache (sufficient for local dev & throttling)
+    # Fallback: in-memory cache (sufficient for local dev & throttling)
     CACHES = {
         "default": {
             "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
@@ -205,11 +203,6 @@ else:
             "TIMEOUT": None,
         }
     }
-CHANNEL_LAYERS = {
-    "default": {
-        "BACKEND": "channels.layers.InMemoryChannelLayer",
-    }
-}
 # ------------------------- Auth / API -------------------------
 REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
@@ -246,7 +239,6 @@ LANGUAGE_CODE = "en-us"
 TIME_ZONE = "Africa/Nairobi"
 USE_I18N = True
 USE_TZ = True
-TIME_ZONE = "UTC" 
 
 # --------------------- Static & Media (WhiteNoise) ------------
 # Use an absolute prefix so template {% static %} resolves to /static/... and not a relative path
@@ -282,7 +274,7 @@ MEDIA_ROOT = BASE_DIR / "mediafiles"
 
 # -------------------------- Security --------------------------
 ENV = os.getenv("ENV", "dev").lower()     # dev | staging | prod
-DEBUG = os.getenv("DEBUG", "1") == "1"
+# Do NOT override DEBUG here; respect the earlier env-based DEBUG
 IS_PROD = ENV == "prod"
 
 # --- Redirects / proxy trust ---
@@ -301,10 +293,14 @@ CSRF_COOKIE_SECURE = IS_PROD
 SESSION_COOKIE_SAMESITE = "Lax"
 CSRF_COOKIE_SAMESITE = "Lax"
 
-# Optional: set a canonical host in prod to avoid odd redirects
-ALLOWED_HOSTS = ["127.0.0.1", "localhost"] if not IS_PROD else ["yourdomain.com"]
+# Optional: if ALLOWED_HOSTS not set via env above, provide safe defaults
+if not ALLOWED_HOSTS:
+    ALLOWED_HOSTS = ["127.0.0.1", "localhost"] if not IS_PROD else []
 
 CORS_ALLOWED_ORIGINS = env.list("CORS_ALLOWED_ORIGINS", default=[])
+
+# Legacy Order payments/webhooks toggle (migration aid)
+LEGACY_ORDER_PAYMENTS = env.bool("LEGACY_ORDER_PAYMENTS", default=True)
 
 # -------------------- Third-party / Payments -------------------
 # Geoapify

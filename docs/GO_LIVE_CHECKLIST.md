@@ -1,0 +1,35 @@
+# Go-Live Checklist
+
+- Settings
+  - [ ] DEBUG=0, ENV=prod
+  - [ ] ALLOWED_HOSTS set to prod domain(s)
+  - [ ] CSRF_TRUSTED_ORIGINS set to https://<domain>
+  - [ ] SECURE_SSL_REDIRECT=True (proxy header set)
+  - [ ] SESSION/CSRF cookies secure + SameSite
+- Secrets
+  - [ ] SECRET_KEY set (not in repo)
+  - [ ] PAYSTACK_*, STRIPE_*, PAYPAL_* set from secret store
+  - [ ] EMAIL_* configured with app password
+- Database
+  - [ ] DATABASE_URL=postgres://...
+  - [ ] Migrations applied on staging then prod
+  - [ ] Backup snapshot before prod migration
+- Realtime
+  - [ ] REDIS_URL set
+  - [ ] Channels workers sized appropriately
+- Static
+  - [ ] npm ci && npm run build
+  - [ ] python manage.py collectstatic --noinput
+- Health
+  - [ ] /healthz returns 200
+  - [ ] /readyz returns ready
+- Payments
+  - [ ] Webhook endpoints reachable over HTTPS
+  - [ ] Test webhook payloads processed successfully
+  - [ ] LEGACY_ORDER_PAYMENTS flag set as desired (0 to use payments/* only)
+- Observability
+  - [ ] Request IDs in logs
+  - [ ] Sentry DSN configured (optional)
+- Post-deploy smoke
+  - [ ] Create order, checkout, receive webhook
+  - [ ] WS: driver tracking updates flow

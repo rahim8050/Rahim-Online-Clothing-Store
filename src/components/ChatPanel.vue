@@ -74,7 +74,8 @@
               @keydown.enter.exact.stop.prevent="submit"
               @keydown.enter.shift.stop
             />
-            <button class="send" :disabled="!canSend">Send</button>
+            <!-- Explicitly type=button and stop propagation to avoid interfering with page forms -->
+            <button type="button" class="send" :disabled="!canSend" @click.stop.prevent="submit">Send</button>
           </div>
         </form>
       </section>

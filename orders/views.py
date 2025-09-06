@@ -700,6 +700,8 @@ def Stripe_payment_success(request, order_id):
 
 @csrf_exempt
 def stripe_webhook(request):
+    if not getattr(settings, 'LEGACY_ORDER_PAYMENTS', True):
+        return HttpResponse(status=410)
     payload = request.body
     sig_header = request.META.get("HTTP_STRIPE_SIGNATURE")
     endpoint_secret = settings.STRIPE_WEBHOOK_SECRET
@@ -739,6 +741,8 @@ def stripe_webhook(request):
 # ---------- Paystack webhook ----------
 @csrf_exempt
 def paystack_webhook(request):
+    if not getattr(settings, 'LEGACY_ORDER_PAYMENTS', True):
+        return HttpResponse(status=410)
     """
     Verified, idempotent Paystack webhook with replay dedupe and notifications.
     """
@@ -912,6 +916,8 @@ def send_payment_receipt_email(transaction, order):
 # ---------- PayPal ----------
 @csrf_exempt
 def paypal_webhook(request):
+    if not getattr(settings, 'LEGACY_ORDER_PAYMENTS', True):
+        return HttpResponse(status=410)
     try:
         event = json.loads(request.body)
     except json.JSONDecodeError:

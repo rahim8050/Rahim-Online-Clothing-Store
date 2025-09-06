@@ -1,0 +1,32 @@
+diff --git a/core/views.py b/core/views.py
+index abcdef1..abcdef2 100644
+--- a/core/views.py
++++ b/core/views.py
+@@
+-from django.http import JsonResponse
++from django.http import JsonResponse
++from django.db import connection
+@@
+ def healthz(request):
+     return JsonResponse({"status": "ok"})
+@@
++def readyz(request):
++    """Lightweight readiness probe that checks DB connectivity."""
++    try:
++        with connection.cursor() as cur:
++            cur.execute("SELECT 1")
++            cur.fetchone()
++        return JsonResponse({"status": "ready"})
++    except Exception as e:
++        return JsonResponse({"status": "degraded", "error": str(e)}, status=503)
+diff --git a/Rahim_Online_ClothesStore/urls.py b/Rahim_Online_ClothesStore/urls.py
+index abcdef3..abcdef4 100644
+--- a/Rahim_Online_ClothesStore/urls.py
++++ b/Rahim_Online_ClothesStore/urls.py
+@@
+-from core.views import healthz
++from core.views import healthz, readyz
+@@
+-    path('healthz', healthz, name='healthz'),
++    path('healthz', healthz, name='healthz'),
++    path('readyz', readyz, name='readyz'),

@@ -8,129 +8,142 @@
   <div class="bg-white rounded-lg shadow-md overflow-hidden">
 
     <h2 class="text-2xl md:text-3xl font-bold text-indigo-600 mb-6 text-center py-4 bg-indigo-50">
-      Check Out
-    </h2>
+  Check Out
+</h2>
 
-    <form method="post"
-          action="{% url 'orders:order_create' %}"
-          id="checkout-form"
-          class="md:flex"
-          novalidate>
-      {% csrf_token %}
+<form method="post"
+      action="{% url 'orders:order_create' %}"
+      id="checkout-form"
+      class="md:flex"
+      novalidate>
+  {% csrf_token %}
 
-      {% if form.non_field_errors %}
-        <div class="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
-          {{ form.non_field_errors }}
-        </div>
-      {% endif %}
+  {% if form.non_field_errors %}
+    <div class="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
+      {{ form.non_field_errors }}
+    </div>
+  {% endif %}
 
-      {% if error_msg %}
-        <div class="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
-          {{ error_msg }}
-        </div>
-      {% endif %}
+  {% if error_msg %}
+    <div class="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
+      {{ error_msg }}
+    </div>
+  {% endif %}
 
-      {# ===================== Left: Order Details ===================== #}
-      <div class="w-full md:w-1/2 p-6 border-r border-gray-200">
+  {# ===================== Left: Order Details ===================== #}
+  <div class="w-full md:w-1/2 p-6 border-r border-gray-200">
+    <div class="mb-4">
+      <label for="dest-search" class="block text-sm font-medium text-gray-700 mb-1">
+        Delivery Address <span class="text-red-500">*</span>
+      </label>
+      <input id="dest-search" type="text" class="w-full px-3 py-2 border border-gray-300 rounded-md" autocomplete="off">
+      <ul id="dest-suggestions" class="border border-gray-300 mt-1 bg-white rounded-md shadow-md max-h-60 overflow-auto hidden"></ul>
+
+      {# Bound/hidden fields for address #}
+      {% render_field form.address type="hidden" id="id_address" %}
+      <input type="hidden" name="dest_address_text" id="dest_address_text">
+      <input type="hidden" name="dest_lat" id="dest_lat">
+      <input type="hidden" name="dest_lng" id="dest_lng">
+      <input type="hidden" name="dest_source" id="dest_source" value="autocomplete">
+    </div>
+
+    {# Render all fields EXCEPT payment_method/mpesa_phone/address #}
+    {% for field in form %}
+      {% if field.name not in ['payment_method', 'mpesa_phone', 'address'] %}
         <div class="mb-4">
-          <label for="dest-search" class="block text-sm font-medium text-gray-700 mb-1">
-            Delivery Address<span class="text-red-500">*</span>
-          </label>
-          <input id="dest-search" type="text" class="w-full px-3 py-2 border border-gray-300 rounded-md" autocomplete="off">
-          <ul id="dest-suggestions" class="border border-gray-300 mt-1 bg-white rounded-md shadow-md max-h-60 overflow-auto hidden"></ul>
-
-          {# bound/hidden fields #}
-          {% render_field form.address type="hidden" id="id_address" %}
-          <input type="hidden" name="dest_address_text" id="dest_address_text">
-          <input type="hidden" name="dest_lat" id="dest_lat">
-          <input type="hidden" name="dest_lng" id="dest_lng">
-          <input type="hidden" name="dest_source" id="dest_source" value="autocomplete">
-        </div>
-
-        {# render all other fields EXCEPT payment_method/mpesa_phone/address #}
-        {% for field in form %}
-          {% if field.name not in ['payment_method', 'mpesa_phone', 'address'] %}
-            <div class="mb-4">
-              <label class="block text-sm font-medium text-gray-700 mb-1">
-                {{ field.label }}{% if field.field.required %}<span class="text-red-500">*</span>{% endif %}
-              </label>
-
-              {% if error_msg and field.errors %}
-                {% render_field field class="w-full px-3 py-2 border border-red-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500" %}
-                <p class="mt-1 text-sm text-red-600">{{ field.errors|striptags }}</p>
-              {% else %}
-                {% render_field field class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500" %}
-              {% endif %}
-            </div>
-          {% endif %}
-        {% endfor %}
-      </div>
-
-      {# ===================== Right: Payment & Total ===================== #}
-      <div class="w-full md:w-1/2 p-6 bg-gray-50">
-        <h3 class="text-xl font-semibold text-gray-800 mb-4 flex items-center">
-          <svg class="w-5 h-5 mr-2 text-green-600" viewBox="0 0 24 24" fill="none">
-            <path d="M4 7h16v10H4z" stroke="currentColor" stroke-width="1.5" />
-            <path d="M4 10h16" stroke="currentColor" stroke-width="1.5" />
-          </svg>
-          Payment Method
-        </h3>
-
-        {# RENDER ONLY THE FORM'S RadioSelect SUBWIDGETS (no hidden copy, no duplicate) #}
-        <div id="pm-group" class="space-y-2 mb-4">
-          {% for subwidget in form.payment_method %}
-            {% if subwidget.data.value in ['card', 'mpesa'] %} {# hide paypal for now #}
-              <label for="{{ subwidget.id_for_label }}"
-                     class="pm-option flex items-center p-3 border rounded-lg cursor-pointer hover:border-indigo-300
-                            {% if subwidget.data.selected %}border-indigo-400 bg-indigo-50{% else %}border-gray-300{% endif %}">
-                {{ subwidget.tag }}
-                <span class="ml-3 text-sm font-medium text-gray-700">
-                  {{ subwidget.choice_label }}
-                </span>
-              </label>
-            {% endif %}
-          {% endfor %}
-        </div>
-
-        {% if form.payment_method.errors %}
-          <p class="mt-2 text-sm text-red-600">{{ form.payment_method.errors|striptags }}</p>
-        {% endif %}
-
-        {# optional: mpesa phone when mpesa selected
-        <div id="mpesa-phone-container" class="mb-4 hidden">
           <label class="block text-sm font-medium text-gray-700 mb-1">
-            {{ form.mpesa_phone.label }}<span class="text-red-500">*</span>
+            {{ field.label }}{% if field.field.required %}<span class="text-red-500">*</span>{% endif %}
           </label>
-          {% render_field form.mpesa_phone class="w-full px-3 py-2 border border-gray-300 rounded-md" %}
-          {% if form.mpesa_phone.errors %}
-            <p class="mt-1 text-sm text-red-600">{{ form.mpesa_phone.errors|striptags }}</p>
-          {% endif %}
-        </div>
-        %}
 
-        <div class="mt-6 border-t border-gray-200 pt-4">
-          <h4 class="text-sm font-medium text-gray-700 mb-2">Order Total</h4>
-          {% if selected_total %}
-            <div class="text-xl font-semibold text-indigo-600">
-              KES {{ selected_total|floatformat:2 }}
-            </div>
-          {% elif cart %}
-            <div class="text-xl font-semibold text-indigo-600">
-              KES {{ cart.get_total_price|floatformat:2 }}
-            </div>
+          {% if error_msg and field.errors %}
+            {% render_field field class="w-full px-3 py-2 border border-red-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500" %}
+            <p class="mt-1 text-sm text-red-600">{{ field.errors|striptags }}</p>
           {% else %}
-            <div class="text-xl font-semibold text-gray-500">Cart is empty</div>
+            {% render_field field class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500" %}
           {% endif %}
         </div>
+      {% endif %}
+    {% endfor %}
+  </div>
 
-        <button type="submit"
-                id="submit-btn"
-                class="w-full mt-6 bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-6 py-3 rounded-lg opacity-50 cursor-not-allowed"
-                disabled>
-          Complete Order
-        </button>
-      </div>
-    </form>
+  {# ===================== Right: Payment & Total ===================== #}
+  <div class="w-full md:w-1/2 p-6 bg-gray-50">
+    <h3 class="text-xl font-semibold text-gray-800 mb-4 flex items-center">
+      <svg class="w-5 h-5 mr-2 text-green-600" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M4 7h16v10H4z" stroke="currentColor" stroke-width="1.5" />
+        <path d="M4 10h16" stroke="currentColor" stroke-width="1.5" />
+      </svg>
+      Payment Method
+    </h3>
+
+    {# SINGLE authoritative field submitted with the form #}
+    <input type="hidden"
+           id="pm-hidden"
+           name="payment_method"
+           value="{{ form.payment_method.value|default:'mpesa' }}">
+
+    {# Visible radios use DIFFERENT name (pm_choice) and sync to hidden #}
+    {% with current=form.payment_method.value|default:'mpesa' %}
+    <div id="pm-group" class="space-y-2 mb-4">
+      <label for="pm-card"
+             class="pm-option flex items-center p-3 border rounded-lg cursor-pointer hover:border-indigo-300
+                    {% if current == 'card' %}border-indigo-400 bg-indigo-50{% else %}border-gray-300{% endif %}">
+        <input id="pm-card" type="radio" name="pm_choice" value="card"
+              class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300"
+              {% if current == 'card' %}checked{% endif %}>
+        <span class="ml-3 text-sm font-medium text-gray-700">Card</span>
+      </label>
+
+      <label for="pm-mpesa"
+             class="pm-option flex items-center p-3 border rounded-lg cursor-pointer hover:border-indigo-300
+                    {% if current == 'mpesa' %}border-indigo-400 bg-indigo-50{% else %}border-gray-300{% endif %}">
+        <input id="pm-mpesa" type="radio" name="pm_choice" value="mpesa"
+              class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300"
+              {% if current == 'mpesa' %}checked{% endif %}>
+        <span class="ml-3 text-sm font-medium text-gray-700">M-Pesa</span>
+      </label>
+    </div>
+    {% endwith %}
+
+    {% if form.payment_method.errors %}
+      <p class="mt-2 text-sm text-red-600">{{ form.payment_method.errors|striptags }}</p>
+    {% endif %}
+
+    {# Optional: show mpesa phone when M-Pesa selected #}
+    <div id="mpesa-phone-container" class="mb-4 hidden">
+      <label class="block text-sm font-medium text-gray-700 mb-1">
+        {{ form.mpesa_phone.label }}<span class="text-red-500">*</span>
+      </label>
+      {% render_field form.mpesa_phone class="w-full px-3 py-2 border border-gray-300 rounded-md" %}
+      {% if form.mpesa_phone.errors %}
+        <p class="mt-1 text-sm text-red-600">{{ form.mpesa_phone.errors|striptags }}</p>
+      {% endif %}
+    </div>
+
+    <div class="mt-6 border-t border-gray-200 pt-4">
+      <h4 class="text-sm font-medium text-gray-700 mb-2">Order Total</h4>
+      {% if selected_total %}
+        <div class="text-xl font-semibold text-indigo-600">
+          KES {{ selected_total|floatformat:2 }}
+        </div>
+      {% elif cart %}
+        <div class="text-xl font-semibold text-indigo-600">
+          KES {{ cart.get_total_price|floatformat:2 }}
+        </div>
+      {% else %}
+        <div class="text-xl font-semibold text-gray-500">Cart is empty</div>
+      {% endif %}
+    </div>
+
+    <button type="submit"
+            id="submit-btn"
+            class="w-full mt-6 bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-6 py-3 rounded-lg opacity-50 cursor-not-allowed"
+            disabled>
+      Complete Order
+    </button>
+  </div>
+</form>
+
   </div>
 </div>
 {% endblock %}
@@ -138,45 +151,74 @@
 {% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', () => {
-  // 0) Guard: remove any stray radios outside #pm-group (defensive)
-  const group = document.getElementById('pm-group');
-  document.querySelectorAll('input[name="payment_method"]').forEach(el => {
-    if (group && !group.contains(el)) (el.closest('label') || el).remove();
-  });
+  /* ===== Payment single source of truth ===== */
+  const form        = document.getElementById('checkout-form');
+  const hiddenPM    = document.getElementById('pm-hidden');
+  const radioCard   = document.getElementById('pm-card');
+  const radioMpesa  = document.getElementById('pm-mpesa');
+  const rowCard     = document.querySelector('label[for="pm-card"]');
+  const rowMpesa    = document.querySelector('label[for="pm-mpesa"]');
+  const mpesaBox    = document.getElementById('mpesa-phone-container');
 
-  // 1) Keep radio highlight in sync + toggle M-Pesa phone block
-  function refreshPM() {
-    if (!group) return;
-    group.querySelectorAll('.pm-option').forEach(opt => {
-      const input = opt.querySelector('input[type="radio"]');
-      opt.classList.remove('border-indigo-400','bg-indigo-50','border-gray-300');
-      if (input && input.checked) {
-        opt.classList.add('border-indigo-400','bg-indigo-50');
-      } else {
-        opt.classList.add('border-gray-300');
-      }
-    });
-    const mpesaSelected = group.querySelector('input[type="radio"][name="payment_method"][value="mpesa"]')?.checked;
-    const phoneBlock = document.getElementById('mpesa-phone-container');
-    if (phoneBlock) phoneBlock.classList.toggle('hidden', !mpesaSelected);
+  // Remove any accidental duplicate payment_method inputs (defensive)
+  Array.from(document.querySelectorAll('input[name="payment_method"]'))
+    .filter(el => el !== hiddenPM)
+    .forEach(el => (el.closest('label') || el).remove());
+
+  function setPM(value) {
+    hiddenPM.value = value;
+    applyPMUI();
   }
-  group?.addEventListener('change', (e) => {
-    if (e.target.matches('input[type="radio"][name="payment_method"]')) refreshPM();
-  });
-  refreshPM();
 
-  // 2) Geoapify autocomplete minimal gating (enable submit only after pick)
-  const input = document.getElementById('dest-search');
-  const list = document.getElementById('dest-suggestions');
+  function applyPMUI() {
+    const v = hiddenPM.value || 'mpesa';
+
+    // radio checked states
+    if (radioCard)  radioCard.checked  = (v === 'card');
+    if (radioMpesa) radioMpesa.checked = (v === 'mpesa');
+
+    // row highlighting
+    [rowCard, rowMpesa].forEach(row => {
+      if (!row) return;
+      row.classList.remove('border-indigo-400','bg-indigo-50','border-gray-300');
+      row.classList.add('border-gray-300');
+    });
+    if (v === 'card' && rowCard) {
+      rowCard.classList.remove('border-gray-300');
+      rowCard.classList.add('border-indigo-400','bg-indigo-50');
+    }
+    if (v === 'mpesa' && rowMpesa) {
+      rowMpesa.classList.remove('border-gray-300');
+      rowMpesa.classList.add('border-indigo-400','bg-indigo-50');
+    }
+
+    // Show/hide M-Pesa phone
+    if (mpesaBox) mpesaBox.classList.toggle('hidden', v !== 'mpesa');
+  }
+
+  // Init default if empty
+  if (!hiddenPM.value) {
+    hiddenPM.value = (radioCard && radioCard.checked) ? 'card' : 'mpesa';
+  }
+  applyPMUI();
+
+  // Wire events (click on label area or change on radio)
+  radioCard?.addEventListener('change', () => setPM('card'));
+  radioMpesa?.addEventListener('change', () => setPM('mpesa'));
+  rowCard?.addEventListener('click', (e) => { if (e.target.tagName !== 'INPUT') setPM('card'); });
+  rowMpesa?.addEventListener('click', (e) => { if (e.target.tagName !== 'INPUT') setPM('mpesa'); });
+
+  /* ===== Address autocomplete gating ===== */
+  const input     = document.getElementById('dest-search');
+  const list      = document.getElementById('dest-suggestions');
   const submitBtn = document.getElementById('submit-btn');
-  const addr = document.getElementById('id_address');
-  const destTxt = document.getElementById('dest_address_text');
-  const destLat = document.getElementById('dest_lat');
-  const destLng = document.getElementById('dest_lng');
+  const addr      = document.getElementById('id_address');
+  const destTxt   = document.getElementById('dest_address_text');
+  const destLat   = document.getElementById('dest_lat');
+  const destLng   = document.getElementById('dest_lng');
   let controller;
 
-  function resetSelection() {
-    destTxt.value = ''; destLat.value = ''; destLng.value = ''; addr.value = '';
+  function disableSubmit() {
     submitBtn.disabled = true;
     submitBtn.classList.add('opacity-50','cursor-not-allowed');
   }
@@ -184,337 +226,61 @@ document.addEventListener('DOMContentLoaded', () => {
     submitBtn.disabled = false;
     submitBtn.classList.remove('opacity-50','cursor-not-allowed');
   }
-
-  input?.addEventListener('input', function () {
-    const q = input.value.trim();
-    resetSelection(); list.innerHTML = '';
-    if (q.length < 3) { list.classList.add('hidden'); return; }
-    if (controller) controller.abort();
-    controller = new AbortController();
-    fetch('{% url "orders:geo-autocomplete" %}?q=' + encodeURIComponent(q), {signal: controller.signal})
-      .then(r => r.ok ? r.json() : {results: []})
-      .then(data => {
-        list.innerHTML = '';
-        (data.results || []).forEach((p) => {
-          const li = document.createElement('li');
-          li.tabIndex = 0;
-          li.className = 'p-2 hover:bg-indigo-600 hover:text-white cursor-pointer';
-          li.textContent = p.formatted;
-          function choose() {
-            input.value = p.formatted;
-            addr.value = p.formatted;
-            destTxt.value = p.formatted;
-            destLat.value = p.lat;
-            destLng.value = p.lon;
-            enableSubmit();
-            list.classList.add('hidden');
-          }
-          li.addEventListener('click', choose);
-          li.addEventListener('keydown', e => { if (e.key === 'Enter') choose(); });
-          list.appendChild(li);
-        });
-        list.classList.toggle('hidden', list.children.length === 0);
-      }).catch(() => {});
-  });
-
-  document.getElementById('checkout-form')?.addEventListener('submit', function(e){
-    if (!destLat.value || !destLng.value) {
-      e.preventDefault();
-      alert('Please select a delivery address from suggestions.');
-    }
-  });
-});
-</script>
-{% endblock %}
-{% extends 'base.html' %}
-{% load widget_tweaks %}
-
-{% block title %}Your Order{% endblock %}
-
-{% block content %}
-<div class="container mx-auto px-4 py-8 max-w-4xl">
-  <div class="bg-white rounded-lg shadow-md overflow-hidden">
-
-    <h2 class="text-2xl md:text-3xl font-bold text-indigo-600 mb-6 text-center py-4 bg-indigo-50">
-      Check Out
-    </h2>
-
-    <form method="post"
-          action="{% url 'orders:order_create' %}"
-          id="checkout-form"
-          class="md:flex"
-          novalidate>
-      {% csrf_token %}
-
-      {% if form.non_field_errors %}
-        <div class="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
-          {{ form.non_field_errors }}
-        </div>
-      {% endif %}
-
-      {% if error_msg %}
-        <div class="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
-          {{ error_msg }}
-        </div>
-      {% endif %}
-
-      {# ===================== Left: Order Details ===================== #}
-      <div class="w-full md:w-1/2 p-6 border-r border-gray-200">
-        <div class="mb-4">
-          <label for="dest-search" class="block text-sm font-medium text-gray-700 mb-1">
-            Delivery Address<span class="text-red-500">*</span>
-          </label>
-          <input id="dest-search" type="text" class="w-full px-3 py-2 border border-gray-300 rounded-md" autocomplete="off">
-          <ul id="dest-suggestions" class="border border-gray-300 mt-1 bg-white rounded-md shadow-md max-h-60 overflow-auto hidden"></ul>
-
-          {# bound/hidden fields for address #}
-          {% render_field form.address type="hidden" id="id_address" %}
-          <input type="hidden" name="dest_address_text" id="dest_address_text">
-          <input type="hidden" name="dest_lat" id="dest_lat">
-          <input type="hidden" name="dest_lng" id="dest_lng">
-          <input type="hidden" name="dest_source" id="dest_source" value="autocomplete">
-        </div>
-
-        {# render all other fields EXCEPT payment_method/mpesa_phone/address #}
-        {% for field in form %}
-          {% if field.name not in ['payment_method', 'mpesa_phone', 'address'] %}
-            <div class="mb-4">
-              <label class="block text-sm font-medium text-gray-700 mb-1">
-                {{ field.label }}{% if field.field.required %}<span class="text-red-500">*</span>{% endif %}
-              </label>
-              {% if error_msg and field.errors %}
-                {% render_field field class="w-full px-3 py-2 border border-red-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500" %}
-                <p class="mt-1 text-sm text-red-600">{{ field.errors|striptags }}</p>
-              {% else %}
-                {% render_field field class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500" %}
-              {% endif %}
-            </div>
-          {% endif %}
-        {% endfor %}
-      </div>
-
-      {# ===================== Right: Payment & Total ===================== #}
-      <div class="w-full md:w-1/2 p-6 bg-gray-50">
-        <h3 class="text-xl font-semibold text-gray-800 mb-4 flex items-center">
-          <svg class="w-5 h-5 mr-2 text-green-600" viewBox="0 0 24 24" fill="none">
-            <path d="M4 7h16v10H4z" stroke="currentColor" stroke-width="1.5" />
-            <path d="M4 10h16" stroke="currentColor" stroke-width="1.5" />
-          </svg>
-          Payment Method
-        </h3>
-
-        {# SINGLE authoritative field that will be submitted #}
-        <input type="hidden"
-               id="pm-hidden"
-               name="payment_method"
-               value="{{ form.payment_method.value|default:'mpesa' }}">
-
-        {# Visible radios use DIFFERENT name (pm_choice) and sync to hidden #}
-        <div id="pm-group" class="space-y-2 mb-4">
-          {% with current=form.payment_method.value|default:'mpesa' %}
-            <label class="pm-option flex items-center p-3 border rounded-lg cursor-pointer hover:border-indigo-300
-                          {% if current == 'card' %}border-indigo-400 bg-indigo-50{% else %}border-gray-300{% endif %}">
-              <input type="radio"
-                     name="pm_choice"
-                     value="card"
-                     class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300"
-                     {% if current == 'card' %}checked{% endif %}>
-              <span class="ml-3 text-sm font-medium text-gray-700">Card</span>
-            </label>
-
-            <label class="pm-option flex items-center p-3 border rounded-lg cursor-pointer hover:border-indigo-300
-                          {% if current == 'mpesa' %}border-indigo-400 bg-indigo-50{% else %}border-gray-300{% endif %}">
-              <input type="radio"
-                     name="pm_choice"
-                     value="mpesa"
-                     class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300"
-                     {% if current == 'mpesa' %}checked{% endif %}>
-              <span class="ml-3 text-sm font-medium text-gray-700">M-Pesa</span>
-            </label>
-
-            {# Add PayPal later if needed:
-            <label class="pm-option ...">
-              <input type="radio" name="pm_choice" value="paypal">
-              <span class="ml-3 text-sm font-medium text-gray-700">PayPal</span>
-            </label>
-            #}
-          {% endwith %}
-        </div>
-
-        {% if form.payment_method.errors %}
-          <p class="mt-2 text-sm text-red-600">{{ form.payment_method.errors|striptags }}</p>
-        {% endif %}
-
-        {# optional: mpesa phone when mpesa selected
-        <div id="mpesa-phone-container" class="mb-4 hidden">
-          <label class="block text-sm font-medium text-gray-700 mb-1">
-            {{ form.mpesa_phone.label }}<span class="text-red-500">*</span>
-          </label>
-          {% render_field form.mpesa_phone class="w-full px-3 py-2 border border-gray-300 rounded-md" %}
-          {% if form.mpesa_phone.errors %}
-            <p class="mt-1 text-sm text-red-600">{{ form.mpesa_phone.errors|striptags }}</p>
-          {% endif %}
-        </div>
-        %}
-
-        <div class="mt-6 border-t border-gray-200 pt-4">
-          <h4 class="text-sm font-medium text-gray-700 mb-2">Order Total</h4>
-          {% if selected_total %}
-            <div class="text-xl font-semibold text-indigo-600">KES {{ selected_total|floatformat:2 }}</div>
-          {% elif cart %}
-            <div class="text-xl font-semibold text-indigo-600">KES {{ cart.get_total_price|floatformat:2 }}</div>
-          {% else %}
-            <div class="text-xl font-semibold text-gray-500">Cart is empty</div>
-          {% endif %}
-        </div>
-
-        <button type="submit"
-                id="submit-btn"
-                class="w-full mt-6 bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-6 py-3 rounded-lg opacity-50 cursor-not-allowed"
-                disabled>
-          Complete Order
-        </button>
-      </div>
-    </form>
-  </div>
-</div>
-{% endblock %}
-
-{% block extra_js %}
-<script>
-document.addEventListener('DOMContentLoaded', () => {
-  // ===== Payment radios: sync + nuke duplicates =====
-  const hidden = document.getElementById('pm-hidden');
-  const group  = document.getElementById('pm-group');
-
-  // Remove ANY other inputs named payment_method (defensive)
-  document.querySelectorAll('input[name="payment_method"]').forEach(el => {
-    if (el !== hidden) (el.closest('label') || el).remove();
-  });
-
-  function refreshPM() {
-    if (!group) return;
-    group.querySelectorAll('.pm-option').forEach(opt => {
-      const input = opt.querySelector('input[type="radio"][name="pm_choice"]');
-      opt.classList.remove('border-indigo-400','bg-indigo-50','border-gray-300');
-      if (input && input.checked) {
-        opt.classList.add('border-indigo-400','bg-indigo-50');
-      } else {
-        opt.classList.add('border-gray-300');
-      }
-    });
-    const mpesaSelected = group.querySelector('input[type="radio"][name="pm_choice"][value="mpesa"]')?.checked;
-    const phoneBlock = document.getElementById('mpesa-phone-container');
-    if (phoneBlock) phoneBlock.classList.toggle('hidden', !mpesaSelected);
-  }
-
-  group?.addEventListener('change', (e) => {
-    if (e.target.matches('input[type="radio"][name="pm_choice"]')) {
-      hidden.value = e.target.value; // only this field is submitted
-      refreshPM();
-    }
-  });
-
-  // Initialize hidden value & styles
-  const checked = group?.querySelector('input[type="radio"][name="pm_choice"]:checked');
-  if (checked) hidden.value = checked.value;
-  refreshPM();
-
-  // ===== Address autocomplete gating (keep your existing endpoint) =====
-  const input = document.getElementById('dest-search');
-  const list = document.getElementById('dest-suggestions');
-  const submitBtn = document.getElementById('submit-btn');
-  const addr = document.getElementById('id_address');
-  const destTxt = document.getElementById('dest_address_text');
-  const destLat = document.getElementById('dest_lat');
-  const destLng = document.getElementById('dest_lng');
-  let controller;
-
   function resetSelection() {
-    destTxt.value = ''; destLat.value = ''; destLng.value = ''; addr.value = '';
-    submitBtn.disabled = true;
-    submitBtn.classList.add('opacity-50','cursor-not-allowed');
+    destTxt.value = '';
+    destLat.value = '';
+    destLng.value = '';
+    addr.value    = '';
+    disableSubmit();
   }
-  function enableSubmit() {
-    submitBtn.disabled = false;
-    submitBtn.classList.remove('opacity-50','cursor-not-allowed');
-  }
+
+  disableSubmit(); // start disabled until a suggestion is chosen
 
   input?.addEventListener('input', function () {
     const q = input.value.trim();
-    resetSelection(); list.innerHTML = '';
+    resetSelection();
+    list.innerHTML = '';
     if (q.length < 3) { list.classList.add('hidden'); return; }
+
     if (controller) controller.abort();
     controller = new AbortController();
-    fetch('{% url "orders:geo-autocomplete" %}?q=' + encodeURIComponent(q), {signal: controller.signal})
-      .then(r => r.ok ? r.json() : {results: []})
+
+    fetch('{% url "orders:geo-autocomplete" %}?q=' + encodeURIComponent(q), { signal: controller.signal })
+      .then(r => r.ok ? r.json() : { results: [] })
       .then(data => {
         list.innerHTML = '';
-        (data.results || []).forEach((p) => {
+        (data.results || []).forEach(p => {
           const li = document.createElement('li');
           li.tabIndex = 0;
           li.className = 'p-2 hover:bg-indigo-600 hover:text-white cursor-pointer';
           li.textContent = p.formatted;
-          function choose() {
+          const choose = () => {
             input.value = p.formatted;
-            addr.value = p.formatted;
+            addr.value  = p.formatted;
             destTxt.value = p.formatted;
             destLat.value = p.lat;
             destLng.value = p.lon;
             enableSubmit();
             list.classList.add('hidden');
-          }
+          };
           li.addEventListener('click', choose);
           li.addEventListener('keydown', e => { if (e.key === 'Enter') choose(); });
           list.appendChild(li);
         });
         list.classList.toggle('hidden', list.children.length === 0);
-      }).catch(() => {});
+      })
+      .catch(() => {});
   });
 
-  document.getElementById('checkout-form')?.addEventListener('submit', function(e){
+  form?.addEventListener('submit', function(e){
+    // Final sync + guard
+    applyPMUI();
     if (!destLat.value || !destLng.value) {
       e.preventDefault();
-      alert('Please select a delivery address from suggestions.');
+      alert('Please select a delivery address from the suggestions.');
     }
   });
 });
-
-
-document.addEventListener('DOMContentLoaded', () => {
-  // 1) Grab ALL currently-rendered radios named "payment_method"
-  const radios = Array.from(document.querySelectorAll('input[name="payment_method"]'));
-  if (!radios.length) return;
-
-  // 2) Ensure a single hidden "authoritative" input that will be submitted
-  let hidden = document.getElementById('pm-hidden');
-  if (!hidden) {
-    hidden = document.createElement('input');
-    hidden.type = 'hidden';
-    hidden.name = 'payment_method';      // <- only this will be submitted
-    hidden.id = 'pm-hidden';
-    (document.getElementById('checkout-form') || document.body).appendChild(hidden);
-  }
-
-  // 3) Pick initial value (use checked one, else first, else 'mpesa')
-  const selected = radios.find(r => r.checked) || radios[0];
-  hidden.value = selected ? selected.value : 'mpesa';
-
-  // 4) Rename ALL existing radios so they DON'T submit
-  radios.forEach(r => { r.name = 'pm_choice'; });
-
-  // 5) When user changes visible radios, sync to the hidden value
-  document.addEventListener('change', (e) => {
-    if (e.target.matches('input[type="radio"][name="pm_choice"]')) {
-      hidden.value = e.target.value;
-    }
-  });
-
-  // (Optional) log a confirmation
-  console.log('PM consolidated. Hidden=', hidden.value,
-              'choices=', document.querySelectorAll('input[name="pm_choice"]').length);
-});
-
-
 </script>
 {% endblock %}
+
