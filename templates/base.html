@@ -14,6 +14,7 @@
     <!-- Tailwind CSS -->
     {% comment %} <script src="https://cdn.tailwindcss.com"></script> {% endcomment %}
 <link rel="stylesheet" href="{% static 'css/app.css' %}">
+<link rel="stylesheet" href="{% static 'dist/assets/main.css' %}"> 
 
 
     <!-- Font Awesome -->
@@ -123,6 +124,34 @@
 
 
     {% block extra_js %}{% endblock %}
-    {% include 'partials/chatbot.html' %}
+    <div id="rahim-assistant-mount"
+     data-role="{% if user_is_vendor %}vendor{% elif user_is_vendor_staff %}vendor_staff{% elif user_is_driver %}driver
+                {% elif request.user.is_staff %}admin
+                {% elif request.user.is_authenticated %}customer
+                {% else %}guest{% endif %}"
+     data-vendor="{{ user_is_vendor|yesno:'1,0' }}"
+     data-vendor-staff="{{ user_is_vendor_staff|yesno:'1,0' }}"
+     data-driver="{{ user_is_driver|yesno:'1,0' }}">
+</div>
+{# Old chatbot disabled to avoid conflicts with new ChatPanel #}
+{# {% include 'partials/chatbot.html'%} #}
+    <script type="module" src="{% static 'dist/assets/main.js' %}"></script>
+    <!-- Lightweight WS client to surface vendor application updates as toasts -->
+    <script>
+    (function(){
+      function wsUrl(p){var s=location.protocol==='https:'?'wss':'ws';return s+'://'+location.host+(p.startsWith('/')?p:'/'+p);} 
+      try{var ws=new WebSocket(wsUrl('/ws/notifications/'));}catch(e){return;}
+      ws.onmessage=function(ev){
+        var d; try{ d=JSON.parse(ev.data);}catch(_){ d=null; }
+        if(d && d.type==='vendor_application.updated'){
+          var el=document.createElement('div');
+          el.className='fixed bottom-20 right-4 z-[9999] bg-black text-white text-sm px-3 py-2 rounded shadow';
+          el.textContent=d.message || ('Vendor application status: '+(d.status||''));
+          document.body.appendChild(el); setTimeout(function(){ el.remove(); }, 4000);
+          if(window.AssistantPushMessage){ window.AssistantPushMessage({ who:'bot', text:("Vendor application → "+(d.status||'')) }); }
+        }
+      };
+    })();
+    </script>
 </body>
 </html>

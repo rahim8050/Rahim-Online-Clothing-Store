@@ -27,6 +27,7 @@ from apis.views import (
     VendorProductsExportCSV,
     VendorApplyAPI,
 )
+from apis.views_vendor import VendorKPIAPI
 app_name = "apis"
 from rest_framework.routers import DefaultRouter
 from orders.api_driver import DeliveryViewSet
@@ -44,6 +45,7 @@ urlpatterns = [
     path("vendor/products/create/", VendorProductCreateAPI.as_view(), name="vendor-product-create"),
     path("vendor/shopable-products/", ShopableProductsAPI.as_view(), name="shopable-products"),
     path("vendor/apply/", VendorApplyAPI.as_view(), name="vendor-apply"),
+    path("vendor/kpis/", VendorKPIAPI.as_view(), name="vendor-kpis"),
 
     # Driver
     path("driver/deliveries/", DriverDeliveriesAPI.as_view(), name="driver-deliveries"),
