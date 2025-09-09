@@ -1,5 +1,7 @@
 from django.contrib import admin
 from django.urls import include, path
+from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from django.conf import settings
 from django.conf.urls.static import static
 from users.views import debug_ws_push
@@ -32,9 +34,24 @@ urlpatterns = [
     path('accounts/', include('django.contrib.auth.urls')),
     path('', include('users.urls')),
 
-    # API prefix (align with your frontend: use /apis/... in fetch)
+    # Legacy API endpoints (existing, non-versioned)
     path('apis/', include('apis.urls')),
     path('api/assistant/', include('assistant.urls')),
+    # New versioned API (DRF-only), per-app mounts
+    path('apis/v1/schema/', SpectacularAPIView.as_view(), name='v1-schema'),
+    path('apis/v1/docs/', SpectacularSwaggerView.as_view(url_name='v1-schema'), name='v1-docs'),
+    # JWT endpoints (dev-friendly paths)
+    path('apis/v1/auth/jwt/create/', TokenObtainPairView.as_view(), name='v1-jwt-create'),
+    path('apis/v1/auth/jwt/refresh/', TokenRefreshView.as_view(), name='v1-jwt-refresh'),
+    # Per-app v1 routers
+    path('apis/v1/catalog/', include('product_app.urls_v1')),
+    path('apis/v1/cart/', include('cart.urls_v1')),
+    path('apis/v1/orders/', include('orders.urls_v1')),
+    path('apis/v1/payments/', include('payments.urls_v1')),
+    path('apis/v1/users/', include('users.urls_v1')),
+    # v2 mounts (keep v1 intact)
+    path('apis/v2/cart/', include('cart.urls_v2')),
+    path('apis/v2/cart/guest/', include('cart.urls_guest_v2')),
 
 
     path('payments/checkout/', CheckoutView.as_view(), name='payments_checkout'),
