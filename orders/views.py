@@ -32,6 +32,7 @@ import time
 from decimal import Decimal, ROUND_HALF_UP, InvalidOperation
 
 from .models import Delivery, Transaction, EmailDispatchLog, PaymentEvent, DeliveryPing
+from payments.serializers import PaystackWebhookSerializer
 
 # Configure Stripe and PayPal with keys from settings
 stripe.api_key = settings.STRIPE_SECRET_KEY
@@ -744,28 +745,34 @@ def paystack_webhook(request):
     """
     logger_ps = logging.getLogger("paystack")
 
-    # 1) Verify signature
-    signature = request.META.get("HTTP_X_PAYSTACK_SIGNATURE", "")
-    computed = hmac.new(
-        settings.PAYSTACK_SECRET_KEY.encode(), request.body, hashlib.sha512
-    ).hexdigest()
-    if not hmac.compare_digest(signature, computed):
+    # 1) Verify signature using raw request body
+    raw = request.body  # bytes
+    signature = (request.META.get("HTTP_X_PAYSTACK_SIGNATURE", "") or "").strip().lower()
+    expected = hmac.new(
+        (settings.PAYSTACK_SECRET_KEY or "").encode("utf-8"), raw, hashlib.sha512
+    ).hexdigest().lower()
+    if not signature or not hmac.compare_digest(expected, signature):
         logger_ps.warning("Invalid Paystack signature")
-        return HttpResponse(status=400)
+        return JsonResponse({"detail": "invalid signature"}, status=401)
 
-    # 2) Parse + replay-dedupe (by body hash)
-    body = request.body
+    # 2) Parse JSON strictly
     try:
-        event = json.loads(body or b"{}")
+        event = json.loads(raw.decode("utf-8"))
     except Exception:
-        return HttpResponse(status=400)
+        return JsonResponse({"detail": "invalid json"}, status=400)
+
+    # 3) Validate schema
+    ser = PaystackWebhookSerializer(data=event)
+    if not ser.is_valid():
+        return JsonResponse({"detail": "invalid payload", "errors": ser.errors}, status=400)
 
     data = event.get("data", {}) or {}
     reference = data.get("reference")
     if not reference:
-        return HttpResponse(status=400)
+        return JsonResponse({"detail": "missing reference"}, status=400)
 
-    sha = hashlib.sha256(body).hexdigest()
+    # 4) Idempotency via body SHA256
+    sha = hashlib.sha256(raw).hexdigest().lower()
     pe, created = PaymentEvent.objects.get_or_create(
         body_sha256=sha,
         defaults={"provider": "paystack", "reference": reference, "body": event},
@@ -777,7 +784,7 @@ def paystack_webhook(request):
     order_id = (data.get("metadata") or {}).get("order_id")
     customer_email = (data.get("customer") or {}).get("email")
 
-    # 3) Single-source-of-truth update
+    # 5) Single-source-of-truth update
     with transaction.atomic():
         try:
             tx = Transaction.objects.select_for_update().get(reference=reference)
@@ -804,8 +811,12 @@ def paystack_webhook(request):
         if event_type == "charge.success":
             tx.status = "success"
             tx.verified = True
+            try:
+                tx.body_sha256 = sha
+            except Exception:
+                pass
             tx.save(update_fields=[
-                "callback_received", "verified", "status", "email", "raw_event", "processed_at"
+                "callback_received", "verified", "status", "email", "raw_event", "processed_at", "body_sha256"
             ])
 
             if order:
@@ -837,8 +848,12 @@ def paystack_webhook(request):
 
         elif event_type == "charge.failed":
             tx.status = "failed"
+            try:
+                tx.body_sha256 = sha
+            except Exception:
+                pass
             tx.save(update_fields=[
-                "callback_received", "status", "email", "raw_event", "processed_at"
+                "callback_received", "status", "email", "raw_event", "processed_at", "body_sha256"
             ])
             if order:
                 order.payment_status = "failed"
@@ -855,8 +870,12 @@ def paystack_webhook(request):
 
         elif event_type == "charge.cancelled":
             tx.status = "cancelled"
+            try:
+                tx.body_sha256 = sha
+            except Exception:
+                pass
             tx.save(update_fields=[
-                "callback_received", "status", "email", "raw_event", "processed_at"
+                "callback_received", "status", "email", "raw_event", "processed_at", "body_sha256"
             ])
             if order:
                 order.payment_status = "cancelled"
@@ -873,8 +892,12 @@ def paystack_webhook(request):
 
         else:
             tx.status = "pending"
+            try:
+                tx.body_sha256 = sha
+            except Exception:
+                pass
             tx.save(update_fields=[
-                "callback_received", "status", "email", "raw_event", "processed_at"
+                "callback_received", "status", "email", "raw_event", "processed_at", "body_sha256"
             ])
 
     return HttpResponse(status=200)

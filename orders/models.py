@@ -391,6 +391,14 @@ class Transaction(models.Model):
     )
 
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    body_sha256 = models.CharField(
+       max_length=64,
+        unique=True,
+        db_index=True,
+        null=True,
+        blank=True,
+       help_text="SHA256 of the raw webhook body for idempotency"
+    )
     order = models.ForeignKey(Order, on_delete=models.CASCADE)
     email = models.EmailField(blank=True, null=True)
     amount = models.DecimalField(max_digits=10, decimal_places=2)

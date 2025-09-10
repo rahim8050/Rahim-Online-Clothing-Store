@@ -2,7 +2,8 @@ from decimal import Decimal
 import json
 import uuid
 from django.db import transaction as dbtx
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponse
+from django.core.exceptions import ValidationError
 from django.shortcuts import get_object_or_404
 from django.utils.decorators import method_decorator
 from django.views import View
@@ -10,6 +11,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.decorators import login_required
 
 from .models import Transaction, AuditLog
+from orders.models import PaymentEvent
 from .services import (
     init_checkout,
     verify_stripe,
@@ -109,13 +111,28 @@ class PaystackWebhookView(View):
         try:
             data = verify_paystack(request)
             sig_valid = True
-        except Exception as e:
-            AuditLog.log(event="WEBHOOK_SIGNATURE_INVALID", request_id=request_id, message=str(e))
-            return JsonResponse({"ok": False}, status=400)
+        except ValidationError as e:
+            # Differentiate signature vs JSON issues without leaking secrets
+            msg = (str(e) or "").lower()
+            if "json" in msg:
+                return JsonResponse({"detail": "invalid json"}, status=400)
+            AuditLog.log(event="WEBHOOK_SIGNATURE_INVALID", request_id=request_id, message="invalid signature")
+            return JsonResponse({"detail": "invalid signature"}, status=401)
+        # Idempotency via body hash of raw request
+        import hashlib
+        raw = request.body
+        body_sha256 = hashlib.sha256(raw).hexdigest().lower()
         ref = data.get("data", {}).get("reference")
         if not ref:
             AuditLog.log(event="WEBHOOK_MISSING_REFERENCE", request_id=request_id)
-            return JsonResponse({"ok": True}, status=202)
+            return JsonResponse({"detail": "missing reference"}, status=400)
+        # Upsert PaymentEvent for idempotency; duplicate bodies are acknowledged with 200
+        pe, created = PaymentEvent.objects.get_or_create(
+            body_sha256=body_sha256,
+            defaults={"provider": "paystack", "reference": ref, "body": data},
+        )
+        if not created:
+            return HttpResponse(status=200)
         with dbtx.atomic():
             try:
                 txn = Transaction.objects.select_for_update().get(reference=ref)
