@@ -104,3 +104,27 @@ Security notes:
 - Guest endpoints never accept arbitrary cart IDs; they derive the cart solely from the signed cookie and then confirm the path `{id}` matches.
 - User endpoints remain `IsAuthenticated` only and return 404 for other users' carts.
 
+## Paystack Webhook Hardening
+
+- HMAC-SHA512 over raw request body using `PAYSTACK_SECRET_KEY`.
+- Signature header: `x-paystack-signature` (lowercase/stripped). We verify with constant-time compare.
+- Idempotency via SHA-256 of the raw body stored on `orders.PaymentEvent`; identical bodies ack with 200 and no side-effects.
+- Endpoints:
+  - Project: `/webhook/paystack/` (payments.views.PaystackWebhookView)
+  - Orders app: `orders:paystack_webhook` (orders.views.paystack_webhook)
+
+Environment variables
+- `PAYSTACK_SECRET_KEY`: `sk_test_xxx_or_sk_live_xxx`
+- `DJANGO_SETTINGS_MODULE`: `Rahim_Online_ClothesStore.settings`
+
+Local testing
+- Compute signature (Python):
+  `python - <<PY\nimport hmac, hashlib\nraw=b'{"event":"charge.success","data":{"reference":"ref_123","amount":30000,"currency":"KES"}}'\nsecret=b'sk_test_example'\nprint(hmac.new(secret, raw, hashlib.sha512).hexdigest())\nPY`
+
+- Run tests:
+  - `pytest -q`
+  - `python manage.py test orders.tests.test_webhook_paystack -v`
+
+- Replay a payload locally:
+  `python manage.py replay_paystack --order 123 --status success --verbose-json`
+

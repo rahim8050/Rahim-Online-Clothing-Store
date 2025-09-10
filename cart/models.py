@@ -4,7 +4,7 @@ from django.core.validators import MinValueValidator
 from django.conf import settings
 from product_app.models import Product
 from orders.money import D
-
+from django.utils import timezone
 
 class Cart(models.Model):
     class Status(models.TextChoices):
@@ -25,7 +25,7 @@ class Cart(models.Model):
         default=Status.ACTIVE,
         db_index=True,
     )
-    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True, null=False, blank=False)
     updated_at = models.DateTimeField(auto_now=True)
 
     def get_total_price(self):
