@@ -1,4 +1,4 @@
-from django.contrib import admin
+from django.contrib import admin, messages
 from .models import Delivery, DeliveryPing, DeliveryEvent
 from decimal import Decimal, ROUND_HALF_UP
 from django import forms
@@ -7,6 +7,7 @@ from django.forms import NumberInput
 from django.contrib.auth import get_user_model
 from django.core.validators import MinValueValidator, MaxValueValidator
 from .models import Order, Delivery
+from .services import assign_warehouses_and_update_stock
 
 User = get_user_model()
 Q6 = Decimal("0.000001")
@@ -81,10 +82,29 @@ class DeliveryAdminForm(forms.ModelForm):
 @admin.register(Order)
 class OrderAdmin(admin.ModelAdmin):
     form = OrderAdminForm
-    list_display = ("id", "full_name", "email", "paid", "created_at")
+    list_display = ("id", "full_name", "email", "paid", "stock_updated", "created_at")
     list_filter  = ("paid", "created_at")
     search_fields = ("=id", "full_name", "email", "address")
     ordering = ("-created_at",)
+
+    actions = [
+        "action_assign_and_reserve_stock",
+    ]
+
+    def action_assign_and_reserve_stock(self, request, queryset):
+        """Admin action: assign nearest warehouses and reserve (decrement) stock."""
+        success, errors = 0, 0
+        for order in queryset:
+            try:
+                assign_warehouses_and_update_stock(order)
+                success += 1
+            except Exception as e:
+                errors += 1
+        if success:
+            messages.success(request, f"Assigned + reserved stock for {success} order(s).")
+        if errors:
+            messages.warning(request, f"{errors} order(s) failed to reserve stock (see logs).")
+    action_assign_and_reserve_stock.short_description = "Assign warehouses + reserve stock"
 
 @admin.register(Delivery)
 class DeliveryAdmin(admin.ModelAdmin):
