@@ -20,6 +20,8 @@ from .services import (
     process_success,
     process_failure,
 )
+from .enums import TxnStatus
+from payments.notify import emit_once, send_payment_email, send_refund_email
 
 
 @method_decorator(csrf_exempt, name="dispatch")
@@ -98,9 +100,41 @@ class StripeWebhookView(View):
             payment_intent = obj.get("payment_intent") or obj.get("id")
             event_type = event.get("type")
             if event_type in ("payment_intent.succeeded", "checkout.session.completed"):
-                process_success(txn=txn, gateway_reference=payment_intent, request_id=request_id)
+                txn = process_success(txn=txn, gateway_reference=payment_intent, request_id=request_id)
+                # Notify payer on success (idempotent and post-commit)
+                to_email = getattr(getattr(txn, "user", None), "email", None)
+                if to_email:
+                    emit_once(
+                        event_key=f"payment_success:{txn.reference}",
+                        user=getattr(txn, "user", None),
+                        channel="email",
+                        payload={"order_id": txn.order_id, "amount": str(txn.amount)},
+                        send_fn=lambda: send_payment_email(to_email, txn.order_id, txn.amount, txn.reference, "received"),
+                    )
+                # If duplicate auto-refund occurred, also notify refund completion
+                if (
+                    getattr(txn, "status", None) == TxnStatus.REFUNDED
+                    and to_email
+                    and getattr(txn, "refund_reference", None)
+                ):
+                    emit_once(
+                        event_key=f"refund_completed:{txn.refund_reference}",
+                        user=getattr(txn, "user", None),
+                        channel="email",
+                        payload={"order_id": txn.order_id, "amount": str(txn.amount)},
+                        send_fn=lambda: send_refund_email(to_email, txn.order_id, txn.amount, txn.refund_reference, "completed"),
+                    )
             elif event_type in ("payment_intent.payment_failed", "checkout.session.expired"):
-                process_failure(txn=txn, request_id=request_id)
+                txn = process_failure(txn=txn, request_id=request_id)
+                to_email = getattr(getattr(txn, "user", None), "email", None)
+                if to_email:
+                    emit_once(
+                        event_key=f"payment_failed:{txn.reference}",
+                        user=getattr(txn, "user", None),
+                        channel="email",
+                        payload={"order_id": txn.order_id, "amount": str(txn.amount)},
+                        send_fn=lambda: send_payment_email(to_email, txn.order_id, txn.amount, txn.reference, "failed"),
+                    )
         return JsonResponse({"ok": True})
 
 
@@ -146,9 +180,39 @@ class PaystackWebhookView(View):
             status_ = data.get("data", {}).get("status")
             gateway_ref = data.get("data", {}).get("id") or ref
             if status_ == "success":
-                process_success(txn=txn, gateway_reference=gateway_ref, request_id=request_id)
+                txn = process_success(txn=txn, gateway_reference=gateway_ref, request_id=request_id)
+                to_email = getattr(getattr(txn, "user", None), "email", None)
+                if to_email:
+                    emit_once(
+                        event_key=f"payment_success:{txn.reference}",
+                        user=getattr(txn, "user", None),
+                        channel="email",
+                        payload={"order_id": txn.order_id, "amount": str(txn.amount)},
+                        send_fn=lambda: send_payment_email(to_email, txn.order_id, txn.amount, txn.reference, "received"),
+                    )
+                if (
+                    getattr(txn, "status", None) == TxnStatus.REFUNDED
+                    and to_email
+                    and getattr(txn, "refund_reference", None)
+                ):
+                    emit_once(
+                        event_key=f"refund_completed:{txn.refund_reference}",
+                        user=getattr(txn, "user", None),
+                        channel="email",
+                        payload={"order_id": txn.order_id, "amount": str(txn.amount)},
+                        send_fn=lambda: send_refund_email(to_email, txn.order_id, txn.amount, txn.refund_reference, "completed"),
+                    )
             else:
-                process_failure(txn=txn, request_id=request_id)
+                txn = process_failure(txn=txn, request_id=request_id)
+                to_email = getattr(getattr(txn, "user", None), "email", None)
+                if to_email:
+                    emit_once(
+                        event_key=f"payment_failed:{txn.reference}",
+                        user=getattr(txn, "user", None),
+                        channel="email",
+                        payload={"order_id": txn.order_id, "amount": str(txn.amount)},
+                        send_fn=lambda: send_payment_email(to_email, txn.order_id, txn.amount, txn.reference, "failed"),
+                    )
         return JsonResponse({"ok": True})
 
 
@@ -181,7 +245,37 @@ class MPesaWebhookView(View):
             result_code = callback.get("ResultCode")
             gateway_ref = meta.get("MpesaReceiptNumber")
             if result_code == 0:
-                process_success(txn=txn, gateway_reference=gateway_ref, request_id=request_id)
+                txn = process_success(txn=txn, gateway_reference=gateway_ref, request_id=request_id)
+                to_email = getattr(getattr(txn, "user", None), "email", None)
+                if to_email:
+                    emit_once(
+                        event_key=f"payment_success:{txn.reference}",
+                        user=getattr(txn, "user", None),
+                        channel="email",
+                        payload={"order_id": txn.order_id, "amount": str(txn.amount)},
+                        send_fn=lambda: send_payment_email(to_email, txn.order_id, txn.amount, txn.reference, "received"),
+                    )
+                if (
+                    getattr(txn, "status", None) == TxnStatus.REFUNDED
+                    and to_email
+                    and getattr(txn, "refund_reference", None)
+                ):
+                    emit_once(
+                        event_key=f"refund_completed:{txn.refund_reference}",
+                        user=getattr(txn, "user", None),
+                        channel="email",
+                        payload={"order_id": txn.order_id, "amount": str(txn.amount)},
+                        send_fn=lambda: send_refund_email(to_email, txn.order_id, txn.amount, txn.refund_reference, "completed"),
+                    )
             else:
-                process_failure(txn=txn, request_id=request_id)
+                txn = process_failure(txn=txn, request_id=request_id)
+                to_email = getattr(getattr(txn, "user", None), "email", None)
+                if to_email:
+                    emit_once(
+                        event_key=f"payment_failed:{txn.reference}",
+                        user=getattr(txn, "user", None),
+                        channel="email",
+                        payload={"order_id": txn.order_id, "amount": str(txn.amount)},
+                        send_fn=lambda: send_payment_email(to_email, txn.order_id, txn.amount, txn.reference, "failed"),
+                    )
         return JsonResponse({"ok": True})
