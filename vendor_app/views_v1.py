@@ -130,6 +130,9 @@ class OrgViewSet(viewsets.ModelViewSet):
     @extend_schema(tags=["Vendor KPIs"], summary="List KPI aggregates")
     @action(detail=True, methods=["get"], url_path="kpis")
     def kpis(self, request, pk=None):
+        from django.conf import settings
+        if not getattr(settings, "KPIS_ENABLED", False):
+            return Response({"detail": "KPIs disabled"}, status=status.HTTP_404_NOT_FOUND)
         # OWNER/MANAGER only
         if not IsOrgManager().has_permission(request, self):
             return Response({"detail": "Forbidden"}, status=status.HTTP_403_FORBIDDEN)
@@ -155,6 +158,9 @@ class OrgViewSet(viewsets.ModelViewSet):
     @extend_schema(tags=["Vendor KPIs"], summary="Realtime KPI snapshot")
     @action(detail=True, methods=["get"], url_path="kpis/realtime")
     def kpis_realtime(self, request, pk=None):
+        from django.conf import settings
+        if not getattr(settings, "KPIS_ENABLED", False):
+            return Response({"detail": "KPIs disabled"}, status=status.HTTP_404_NOT_FOUND)
         if not IsOrgManager().has_permission(request, self):
             return Response({"detail": "Forbidden"}, status=status.HTTP_403_FORBIDDEN)
         snap = get_realtime(int(pk))

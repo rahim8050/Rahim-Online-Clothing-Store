@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
+import logging
+import time
 from typing import Any, Dict
 
 from django.conf import settings
@@ -10,6 +12,8 @@ from django.utils import timezone
 
 from payments.idempotency import idempotent
 from invoicing.models import Invoice
+from vendor_app.models import VendorOrg
+from core import metrics
 
 
 @dataclass
@@ -51,6 +55,23 @@ def submit_invoice(*, invoice: Invoice, idempotency_key: str | None = None) -> E
     - Transition DRAFT/REJECTED -> SUBMITTED -> ACCEPTED/REJECTED
     - Persist IRN on acceptance; set timestamps accordingly
     """
+    # Feature flag gate
+    if not getattr(settings, "ETIMS_ENABLED", False):
+        metrics.inc("invoices_rejected", reason="feature_disabled")
+        return EtimsResult(status="rejected", errors={"message": "ETIMS_DISABLED"})
+
+    # Pre-submit compliance checks: require verified KRA PIN on org
+    try:
+        org: VendorOrg = invoice.org
+        kra_pin = (org.kra_pin or "").strip().upper()
+        if not kra_pin or org.tax_status != VendorOrg.TaxStatus.VERIFIED:
+            metrics.inc("invoices_rejected", reason="org_not_verified")
+            return EtimsResult(status="rejected", errors={"message": "ORG_NOT_VERIFIED"})
+    except Exception:  # defensive default
+        metrics.inc("invoices_rejected", reason="org_check_failed")
+        return EtimsResult(status="rejected", errors={"message": "ORG_CHECK_FAILED"})
+
+    t0 = time.perf_counter()
     with transaction.atomic():
         invoice.refresh_from_db()
         if invoice.status == Invoice.Status.ACCEPTED:
@@ -83,5 +104,10 @@ def submit_invoice(*, invoice: Invoice, idempotency_key: str | None = None) -> E
             invoice.last_error = msg
             invoice.save(update_fields=["status", "rejected_at", "last_error", "updated_at"])
 
+        dt = time.perf_counter() - t0
+        try:
+            metrics.inc("invoices_submitted", status=result.status)
+            metrics.observe("etims_latency", dt, status=result.status)
+        except Exception:
+            pass
         return result
-

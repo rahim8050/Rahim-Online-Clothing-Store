@@ -61,6 +61,7 @@ urlpatterns = [
     path('webhook/paystack/', PaystackWebhookView.as_view(), name='paystack_webhook'),
     path('webhook/mpesa/', MPesaWebhookView.as_view(), name='mpesa_webhook'),
     path('healthz', healthz, name='healthz'),
+    path('readyz', __import__('core.views', fromlist=['readyz']).readyz, name='readyz'),
 
     # Product routes — keep AFTER dashboards so they don't shadow them
     path('products/search/', product_views.SearchProduct, name='product_search'),

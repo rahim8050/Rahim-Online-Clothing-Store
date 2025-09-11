@@ -54,6 +54,10 @@ class InvoiceViewSet(viewsets.ReadOnlyModelViewSet):
         user = request.user
         if not (getattr(user, "is_staff", False) or has_min_role(user, inv.org, "MANAGER")):
             return Response({"detail": "Forbidden"}, status=status.HTTP_403_FORBIDDEN)
+        # Feature flag gate
+        from django.conf import settings
+        if not getattr(settings, "ETIMS_ENABLED", False):
+            return Response({"detail": "ETIMS disabled"}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
         result = submit_invoice(invoice=inv, idempotency_key=f"invoice:submit:{inv.id}")
         inv.refresh_from_db()
