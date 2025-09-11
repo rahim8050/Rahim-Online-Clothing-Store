@@ -79,6 +79,24 @@ logger = logging.getLogger(__name__)
 User = get_user_model()
 
 
+# --------- Doc helper serializers (module-level to avoid nested scope issues) ---------
+
+class VendorProductsImportRequestSerializer(serializers.Serializer):  # docs helper; guessed
+    owner_id = serializers.IntegerField(required=False)
+    file = serializers.FileField()
+
+
+class VendorProductsImportResultErrorSerializer(serializers.Serializer):  # docs helper
+    row = serializers.IntegerField()
+    error = serializers.CharField()
+
+
+class VendorProductsImportResultSerializer(serializers.Serializer):  # docs helper
+    created = serializers.IntegerField()
+    updated = serializers.IntegerField()
+    errors = VendorProductsImportResultErrorSerializer(many=True)
+
+
 def _publish_delivery(delivery, kind: str, payload: dict | None = None):
     """
     Publish a generic delivery event to the delivery's WS group.
@@ -792,17 +810,6 @@ class VendorOwnersAPI(APIView):
 class VendorProductsImportCSV(APIView):
     permission_classes = [IsAuthenticated, IsVendorOrVendorStaff, HasVendorScope]
     required_vendor_scope = "catalog"
-    class VendorProductsImportRequestSerializer(serializers.Serializer):  # guessed; refine as needed
-        owner_id = serializers.IntegerField(required=False)
-        file = serializers.FileField()
-    class VendorProductsImportResultErrorSerializer(serializers.Serializer):
-        row = serializers.IntegerField()
-        error = serializers.CharField()
-    class VendorProductsImportResultSerializer(serializers.Serializer):
-        created = serializers.IntegerField()
-        updated = serializers.IntegerField()
-        errors = VendorProductsImportResultErrorSerializer(many=True)
-
     serializer_class = VendorProductsImportRequestSerializer
 
     @extend_schema(request=VendorProductsImportRequestSerializer, responses=VendorProductsImportResultSerializer)
