@@ -456,6 +456,16 @@ SPECTACULAR_SETTINGS = {
     "TITLE": "Rahim Online Clothing Store API",
     "DESCRIPTION": "Versioned DRF API for catalog, cart, orders, payments, and users.",
     "VERSION": "1.0.0",
+    # Disambiguate enums with the same field name across components
+    "ENUM_NAME_OVERRIDES": {
+        # Model fields
+        "orders.Delivery.status": "DeliveryStatusEnum",
+        "users.VendorApplication.status": "VendorApplicationStatusEnum",
+        "orders.OrderItem.delivery_status": "OrderItemDeliveryStatusEnum",
+        "orders.Order.payment_status": "OrderPaymentStatusEnum",
+        # Serializer fields (in case they are materialized as enums)
+        "apis.serializers.DeliveryStatusSerializer.status": "DeliveryStatusBodyEnum",
+    },
 }
 
 # DRF: schema + throttle scopes (view-specific throttles)
