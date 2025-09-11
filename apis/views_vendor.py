@@ -14,6 +14,31 @@ from users.utils import resolve_vendor_owner_for
 from product_app.utils import get_vendor_field
 
 
+# --------- Doc helper serializers (module-level) ---------
+class VendorKPIsProductsSerializer(serializers.Serializer):  # guessed; refine as needed
+  total = serializers.IntegerField()
+  live = serializers.IntegerField()
+
+
+class VendorKPIsSeriesEntrySerializer(serializers.Serializer):  # guessed; refine as needed
+  date = serializers.DateField()
+  orders = serializers.IntegerField()
+  revenue = serializers.FloatField()
+
+
+class VendorKPIsLastPayoutSerializer(serializers.Serializer):  # guessed; refine as needed
+  amount = serializers.FloatField()
+  created_at = serializers.DateTimeField()
+
+
+class VendorKPIsResponseSerializer(serializers.Serializer):  # guessed; refine as needed
+  products = VendorKPIsProductsSerializer()
+  orders_30d = serializers.IntegerField()
+  revenue_30d = serializers.FloatField()
+  series_14d = VendorKPIsSeriesEntrySerializer(many=True)
+  last_payout = VendorKPIsLastPayoutSerializer(allow_null=True)
+
+
 class VendorKPIAPI(APIView):
   """GET /apis/vendor/kpis/?owner_id=<id>
   Returns vendor KPIs for dashboard: products totals, last 30d orders & revenue,
@@ -21,23 +46,6 @@ class VendorKPIAPI(APIView):
   """
 
   permission_classes = [IsAuthenticated, IsVendorOrVendorStaff]
-  class _Products(serializers.Serializer):
-    total = serializers.IntegerField()
-    live = serializers.IntegerField()
-  class _SeriesEntry(serializers.Serializer):
-    date = serializers.DateField()
-    orders = serializers.IntegerField()
-    revenue = serializers.FloatField()
-  class _LastPayout(serializers.Serializer):
-    amount = serializers.FloatField()
-    created_at = serializers.DateTimeField()
-  class VendorKPIsResponseSerializer(serializers.Serializer):  # guessed; refine as needed
-    products = _Products()
-    orders_30d = serializers.IntegerField()
-    revenue_30d = serializers.FloatField()
-    series_14d = _SeriesEntry(many=True)
-    last_payout = _LastPayout(allow_null=True)
-
   # no request body on GET
   serializer_class = VendorKPIsResponseSerializer
 
