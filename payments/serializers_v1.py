@@ -13,9 +13,5 @@ class CheckoutInitV1Serializer(serializers.Serializer):
 
 class CheckoutInitV1ResponseSerializer(serializers.Serializer):  # guessed; refine as needed
     ok = serializers.BooleanField()
-    order_id = serializers.IntegerField()
-    amount = serializers.DecimalField(max_digits=10, decimal_places=2)
-    currency = serializers.CharField(max_length=3)
+    reference = serializers.CharField()
     gateway = serializers.CharField(max_length=20)
-    method = serializers.CharField(max_length=20)
-    idempotency_key = serializers.CharField(max_length=64)
