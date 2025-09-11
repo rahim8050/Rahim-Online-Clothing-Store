@@ -4,6 +4,7 @@ from typing import Optional
 
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
+from drf_spectacular.utils import extend_schema_field
 
 from .models import VendorMember, VendorOrg, VendorOrgAuditLog
 from .services import has_min_role
@@ -111,10 +112,12 @@ class MemberSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["id", "created_at", "org"]
 
-    def get_user_email(self, obj):
+    @extend_schema_field(serializers.EmailField(allow_null=True))
+    def get_user_email(self, obj) -> str | None:
         return getattr(obj.user, "email", None)
 
-    def get_user_username(self, obj):
+    @extend_schema_field(serializers.CharField(allow_null=True))
+    def get_user_username(self, obj) -> str | None:
         return getattr(obj.user, "username", None)
 
 

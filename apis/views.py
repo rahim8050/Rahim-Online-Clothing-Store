@@ -28,11 +28,14 @@ from django.core.signing import loads as unsign
 signer = TimestampSigner()
 
 from rest_framework import status
+from rest_framework import serializers  # for Minimal/Inline serializers used in docs
 from rest_framework.generics import ListAPIView, CreateAPIView
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from drf_spectacular.utils import extend_schema  # docs: request/response hints
+from drf_spectacular.types import OpenApiTypes
 from django.template.loader import render_to_string
 from django.core.mail import EmailMultiAlternatives
 from django.contrib.sites.shortcuts import get_current_site
@@ -66,6 +69,7 @@ from .serializers import (
     VendorStaffInviteSerializer,     # <-- now defined in apis/serializers.py
     VendorStaffRemoveSerializer,     # <-- now defined in apis/serializers.py
     WhoAmISerializer,
+    _EmptySerializer,                # used as request serializer where body is empty
 )
 
 
@@ -74,6 +78,24 @@ from inventory.services import check_low_stock_and_notify
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
+
+
+# --------- Doc helper serializers (module-level to avoid nested scope issues) ---------
+
+class VendorProductsImportRequestSerializer(serializers.Serializer):  # docs helper; guessed
+    owner_id = serializers.IntegerField(required=False)
+    file = serializers.FileField()
+
+
+class VendorProductsImportResultErrorSerializer(serializers.Serializer):  # docs helper
+    row = serializers.IntegerField()
+    error = serializers.CharField()
+
+
+class VendorProductsImportResultSerializer(serializers.Serializer):  # docs helper
+    created = serializers.IntegerField()
+    updated = serializers.IntegerField()
+    errors = VendorProductsImportResultErrorSerializer(many=True)
 
 
 def _publish_delivery(delivery, kind: str, payload: dict | None = None):
@@ -93,7 +115,9 @@ def _publish_delivery(delivery, kind: str, payload: dict | None = None):
 
 class WhoAmI(APIView):
     permission_classes = [IsAuthenticated]
+    serializer_class = WhoAmISerializer  # for schema generation
 
+    @extend_schema(request=None, responses=WhoAmISerializer)
     def get(self, request):
         ser = WhoAmISerializer(request.user)
         return Response(ser.data)
@@ -136,7 +160,10 @@ class VendorProductsAPI(APIView):
       auto-resolved if they have exactly one allowed owner
     """
     permission_classes = [IsAuthenticated, IsVendorOrVendorStaff]
+    # Note: response is ProductSerializer(many=True)
+    serializer_class = ProductSerializer
 
+    @extend_schema(request=None, responses=ProductSerializer(many=True))
     def get(self, request):
         # 1) Resolve owner context (owner_id may be omitted if user has exactly one)
         raw_owner = request.query_params.get("owner_id", None)
@@ -183,7 +210,9 @@ class VendorProductsAPI(APIView):
 
 class DriverDeliveriesAPI(APIView):
     permission_classes = [IsAuthenticated, IsDriver]
+    serializer_class = DeliverySerializer
 
+    @extend_schema(request=None, responses=DeliverySerializer(many=True))
     def get(self, request):
         qs = Delivery.objects.filter(driver=request.user).select_related("order").order_by("-id")
         serializer = DeliverySerializer(qs, many=True, context={"request": request})
@@ -192,7 +221,22 @@ class DriverDeliveriesAPI(APIView):
 
 class VendorDeliveriesAPI(APIView):
     permission_classes = [IsAuthenticated, IsVendorOrVendorStaff]
+    # Minimal output serializer inferred from Response keys
+    class VendorDeliveryOutSerializer(serializers.Serializer):  # guessed; refine as needed
+        id = serializers.IntegerField()
+        order_id = serializers.IntegerField()
+        driver_id = serializers.IntegerField(allow_null=True)
+        status = serializers.CharField()
+        assigned_at = serializers.DateTimeField(allow_null=True)
+        picked_up_at = serializers.DateTimeField(allow_null=True)
+        delivered_at = serializers.DateTimeField(allow_null=True)
+        last_lat = serializers.FloatField(allow_null=True)
+        last_lng = serializers.FloatField(allow_null=True)
+        last_ping_at = serializers.DateTimeField(allow_null=True)
 
+    serializer_class = VendorDeliveryOutSerializer
+
+    @extend_schema(request=None, responses=VendorDeliveryOutSerializer(many=True))
     def get(self, request):
         # Resolve owner context safely
         raw_owner = request.query_params.get("owner_id")
@@ -244,7 +288,9 @@ def _publish_vendor(owner_id: int, kind: str, payload: dict | None = None):
 class DeliveryAssignAPI(APIView):
     permission_classes = [IsAuthenticated, IsVendorOrVendorStaff, HasVendorScope]
     required_vendor_scope = "delivery"
+    serializer_class = DeliveryAssignSerializer
 
+    @extend_schema(request=DeliveryAssignSerializer, responses=DeliverySerializer)
     def post(self, request, pk):
         delivery = get_object_or_404(Delivery, pk=pk)
         ser = DeliveryAssignSerializer(data=request.data)
@@ -273,7 +319,10 @@ class DeliveryAssignAPI(APIView):
 class DeliveryUnassignAPI(APIView):
     permission_classes = [IsAuthenticated, IsVendorOrVendorStaff, HasVendorScope]
     required_vendor_scope = "delivery"
+    # No body expected; keep for schema clarity
+    serializer_class = DeliveryUnassignSerializer  # empty serializer
 
+    @extend_schema(request=DeliveryUnassignSerializer, responses=DeliverySerializer)
     def post(self, request, pk):
         delivery = get_object_or_404(Delivery, pk=pk)
         delivery.driver = None
@@ -300,7 +349,9 @@ class DeliveryUnassignAPI(APIView):
 
 class DeliveryAcceptAPI(APIView):
     permission_classes = [IsAuthenticated, InGroups]
+    serializer_class = _EmptySerializer  # no request body
 
+    @extend_schema(request=None, responses=DeliverySerializer)
     def post(self, request, pk):
         delivery = get_object_or_404(Delivery, pk=pk, driver__isnull=True)
         delivery.mark_assigned(request.user)
@@ -314,7 +365,9 @@ class DeliveryAcceptAPI(APIView):
 class DeliveryStatusAPI(APIView):
     permission_classes = [IsAuthenticated, InGroups]
     required_groups = [DRIVER]
+    serializer_class = DeliveryStatusSerializer
 
+    @extend_schema(request=DeliveryStatusSerializer, responses=DeliverySerializer)
     def post(self, request, pk):
         delivery = get_object_or_404(Delivery, pk=pk, driver=request.user)
         ser = DeliveryStatusSerializer(data=request.data)
@@ -355,7 +408,19 @@ def _q6(x) -> Decimal:
 
 class DriverLocationAPI(APIView):
     permission_classes = [IsAuthenticated, InGroups]
+    class DriverLocationInSerializer(serializers.Serializer):  # guessed; refine as needed
+        delivery_id = serializers.IntegerField()
+        lat = serializers.DecimalField(max_digits=9, decimal_places=6)
+        lng = serializers.DecimalField(max_digits=9, decimal_places=6)
 
+    class DriverLocationOutSerializer(serializers.Serializer):  # guessed; refine as needed
+        ok = serializers.BooleanField()
+        status = serializers.CharField()
+        ts = serializers.DateTimeField()
+
+    serializer_class = DriverLocationInSerializer
+
+    @extend_schema(request=DriverLocationInSerializer, responses=DriverLocationOutSerializer)
     def post(self, request):
         # Expect: {"delivery_id": int, "lat": number|string, "lng": number|string}
         delivery_id = request.data.get("delivery_id")
@@ -429,7 +494,14 @@ from users.services import activate_vendor_staff  # group sync helper
 
 class VendorStaffInviteAPI(APIView):
     permission_classes = [permissions.IsAuthenticated, IsVendorOwner]
+    serializer_class = VendorStaffInviteSerializer
 
+    class VendorStaffInviteOutSerializer(serializers.Serializer):  # guessed; refine as needed
+        ok = serializers.BooleanField()
+        message = serializers.CharField()
+        data = serializers.DictField()
+
+    @extend_schema(request=VendorStaffInviteSerializer, responses=VendorStaffInviteOutSerializer)
     def post(self, request):
         ser = VendorStaffInviteSerializer(data=request.data, context={"request": request})
         ser.is_valid(raise_exception=True)
@@ -510,7 +582,14 @@ class VendorStaffInviteAPI(APIView):
 class VendorStaffAcceptAPI(APIView):
     permission_classes = [permissions.IsAuthenticated]
     TOKEN_MAX_AGE = 60 * 60 * 24 * 7  # 7 days
+    # no request body; response is minimal ok/message
+    class VendorStaffAcceptOutSerializer(serializers.Serializer):  # guessed; refine as needed
+        ok = serializers.BooleanField()
+        message = serializers.CharField()
 
+    serializer_class = _EmptySerializer
+
+    @extend_schema(request=None, responses=VendorStaffAcceptOutSerializer)
     def post(self, request, token: str):
         try:
             payload = unsign(token, max_age=self.TOKEN_MAX_AGE)
@@ -554,7 +633,12 @@ class VendorStaffAcceptAPI(APIView):
 
 class VendorStaffRemoveAPI(APIView):
     permission_classes = [IsAuthenticated, IsVendorOwner]
+    serializer_class = VendorStaffRemoveSerializer
 
+    class VendorStaffRemoveOutSerializer(serializers.Serializer):
+        ok = serializers.BooleanField()
+
+    @extend_schema(request=VendorStaffRemoveSerializer, responses=VendorStaffRemoveOutSerializer)
     def post(self, request, staff_id: int = None):
         # Accept staff_id from URL or body; body wins if provided
         payload = dict(request.data)
@@ -587,8 +671,15 @@ class VendorApplyAPI(APIView):
     permission_classes = [permissions.IsAuthenticated]
     authentication_classes = [SessionAuthentication]  # or [JWTAuthentication, SessionAuthentication]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
+    serializer_class = VendorApplicationCreateSerializer
+
+    class VendorApplyOutSerializer(serializers.Serializer):
+        status = serializers.CharField()
+        id = serializers.IntegerField()
+        created = serializers.BooleanField()
 
     @transaction.atomic
+    @extend_schema(request=VendorApplicationCreateSerializer, responses=VendorApplyOutSerializer)
     def post(self, request):
         user = request.user
         VendorApplication = apps.get_model("users", "VendorApplication")
@@ -630,6 +721,14 @@ from users.models import VendorApplication
 
 class VendorApplyStatusAPI(APIView):
     permission_classes = [IsAuthenticated]
+    class VendorApplyStatusOutSerializer(serializers.Serializer):  # guessed; refine as needed
+        has_applied = serializers.BooleanField()
+        status = serializers.CharField(allow_null=True)
+        application_id = serializers.IntegerField(allow_null=True)
+
+    serializer_class = _EmptySerializer
+
+    @extend_schema(request=None, responses=VendorApplyStatusOutSerializer)
     def get(self, request):
         app = (VendorApplication.objects
                .filter(user=request.user)
@@ -649,7 +748,9 @@ class VendorApplyStatusAPI(APIView):
 
 class VendorStaffListCreateView(APIView):
     permission_classes = [permissions.IsAuthenticated, IsVendorOwner]
+    serializer_class = VendorStaffCreateSerializer  # request body for POST
 
+    @extend_schema(request=None, responses=VendorStaffOutSerializer(many=True))
     def get(self, request):
         # List staff for the resolved owner context only
         raw_owner = request.query_params.get("owner_id")
@@ -660,6 +761,7 @@ class VendorStaffListCreateView(APIView):
         qs = VendorStaff.objects.filter(owner_id=owner_id).order_by("-id")
         return Response(VendorStaffOutSerializer(qs, many=True).data)
 
+    @extend_schema(request=VendorStaffCreateSerializer, responses=VendorStaffOutSerializer)
     def post(self, request):
         # Force owner_id to resolved owner context; ignore client-supplied owner_id
         raw_owner = request.data.get("owner_id")
@@ -687,7 +789,13 @@ from io import StringIO
 
 class VendorOwnersAPI(APIView):
     permission_classes = [IsAuthenticated, IsVendorOrVendorStaff]
+    class VendorOwnerOutSerializer(serializers.Serializer):  # guessed; refine as needed
+        id = serializers.IntegerField()
+        name = serializers.CharField()
 
+    serializer_class = _EmptySerializer
+
+    @extend_schema(request=None, responses=VendorOwnerOutSerializer(many=True))
     def get(self, request):
         ids = list(vendor_owner_ids_for(request.user))
         if not ids:
@@ -703,7 +811,9 @@ class VendorOwnersAPI(APIView):
 class VendorProductsImportCSV(APIView):
     permission_classes = [IsAuthenticated, IsVendorOrVendorStaff, HasVendorScope]
     required_vendor_scope = "catalog"
+    serializer_class = VendorProductsImportRequestSerializer
 
+    @extend_schema(request=VendorProductsImportRequestSerializer, responses=VendorProductsImportResultSerializer)
     def post(self, request):
         f = request.FILES.get("file")
         if not f:
@@ -747,7 +857,9 @@ class VendorProductsImportCSV(APIView):
 class VendorProductsExportCSV(APIView):
     permission_classes = [IsAuthenticated, IsVendorOrVendorStaff, HasVendorScope]
     required_vendor_scope = "catalog"
+    serializer_class = _EmptySerializer
 
+    @extend_schema(request=None, responses={(200, 'text/csv'): OpenApiTypes.STR})
     def get(self, request):
         try:
             owner_id = resolve_vendor_owner_for(request.user, request.query_params.get("owner_id"))
@@ -765,7 +877,12 @@ class VendorProductsExportCSV(APIView):
 
 class VendorStaffDeactivateAPI(APIView):
     permission_classes = [IsAuthenticated, IsVendorOwner]
+    serializer_class = _EmptySerializer
 
+    class VendorStaffDeactivateOutSerializer(serializers.Serializer):
+        ok = serializers.BooleanField()
+
+    @extend_schema(request=None, responses=VendorStaffDeactivateOutSerializer)
     def post(self, request, staff_id: int):
         from users.services import deactivate_vendor_staff
         try:
