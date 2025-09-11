@@ -7,6 +7,8 @@ from django.utils.timezone import now
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from rest_framework import serializers
+from drf_spectacular.utils import extend_schema
 from users.permissions import IsVendorOrVendorStaff
 from users.utils import resolve_vendor_owner_for
 from product_app.utils import get_vendor_field
@@ -19,7 +21,27 @@ class VendorKPIAPI(APIView):
   """
 
   permission_classes = [IsAuthenticated, IsVendorOrVendorStaff]
+  class _Products(serializers.Serializer):
+    total = serializers.IntegerField()
+    live = serializers.IntegerField()
+  class _SeriesEntry(serializers.Serializer):
+    date = serializers.DateField()
+    orders = serializers.IntegerField()
+    revenue = serializers.FloatField()
+  class _LastPayout(serializers.Serializer):
+    amount = serializers.FloatField()
+    created_at = serializers.DateTimeField()
+  class VendorKPIsResponseSerializer(serializers.Serializer):  # guessed; refine as needed
+    products = _Products()
+    orders_30d = serializers.IntegerField()
+    revenue_30d = serializers.FloatField()
+    series_14d = _SeriesEntry(many=True)
+    last_payout = _LastPayout(allow_null=True)
 
+  # no request body on GET
+  serializer_class = VendorKPIsResponseSerializer
+
+  @extend_schema(request=None, responses=VendorKPIsResponseSerializer)
   def get(self, request):
     Product = apps.get_model('product_app', 'Product')
     Order = apps.get_model('orders', 'Order')

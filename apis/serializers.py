@@ -3,6 +3,7 @@ from django.db import transaction
 from django.utils.text import slugify
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
+from drf_spectacular.utils import extend_schema_field
 
 from product_app.models import Product, ProductStock, Warehouse
 from orders.models import OrderItem
@@ -23,13 +24,15 @@ class WhoAmISerializer(serializers.Serializer):
     role = serializers.SerializerMethodField()
     role_label = serializers.SerializerMethodField()
 
-    def get_role(self, obj):
+    @extend_schema_field(serializers.CharField())
+    def get_role(self, obj) -> str:
         try:
             return getattr(obj, "effective_role", None) or getattr(obj, "role", None) or "customer"
         except Exception:
             return "customer"
 
-    def get_role_label(self, obj):
+    @extend_schema_field(serializers.CharField())
+    def get_role_label(self, obj) -> str:
         # Map code -> label using User.Role choices if available
         code = self.get_role(obj)
         try:
@@ -73,7 +76,8 @@ class ProductListSerializer(serializers.ModelSerializer):
         model = Product
         fields = ["id", "name", "price", "available", "slug", "owned_by_me"]
 
-    def get_owned_by_me(self, obj):
+    @extend_schema_field(serializers.BooleanField())
+    def get_owned_by_me(self, obj) -> bool:
         user = self.context["request"].user
         if not user.is_authenticated:
             return False
