@@ -87,6 +87,8 @@ INSTALLED_APPS = [
     "assistant",
     "core",
     "notifications",
+    "vendor_app",
+    "invoicing",
 ]
 
 MIDDLEWARE = [
@@ -454,4 +456,13 @@ SPECTACULAR_SETTINGS = {
     "TITLE": "Rahim Online Clothing Store API",
     "DESCRIPTION": "Versioned DRF API for catalog, cart, orders, payments, and users.",
     "VERSION": "1.0.0",
+}
+
+# DRF: schema + throttle scopes (view-specific throttles)
+REST_FRAMEWORK = {
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    "DEFAULT_THROTTLE_RATES": {
+        # used by vendor_app.throttling.VendorOrgScopedRateThrottle
+        "vendor.org": "60/min",
+    },
 }

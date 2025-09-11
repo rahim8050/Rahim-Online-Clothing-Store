@@ -11,8 +11,13 @@ from django.db import IntegrityError, transaction as dbtx
 from django.utils import timezone
 
 from .enums import Gateway, TxnStatus
-from .models import Transaction, AuditLog
+from .models import Transaction, AuditLog, PaymentEvent, Payout
 from .selectors import safe_decrement_stock, set_order_paid
+from .idempotency import idempotent
+from .models import IdempotencyKey
+from vendor_app.models import VendorOrg
+from decimal import Decimal, ROUND_HALF_UP
+import hashlib
 
 
 # Helpers
@@ -209,3 +214,84 @@ def issue_refund(txn: Transaction, request_id: str = ""):
         # M-Pesa: manual reversal (Daraja Reversal API if enabled) — log via AuditLog
         pass
     AuditLog.log(event="REFUND_ISSUED", transaction=txn, order=txn.order, request_id=request_id)
+
+
+# -------------------- Payouts (idempotent) --------------------
+
+@idempotent(scope="vendor:payout")
+def process_payout(*, org_id: int | None = None, user_id: int | None = None, amount, currency="KES", idempotency_key: str | None = None):
+    """Simulate a payout and ensure duplicate calls with same key do not double-payout.
+
+    For demo/testing, we just log and return a deterministic reference based on the key.
+    """
+    ref = f"PAYOUT-{(idempotency_key or '')[-12:]}" if idempotency_key else "PAYOUT"
+    AuditLog.log(event="PAYOUT_SUCCESS", request_id=idempotency_key or "", message=f"{ref}:{amount}:{currency}")
+    return {"reference": ref, "amount": str(amount), "currency": currency}
+
+
+# -------------------- Org settlement helpers --------------------
+
+def _resolve_org_for_order(order) -> VendorOrg | None:
+    try:
+        item = order.items.select_related("product__owner__vendor_profile").first()
+        if item and getattr(item.product.owner, "vendor_profile", None):
+            return item.product.owner.vendor_profile.org
+    except Exception:
+        return None
+    return None
+
+
+def apply_org_settlement(txn: Transaction, provider: str, raw_body: bytes, payload: dict | None = None) -> PaymentEvent:
+    """Bind transaction to VendorOrg, compute commission + net, persist PaymentEvent & Payout.
+
+    - Commission = org.org_commission_rate * gross
+    - Net to vendor = gross - fees - commission
+    - Fees default to 0 unless provided by gateway payload (not parsed here)
+    """
+    org = txn.vendor_org or _resolve_org_for_order(txn.order)
+    rate = Decimal("0")
+    if org is not None and getattr(org, "org_commission_rate", None) is not None:
+        rate = Decimal(str(org.org_commission_rate))
+
+    gross = Decimal(str(txn.amount))
+    fees = Decimal("0.00")
+    commission = (gross * rate).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    net = (gross - fees - commission).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+    # Persist to txn
+    update_fields = []
+    if txn.vendor_org_id is None and org is not None:
+        txn.vendor_org = org
+        update_fields.append("vendor_org")
+    txn.gross_amount = gross
+    txn.fees_amount = fees
+    txn.commission_amount = commission
+    txn.net_to_vendor = net
+    update_fields += ["gross_amount", "fees_amount", "commission_amount", "net_to_vendor", "updated_at"]
+    txn.save(update_fields=update_fields)
+
+    body_sha256 = hashlib.sha256(raw_body or b"").hexdigest()
+    evt, _ = PaymentEvent.objects.get_or_create(
+        body_sha256=body_sha256,
+        defaults={
+            "provider": provider,
+            "reference": txn.reference,
+            "vendor_org": org,
+            "body": payload or {},
+            "gross_amount": gross,
+            "fees_amount": fees,
+            "net_to_vendor": net,
+        },
+    )
+
+    # Create payout record per successful txn (idempotent via OneToOne)
+    try:
+        if org is not None:
+            Payout.objects.get_or_create(
+                transaction=txn,
+                defaults={"vendor_org": org, "amount": net, "currency": txn.currency},
+            )
+    except Exception:
+        pass
+
+    return evt

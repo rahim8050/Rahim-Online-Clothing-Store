@@ -49,6 +49,8 @@ urlpatterns = [
     path('apis/v1/orders/', include('orders.urls_v1')),
     path('apis/v1/payments/', include('payments.urls_v1')),
     path('apis/v1/users/', include('users.urls_v1')),
+    path('apis/v1/invoicing/', include('invoicing.urls_v1')),
+    path('apis/v1/vendor/', include('vendor_app.urls_v1')),
     # v2 mounts (keep v1 intact)
     path('apis/v2/cart/', include('cart.urls_v2')),
     path('apis/v2/cart/guest/', include('cart.urls_guest_v2')),

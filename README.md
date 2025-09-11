@@ -74,6 +74,80 @@ curl http://127.0.0.1:8000/apis/v1/catalog/products/?search=shirt \
   -H "Authorization: Bearer $ACCESS"
 ```
 
+### Enterprise Vendor v1
+
+Enterprise multi-tenant vendor capabilities are available in parallel under `/apis/v1/vendor/*` without breaking legacy routes.
+
+- Tenancy: `VendorOrg` (organization) and `VendorMember` with org-scoped RBAC (OWNER, MANAGER, STAFF)
+- Permissions: reusable DRF permission classes in `vendor_app/permissions.py`
+- Throttling: org-scoped throttle key via `VendorOrgScopedRateThrottle` (configurable rates)
+- Payments: org-aware commission, PaymentEvent raw payloads with body sha256, and Payout records
+
+Docs:
+- OpenAPI JSON: `/apis/v1/schema/?format=json`
+- Swagger UI: `/apis/v1/docs/`
+- Detailed guide: `docs/ENTERPRISE_VENDOR.md`
+- Kenya payments notes: `docs/PAYMENTS_KE.md`
+
+Quick cURL examples (JWT omitted for brevity):
+
+1) Create an org (as authenticated user)
+
+```
+curl -X POST http://localhost:8000/apis/v1/vendor/orgs/ \
+  -H 'Authorization: Bearer <token>' \
+  -H 'Content-Type: application/json' \
+  -d '{"name": "Rahim Traders"}'
+```
+
+2) Invite a member (MANAGER+)
+
+```
+curl -X POST http://localhost:8000/apis/v1/vendor/orgs/<org_id>/invite/ \
+  -H 'Authorization: Bearer <token>' \
+  -H 'Content-Type: application/json' \
+  -d '{"user_id": 123, "role": "STAFF"}'
+```
+
+3) List members (STAFF+)
+
+```
+curl -H 'Authorization: Bearer <token>' \
+  http://localhost:8000/apis/v1/vendor/orgs/<org_id>/members/
+```
+
+4) List org products and orders (STAFF+)
+
+```
+curl -H 'Authorization: Bearer <token>' http://localhost:8000/apis/v1/vendor/orgs/<org_id>/products/
+curl -H 'Authorization: Bearer <token>' http://localhost:8000/apis/v1/vendor/orgs/<org_id>/orders/
+```
+
+5) Create products (legacy non-versioned route kept; provide owner_id and stock)
+
+```
+curl -X POST http://localhost:8000/apis/vendor/products/create/ \
+  -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' \
+  -d '{"name":"Tee","slug":"tee","price":"100.00","category":1,
+        "owner_id": <owner_user_id>,
+        "stock_allocations": [{"warehouse": 1, "quantity": 10}] }'
+```
+
+6) Kenya Webhooks (idempotent):
+
+```
+# Paystack
+curl -X POST http://localhost:8000/webhook/paystack/ \
+  -H 'Content-Type: application/json' \
+  -H 'X-Paystack-Signature: <hmac-sha512>' \
+  --data-binary @sample_paystack_success.json
+
+# M-PESA STK Callback
+curl -X POST http://localhost:8000/webhook/mpesa/ \
+  -H 'Content-Type: application/json' \
+  --data-binary @sample_mpesa_stk_callback.json
+```
+
 Runbook:
 ```
 pip install -r requirements.txt

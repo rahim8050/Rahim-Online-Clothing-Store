@@ -19,7 +19,9 @@ from .services import (
     verify_mpesa,
     process_success,
     process_failure,
+    apply_org_settlement,
 )
+from .idempotency import accept_once
 from .enums import TxnStatus
 from payments.notify import emit_once, send_payment_email, send_refund_email
 
@@ -82,6 +84,9 @@ class StripeWebhookView(View):
         except Exception as e:
             AuditLog.log(event="WEBHOOK_SIGNATURE_INVALID", request_id=request_id, message=str(e))
             return JsonResponse({"ok": False}, status=400)
+        # Deduplicate identical webhook bodies (provider retries)
+        if not accept_once(scope="webhook:stripe", request=request):
+            return HttpResponse(status=200)
         obj = event.get("data", {}).get("object", {})
         reference = obj.get("metadata", {}).get("reference")
         if not reference:
@@ -101,6 +106,7 @@ class StripeWebhookView(View):
             event_type = event.get("type")
             if event_type in ("payment_intent.succeeded", "checkout.session.completed"):
                 txn = process_success(txn=txn, gateway_reference=payment_intent, request_id=request_id)
+                apply_org_settlement(txn, provider="stripe", raw_body=request.body, payload=event)
                 # Notify payer on success (idempotent and post-commit)
                 to_email = getattr(getattr(txn, "user", None), "email", None)
                 if to_email:
@@ -160,12 +166,8 @@ class PaystackWebhookView(View):
         if not ref:
             AuditLog.log(event="WEBHOOK_MISSING_REFERENCE", request_id=request_id)
             return JsonResponse({"detail": "missing reference"}, status=400)
-        # Upsert PaymentEvent for idempotency; duplicate bodies are acknowledged with 200
-        pe, created = PaymentEvent.objects.get_or_create(
-            body_sha256=body_sha256,
-            defaults={"provider": "paystack", "reference": ref, "body": data},
-        )
-        if not created:
+        # Deduplicate identical webhook bodies quickly
+        if not accept_once(scope="webhook:paystack", request=request):
             return HttpResponse(status=200)
         with dbtx.atomic():
             try:
@@ -181,6 +183,7 @@ class PaystackWebhookView(View):
             gateway_ref = data.get("data", {}).get("id") or ref
             if status_ == "success":
                 txn = process_success(txn=txn, gateway_reference=gateway_ref, request_id=request_id)
+                apply_org_settlement(txn, provider="paystack", raw_body=request.body, payload=data)
                 to_email = getattr(getattr(txn, "user", None), "email", None)
                 if to_email:
                     emit_once(
@@ -225,6 +228,9 @@ class MPesaWebhookView(View):
         except Exception as e:
             AuditLog.log(event="WEBHOOK_SIGNATURE_INVALID", request_id=request_id, message=str(e))
             return JsonResponse({"ok": False}, status=400)
+        # Deduplicate identical webhook bodies
+        if not accept_once(scope="webhook:mpesa", request=request):
+            return HttpResponse(status=200)
         callback = data.get("Body", {}).get("stkCallback", {})
         items = callback.get("CallbackMetadata", {}).get("Item", [])
         meta = {i.get("Name"): i.get("Value") for i in items}
@@ -246,6 +252,7 @@ class MPesaWebhookView(View):
             gateway_ref = meta.get("MpesaReceiptNumber")
             if result_code == 0:
                 txn = process_success(txn=txn, gateway_reference=gateway_ref, request_id=request_id)
+                apply_org_settlement(txn, provider="mpesa", raw_body=request.body, payload=data)
                 to_email = getattr(getattr(txn, "user", None), "email", None)
                 if to_email:
                     emit_once(
