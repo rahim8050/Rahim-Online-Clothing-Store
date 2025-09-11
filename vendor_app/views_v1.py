@@ -14,6 +14,7 @@ from .models import VendorMember, VendorOrg
 from .permissions import IsInOrg, IsOrgManager, IsOrgOwner, IsOrgStaff
 from .serializers_v1 import InviteSerializer, MemberSerializer, OrgSerializer
 from .selectors import org_scoped_queryset, get_kpis, get_realtime
+from drf_spectacular.utils import extend_schema, OpenApiExample, extend_schema_view
 from .permissions import IsOrgManager
 from .throttling import VendorOrgScopedRateThrottle
 
@@ -127,7 +128,21 @@ class OrgViewSet(viewsets.ModelViewSet):
         ser = ProductV1Serializer(page, many=True)
         return self.get_paginated_response(ser.data)
 
-    @extend_schema(tags=["Vendor KPIs"], summary="List KPI aggregates")
+    @extend_schema(
+        tags=["Vendor KPIs"],
+        summary="List KPI aggregates",
+        examples=[
+            OpenApiExample(
+                'KPIs Response',
+                value={
+                    "results": [
+                        {"period_start": "2025-09-01", "period_end": "2025-09-01", "window": "daily", "gross_revenue": "1000.00", "net_revenue": "950.00", "orders": 10, "refunds": 1, "success_rate": "90.00", "fulfillment_avg_mins": "45.00"}
+                    ]
+                },
+                response_only=True,
+            )
+        ],
+    )
     @action(detail=True, methods=["get"], url_path="kpis")
     def kpis(self, request, pk=None):
         from django.conf import settings
@@ -155,7 +170,17 @@ class OrgViewSet(viewsets.ModelViewSet):
         ]
         return Response({"results": data})
 
-    @extend_schema(tags=["Vendor KPIs"], summary="Realtime KPI snapshot")
+    @extend_schema(
+        tags=["Vendor KPIs"],
+        summary="Realtime KPI snapshot",
+        examples=[
+            OpenApiExample(
+                'Realtime Snapshot',
+                value={"gross_revenue": "100.00", "net_revenue": "95.00", "orders": 1, "refunds": 0},
+                response_only=True,
+            )
+        ],
+    )
     @action(detail=True, methods=["get"], url_path="kpis/realtime")
     def kpis_realtime(self, request, pk=None):
         from django.conf import settings

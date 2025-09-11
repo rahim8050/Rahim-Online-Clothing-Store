@@ -8,6 +8,7 @@ from rest_framework.response import Response
 from vendor_app.services import has_min_role
 from .models import Invoice
 from .serializers import InvoiceSerializer
+from drf_spectacular.utils import extend_schema, OpenApiExample
 from .services.etims import submit_invoice
 from .throttling import InvoiceExportThrottle
 from .utils import (
@@ -48,6 +49,38 @@ class InvoiceViewSet(viewsets.ReadOnlyModelViewSet):
             qs = qs.filter(issued_at__date__lte=dto)
         return qs
 
+    @extend_schema(
+        request=None,
+        responses=InvoiceSerializer,
+        examples=[
+            OpenApiExample(
+                'Accepted Invoice',
+                value={
+                    "id": 123,
+                    "status": "accepted",
+                    "irn": "IRN-ABC123",
+                    "org": 1,
+                    "order": 1001,
+                    "buyer_name": "Jane Doe",
+                    "buyer_pin": "A123456789B",
+                    "subtotal": "100.00",
+                    "tax_amount": "16.00",
+                    "total": "116.00",
+                },
+                response_only=True,
+            ),
+            OpenApiExample(
+                'Rejected Invoice',
+                value={
+                    "id": 124,
+                    "status": "rejected",
+                    "irn": "",
+                    "last_error": "ORG_NOT_VERIFIED",
+                },
+                response_only=True,
+            ),
+        ],
+    )
     @action(detail=True, methods=["post"], url_path="submit")
     def submit(self, request, pk=None):
         inv: Invoice = self.get_object()

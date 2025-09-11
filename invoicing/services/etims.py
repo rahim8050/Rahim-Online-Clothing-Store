@@ -4,6 +4,7 @@ import uuid
 from dataclasses import dataclass
 import logging
 import time
+from django.utils.module_loading import import_string
 from typing import Any, Dict
 
 from django.conf import settings
@@ -44,7 +45,59 @@ class SandboxEtimsClient(EtimsClient):
 
 def get_client() -> EtimsClient:
     # For now always sandbox; wire toggle via settings if needed later
-    return SandboxEtimsClient()
+    cls_path = getattr(settings, "ETIMS_CLIENT_CLASS", "invoicing.services.etims.SandboxEtimsClient")
+    try:
+        cls = import_string(cls_path)
+        return cls()
+    except Exception:  # fallback to sandbox
+        logging.getLogger(__name__).warning("Falling back to SandboxEtimsClient", exc_info=True)
+        return SandboxEtimsClient()
+
+
+class RealEtimsClient(EtimsClient):  # pragma: no cover - integration shim
+    """HTTP client shim for real eTIMS integration.
+
+    Configure via settings:
+      - ETIMS_CLIENT_CLASS = 'invoicing.services.etims.RealEtimsClient'
+      - ETIMS_BASE_URL, ETIMS_API_KEY
+    """
+
+    def submit_invoice(self, invoice: Invoice) -> EtimsResult:
+        try:
+            import requests  # type: ignore
+        except Exception:  # requests not installed
+            return EtimsResult(status="rejected", errors={"message": "REAL_CLIENT_DEP_MISSING"})
+
+        if not self.api_key or not self.base_url:
+            return EtimsResult(status="rejected", errors={"message": "REAL_CLIENT_NOT_CONFIGURED"})
+
+        # Minimal illustrative payload – adjust mapping when wiring real API
+        payload = {
+            "invoice_id": invoice.id,
+            "buyer_name": invoice.buyer_name,
+            "buyer_pin": invoice.buyer_pin or "",
+            "total": str(invoice.total),
+            "currency": invoice.currency,
+        }
+        try:
+            r = requests.post(
+                f"{self.base_url.rstrip('/')}/invoices",
+                json=payload,
+                headers={"Authorization": f"Bearer {self.api_key}"},
+                timeout=15,
+            )
+            if r.status_code in (200, 201):
+                body = r.json()
+                return EtimsResult(status="accepted", irn=body.get("irn"))
+            else:
+                try:
+                    body = r.json()
+                    msg = body.get("message") or body.get("error") or r.text
+                except Exception:
+                    msg = r.text
+                return EtimsResult(status="rejected", errors={"message": msg})
+        except Exception as e:
+            return EtimsResult(status="rejected", errors={"message": str(e)})
 
 
 @idempotent(scope="invoice:submit")
