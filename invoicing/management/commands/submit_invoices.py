@@ -7,6 +7,7 @@ from django.utils import timezone
 
 from invoicing.models import Invoice
 from invoicing.services.etims import submit_invoice
+from django.conf import settings
 
 
 class Command(BaseCommand):
@@ -24,7 +25,9 @@ class Command(BaseCommand):
         if not qs.exists():
             self.stdout.write("No invoices to submit")
             return
+        if not getattr(settings, "ETIMS_ENABLED", False):
+            self.stdout.write(self.style.WARNING("ETIMS disabled; aborting submissions."))
+            return
         for inv in qs.iterator():
             res = submit_invoice(invoice=inv, idempotency_key=f"invoice:submit:{inv.id}")
             self.stdout.write(f"Invoice {inv.id}: {res.status} {res.irn or ''}")
-

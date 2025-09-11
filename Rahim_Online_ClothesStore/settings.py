@@ -221,6 +221,28 @@ CHANNEL_LAYERS = {
         "BACKEND": "channels.layers.InMemoryChannelLayer",
     }
 }
+
+# ------------------------ Feature Flags ------------------------
+# Default on in DEBUG, off otherwise unless explicitly enabled via env.
+ETIMS_ENABLED = env.bool("ETIMS_ENABLED", default=bool(DEBUG))
+KPIS_ENABLED = env.bool("KPIS_ENABLED", default=bool(DEBUG))
+
+# ------------------------ Celery Beat --------------------------
+# Schedule daily Vendor KPI aggregation at 00:30 Africa/Nairobi
+try:
+    from celery.schedules import crontab  # type: ignore
+    _kpi_schedule = crontab(minute=30, hour=0)
+except Exception:  # pragma: no cover
+    _kpi_schedule = 24 * 60 * 60  # fallback: every 24h
+
+CELERY_TIMEZONE = "Africa/Nairobi"
+CELERY_BEAT_SCHEDULE = {
+    "vendor-kpis-daily": {
+        "task": "vendor_app.tasks.aggregate_kpis_daily_all",
+        "schedule": _kpi_schedule,
+        "options": {"queue": "default"},
+    }
+}
 # ------------------------- Auth / API -------------------------
 REST_FRAMEWORK = {
     # Permissions: read for all, write for auth by default
