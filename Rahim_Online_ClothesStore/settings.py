@@ -458,13 +458,14 @@ SPECTACULAR_SETTINGS = {
     "VERSION": "1.0.0",
     # Disambiguate enums with the same field name across components
     "ENUM_NAME_OVERRIDES": {
+        # Use fully qualified module paths and unify identical choice sets
         # Model fields
-        "orders.Delivery.status": "DeliveryStatusEnum",
-        "users.VendorApplication.status": "VendorApplicationStatusEnum",
-        "orders.OrderItem.delivery_status": "OrderItemDeliveryStatusEnum",
-        "orders.Order.payment_status": "OrderPaymentStatusEnum",
-        # Serializer fields (in case they are materialized as enums)
-        "apis.serializers.DeliveryStatusSerializer.status": "DeliveryStatusBodyEnum",
+        "orders.models.Delivery.status": "DeliveryStatusEnum",
+        "users.models.VendorApplication.status": "VendorApplicationStatusEnum",
+        "orders.models.OrderItem.delivery_status": "OrderItemDeliveryStatusEnum",
+        "orders.models.Order.payment_status": "OrderPaymentStatusEnum",
+        # Serializer field uses the same choices as Delivery.status, keep same name
+        "apis.serializers.DeliveryStatusSerializer.status": "DeliveryStatusEnum",
     },
 }
 
