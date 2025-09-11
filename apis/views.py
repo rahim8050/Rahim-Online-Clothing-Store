@@ -35,6 +35,7 @@ from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnl
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from drf_spectacular.utils import extend_schema  # docs: request/response hints
+from drf_spectacular.types import OpenApiTypes
 from django.template.loader import render_to_string
 from django.core.mail import EmailMultiAlternatives
 from django.contrib.sites.shortcuts import get_current_site
@@ -858,7 +859,7 @@ class VendorProductsExportCSV(APIView):
     required_vendor_scope = "catalog"
     serializer_class = _EmptySerializer
 
-    @extend_schema(request=None, responses={"text/csv": serializers.CharField()})  # documented as text
+    @extend_schema(request=None, responses={(200, 'text/csv'): OpenApiTypes.STR})
     def get(self, request):
         try:
             owner_id = resolve_vendor_owner_for(request.user, request.query_params.get("owner_id"))

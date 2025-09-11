@@ -106,6 +106,8 @@ if DeliveryModel is not None:
         class Meta:
             model = DeliveryModel
             fields = "__all__"
+            # Avoid component name collision with orders.serializers.DeliverySerializer
+            ref_name = "APIsDelivery"
 else:
     DeliverySerializer = _EmptySerializer
 
