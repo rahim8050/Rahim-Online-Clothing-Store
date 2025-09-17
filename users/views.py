@@ -55,7 +55,7 @@ def geoapify_test(request):
     return render(request, "users/accounts/dev.html", {
         "GEOAPIFY_API_KEY": api_key,
     })
-<<<<<<< HEAD
+
     
     
 
@@ -64,7 +64,7 @@ def after_login(request):
     # central place to branch by role later if you want
     return redirect("dashboard")  # or whatever you have
     
-=======
+
 # users/views.py
 
 
