@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 import os
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "Rahim_Online_ClothesStore.settings")
 os.environ.setdefault("SECRET_KEY", "test")
@@ -67,7 +66,7 @@ class DeliveryWebsocketTests(TestCase):
 
         code = async_to_sync(flow)()
         self.assertEqual(code, 4403)
-=======
+
 import json
 import pytest
 from channels.layers import get_channel_layer
@@ -146,5 +145,6 @@ async def test_delivery_ws_group_receive_position(monkeypatch, settings):
     assert float(data["lng"]) == 2.3456
 
     await comm.send_input({"type": "websocket.disconnect"})
->>>>>>> development
+
+
 
