@@ -18,7 +18,11 @@ from .selectors import safe_decrement_stock, set_order_paid
 # Helpers
 
 def compute_hmac_sha512(secret: str, body_bytes: bytes) -> str:
-    return hmac.new(secret.encode(), body_bytes, hashlib.sha512).hexdigest()
+    """Return lowercase hex HMAC-SHA512 of raw body.
+
+    Note: Always use the raw request body for signing, never re-serialized JSON.
+    """
+    return hmac.new(secret.encode("utf-8"), body_bytes, hashlib.sha512).hexdigest().lower()
 
 
 # Idempotent checkout
@@ -61,12 +65,23 @@ def verify_stripe(request) -> Any:
 
 
 def verify_paystack(request) -> dict:
-    body = request.body
-    signature = request.META.get("HTTP_X_PAYSTACK_SIGNATURE", "")
-    expected = compute_hmac_sha512(settings.PAYSTACK_SECRET_KEY, body)
-    if not hmac.compare_digest(signature, expected):
+    """Validate Paystack webhook using raw-body HMAC.
+
+    - Reads raw body bytes
+    - Computes HMAC-SHA512 with PAYSTACK_SECRET_KEY
+    - Constant-time compare with provided signature header
+    - Returns parsed JSON dict on success
+    """
+    body = request.body  # bytes, raw body
+    signature = (request.META.get("HTTP_X_PAYSTACK_SIGNATURE", "") or "").strip().lower()
+    expected = compute_hmac_sha512(settings.PAYSTACK_SECRET_KEY or "", body)
+    if not signature or not hmac.compare_digest(expected, signature):
         raise ValidationError("Invalid signature")
-    return json.loads(body.decode())
+    try:
+        data = json.loads(body.decode("utf-8"))
+    except Exception:
+        raise ValidationError("Invalid JSON")
+    return data
 
 
 def verify_mpesa(request) -> dict:

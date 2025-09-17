@@ -32,6 +32,10 @@ class Command(BaseCommand):
             action="store_true",
             help="Run email_recovery_drone after success",
         )
+        # Optional overrides to post an exact raw body and secret to a custom URL
+        parser.add_argument("--file", help="JSON file to post as-is (raw body)")
+        parser.add_argument("--secret", help="Override PAYSTACK_SECRET_KEY for signing")
+        parser.add_argument("--url", help="Override webhook URL (absolute or path)")
 
     def handle(self, *args, **options):
         reference = options.get("reference")
@@ -56,25 +60,35 @@ class Command(BaseCommand):
                 raise CommandError("Transaction not found")
             order_id = tx.order_id
 
-        status = options["status"]
-        event = f"charge.{status}"
-        payload = {
-            "event": event,
-            "data": {"id": int(time.time()), "reference": reference, "status": status},
-        }
-        body = json.dumps(payload)
-        signature = hmac.new(
-            settings.PAYSTACK_SECRET_KEY.encode(), body.encode(), hashlib.sha512
-        ).hexdigest()
+        # Build or load the body to replay
+        if options.get("file"):
+            with open(options["file"], "rb") as f:
+                raw = f.read()
+            # Ensure we keep raw bytes exactly as-is
+            body = raw.decode("utf-8")
+        else:
+            status = options["status"]
+            event = f"charge.{status}"
+            payload = {
+                "event": event,
+                "data": {"id": int(time.time()), "reference": reference, "status": status},
+            }
+            # Use compact JSON to ensure signature matches body bytes exactly
+            body = json.dumps(payload, separators=(",", ":"))
+        secret = (options.get("secret") or settings.PAYSTACK_SECRET_KEY).encode()
+        signature = hmac.new(secret, body.encode(), hashlib.sha512).hexdigest()
 
         if options["verbose-json"]:
             self.stdout.write(body)
             self.stdout.write(f"Signature: {signature}")
 
-        try:
-            url = reverse("orders:paystack_webhook")
-        except NoReverseMatch:
-            url = "/orders/paystack/"
+        if options.get("url"):
+            url = options["url"]
+        else:
+            try:
+                url = reverse("orders:paystack_webhook")
+            except NoReverseMatch:
+                url = "/orders/paystack/"
 
         client = Client()
         response = client.post(

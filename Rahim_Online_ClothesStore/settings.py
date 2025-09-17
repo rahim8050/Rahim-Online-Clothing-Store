@@ -90,6 +90,8 @@ INSTALLED_APPS = [
     "Mpesa",
     "utilities",
     "rest_framework",
+    "django_filters",
+    "drf_spectacular",
     "apis.apps.ApisConfig",
     "dashboards",
     "django_extensions",
@@ -115,12 +117,29 @@ MIDDLEWARE = [
 
 # Optional CORS (if installed)
 try:
+
     import corsheaders  # noqa: F401
     INSTALLED_APPS += ["corsheaders"]
     # place CORS high, before CommonMiddleware
     MIDDLEWARE.insert(3, "corsheaders.middleware.CorsMiddleware")
 except Exception:
     pass
+
+    import corsheaders  # noqa
+except ImportError:  # pragma: no cover
+    corsheaders = None
+
+if corsheaders:
+    if "corsheaders" not in INSTALLED_APPS:
+        INSTALLED_APPS += ["corsheaders"]
+    # place high in stack right after SecurityMiddleware (index 0)
+    if "corsheaders.middleware.CorsMiddleware" not in MIDDLEWARE:
+        MIDDLEWARE.insert(1, "corsheaders.middleware.CorsMiddleware")
+
+# Always append guest cart cookie clearer near the end
+if "cart.middleware.ClearGuestCookieOnLoginMiddleware" not in MIDDLEWARE:
+    MIDDLEWARE.append("cart.middleware.ClearGuestCookieOnLoginMiddleware")
+
 
 AUTHENTICATION_BACKENDS = [
     "users.backends.EmailOrUsernameModelBackend",
@@ -247,17 +266,34 @@ if USE_REDIS_CACHE and REDIS_URL:
 
 # ------------------------- Auth / API -------------------------
 REST_FRAMEWORK = {
-    "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
+    # Permissions: read for all, write for auth by default
+    "DEFAULT_PERMISSION_CLASSES": [
+        "rest_framework.permissions.IsAuthenticatedOrReadOnly",
+    ],
+    # Auth: keep JWT + Session
     "DEFAULT_AUTHENTICATION_CLASSES": [
+        "core.authentication.HMACAuthentication",
         "rest_framework_simplejwt.authentication.JWTAuthentication",
         "rest_framework.authentication.SessionAuthentication",
     ],
+    # Filtering/search/order support
+    "DEFAULT_FILTER_BACKENDS": [
+        "django_filters.rest_framework.DjangoFilterBackend",
+        "rest_framework.filters.SearchFilter",
+        "rest_framework.filters.OrderingFilter",
+    ],
+    # Pagination
+    "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
+    "PAGE_SIZE": 20,
+    # Throttling
     "DEFAULT_THROTTLE_CLASSES": [
         "rest_framework.throttling.UserRateThrottle",
     ],
     "DEFAULT_THROTTLE_RATES": {
         "user": "120/min",
     },
+    # OpenAPI schema
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
 }
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=60),
@@ -337,6 +373,15 @@ SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True
 SESSION_COOKIE_SAMESITE = "Lax"
 CSRF_COOKIE_SAMESITE = "Lax"
+
+
+# Optional: set a canonical host in prod to avoid odd redirects
+ALLOWED_HOSTS = ["127.0.0.1", "localhost"] if not IS_PROD else ["yourdomain.com"]
+
+CORS_ALLOWED_ORIGINS = env.list("CORS_ALLOWED_ORIGINS", default=[])
+# In dev allow any origin for rapid iteration
+CORS_ALLOW_ALL_ORIGINS = True
+
 
 # -------------------- Third-party / Payments -------------------
 # Geoapify
@@ -498,3 +543,10 @@ LOGGING = {
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 from django.db.models.functions import Length  # noqa: E402
 models.CharField.register_lookup(Length)
+
+# ---------------------- OpenAPI (v1) -----------------------
+SPECTACULAR_SETTINGS = {
+    "TITLE": "Rahim Online Clothing Store API",
+    "DESCRIPTION": "Versioned DRF API for catalog, cart, orders, payments, and users.",
+    "VERSION": "1.0.0",
+}
