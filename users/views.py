@@ -28,6 +28,8 @@ from django.utils.encoding import force_str
 from django.utils.http import urlsafe_base64_decode
 from django.utils.timezone import now
 from django.views import View
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
 from rest_framework import generics, permissions
 from rest_framework.exceptions import ValidationError
 
@@ -64,6 +66,61 @@ def _is_driver(u) -> bool:
 def geoapify_test(request):
     api_key = getattr(settings, "GEOAPIFY_API_KEY", "")
     return render(request, "users/accounts/dev.html", {"GEOAPIFY_API_KEY": api_key})
+
+
+@login_required
+def debug_ws_push(request, delivery_id: int):
+    """
+    Staff-only helper to push a test WS event to a delivery tracking group.
+    Accepts optional query params:
+      - type: "position_update" or "status" (default: status)
+      - lat, lng: numbers when type=position_update
+      - status: e.g. "en_route", "picked_up", "delivered"
+    Sends to both legacy (delivery.track.<id>) and current (delivery.<id>) groups.
+    """
+    if not request.user.is_staff:
+        return HttpResponseForbidden("staff only")
+
+    msg_type = (request.GET.get("type") or "status").strip()
+    status_val = (request.GET.get("status") or "en_route").strip()
+    try:
+        lat = float(request.GET.get("lat")) if request.GET.get("lat") is not None else None
+        lng = float(request.GET.get("lng")) if request.GET.get("lng") is not None else None
+    except Exception:
+        lat = lng = None
+
+    layer = get_channel_layer()
+    if not layer:
+        return HttpResponse("no channel layer", status=503)
+
+    # Legacy consumer group
+    try:
+        async_to_sync(layer.group_send)(
+            f"delivery.track.{int(delivery_id)}",
+            {
+                "type": "broadcast",
+                "payload": (
+                    {"type": "position_update", "lat": lat, "lng": lng}
+                    if msg_type == "position_update"
+                    else {"type": "status", "status": status_val}
+                ),
+            },
+        )
+    except Exception:
+        pass
+
+    # Current consumer group
+    try:
+        payload = (
+            {"type": "delivery.event", "kind": "position_update", "lat": lat, "lng": lng}
+            if msg_type == "position_update"
+            else {"type": "delivery.event", "kind": "status", "status": status_val}
+        )
+        async_to_sync(layer.group_send)(f"delivery.{int(delivery_id)}", payload)
+    except Exception:
+        pass
+
+    return HttpResponse("ok")
 
 
 # -------------------- Orders list (optimized) --------------------

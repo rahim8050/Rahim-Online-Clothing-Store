@@ -23,23 +23,16 @@ from core.views import healthz
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    # Home
+    path('', product_views.product_list, name='index'),
 
-
+    # Primary app mounts
     path('utilities/', include('utilities.urls')),
     path('cart/', include('cart.urls')),
     path('orders/', include(('orders.urls', 'orders'), namespace='orders')),
 
-    # Home
-    path('', product_views.product_list, name='index'),
-
-
+    # WS debug helper
     path("debug/ws-push/<int:delivery_id>/", debug_ws_push, name="debug-ws-push"),
-    path('utilities/', include('utilities.urls')),
-    path('cart/', include('cart.urls')),
-    path('orders/', include(('orders.urls', 'orders'), namespace='orders')),
-
-    # Home
-    path('', product_views.product_list, name='index'),
 
 
     # --- Dashboards (single source: users.views) ---
@@ -53,9 +46,6 @@ urlpatterns = [
 
 
     # API prefix (align with your frontend: use /apis/... in fetch)
-    path('apis/', include('apis.urls')),
-
-    # Legacy API endpoints (existing, non-versioned)
     path('apis/', include('apis.urls')),
     path('api/assistant/', include('assistant.urls')),
     # New versioned API (DRF-only), per-app mounts

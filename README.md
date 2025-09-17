@@ -33,13 +33,7 @@ Messages follow a unified schema:
 
 Redis (set via `REDIS_URL`) powers the channel layer and cache; configure it in production with password/SSL as needed.
 
-const wsScheme = location.protocol === "https:" ? "wss" : "ws";
-const ws = new WebSocket(`${wsScheme}://${location.host}/ws/delivery/track/DELIVERY_ID/`);
-ws.onmessage = (e) => console.log(JSON.parse(e.data));
 ```
-
-Replace `DELIVERY_ID` with a real identifier. Messages follow a unified schema:
->>>>>>> development
 
 ```
 {"type": "position_update", "lat": 1.23, "lng": 4.56}
