@@ -1,16 +1,11 @@
 {% extends "base.html" %}
 
 {% block title %}Rahim Online - All Products{% endblock %}
+{% load static %}
 
 {% block content %}
 
-<script nonce="{{ request.csp_nonce }}">
-window.initialData = {
-    products: {{ products|safe }},
-    categories: {{ categories|safe }},
-    pagination: {{ pagination_data|safe }}
-}
-</script>
+<script id="initial-data" type="application/json" nonce="{{ request.csp_nonce }}">{{ initial_data_json|safe }}</script>
 
 <div id="productApp" class="container mx-auto p-4 flex">
     <aside class="w-full md:w-[16%] p-4">
@@ -65,8 +60,10 @@ window.initialData = {
     </main>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/vue@2"></script>
-<script src="https://cdn.jsdelivr.net/npm/vue@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/vue@2" defer></script>
+<script src="{% static 'js/products.js' %}" defer></script>
+{% comment %} Inline Vue init moved to static/js/products.js {% endcomment %}
+{% comment %}
 <script nonce="{{ request.csp_nonce }}">
 function capitalizeWords(text) {
     return text ? text.toLowerCase().split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') : '';
@@ -183,6 +180,7 @@ new Vue({
     }
 });
 </script>
+{% endcomment %}
 
 
 {% endblock %}
