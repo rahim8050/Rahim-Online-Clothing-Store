@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <title>Geoapify Test (No Widget)</title>
-  <style>
+  <style nonce="{{ request.csp_nonce|default:'' }}">
     body{font-family:system-ui;margin:24px;max-width:720px}
     .input{width:100%;padding:10px;border:1px solid #d1d5db;border-radius:8px}
     .list{border:1px solid #e5e7eb;border-radius:8px;margin-top:6px;overflow:hidden;display:none}

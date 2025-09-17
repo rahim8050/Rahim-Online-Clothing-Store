@@ -13,6 +13,40 @@ from users import services  # <-- correct: we now defined the functions here
 
 User = get_user_model()
 
+
+
+# ----------------------------------------
+# Auth / Me
+# ----------------------------------------
+class WhoAmISerializer(serializers.Serializer):
+    id = serializers.IntegerField(read_only=True)
+    email = serializers.EmailField(read_only=True, allow_null=True)
+    role = serializers.SerializerMethodField()
+    role_label = serializers.SerializerMethodField()
+
+    def get_role(self, obj):
+        try:
+            return getattr(obj, "effective_role", None) or getattr(obj, "role", None) or "customer"
+        except Exception:
+            return "customer"
+
+    def get_role_label(self, obj):
+        # Map code -> label using User.Role choices if available
+        code = self.get_role(obj)
+        try:
+            choices = dict(getattr(User, "Role").choices)
+            return choices.get(code, code)
+        except Exception:
+            labels = {
+                "customer": "Customer",
+                "vendor": "Vendor",
+                "vendor_staff": "Vendor Staff",
+                "driver": "Driver",
+                "admin": "Admin",
+            }
+            return labels.get(code, code)
+
+
 # ----------------------------------------
 # Helpers
 # ----------------------------------------
@@ -292,6 +326,59 @@ class VendorApplySerializer(serializers.ModelSerializer):
         user = self.context["request"].user
         # Your VendorApplication should have fields named as above + user + status
         return VendorApplication.objects.create(user=user, status="pending", **validated)
+
+
+
+# ------------------------
+# KYC apply (required)
+# ------------------------
+import re
+
+KRA_PIN_RE = re.compile(r"^[A-Z]\d{9}[A-Z]$", re.I)
+
+
+class VendorApplicationCreateSerializer(serializers.ModelSerializer):
+    company_name = serializers.CharField(max_length=120, allow_blank=False, required=True)
+    phone = serializers.CharField(max_length=32, allow_blank=False, required=True)
+    kra_pin = serializers.CharField(max_length=32, allow_blank=False, required=True)
+    national_id = serializers.CharField(max_length=32, allow_blank=False, required=True)
+    document = serializers.FileField(required=True)
+    note = serializers.CharField(allow_blank=True, required=False)
+
+    class Meta:
+        model = VendorApplication
+        fields = [
+            "company_name",
+            "phone",
+            "kra_pin",
+            "national_id",
+            "document",
+            "note",
+        ]
+
+    def validate_company_name(self, v):
+        v = (v or "").strip()
+        if not v:
+            raise serializers.ValidationError("Company name is required.")
+        return v
+
+    def validate_kra_pin(self, v):
+        v = (v or "").strip().upper()
+        if not KRA_PIN_RE.match(v):
+            raise serializers.ValidationError("KRA PIN must look like A123456789B.")
+        return v
+
+    def validate_phone(self, v):
+        v = (v or "").strip()
+        if len(v) < 7:
+            raise serializers.ValidationError("Phone number looks too short.")
+        return v
+
+    def validate_document(self, f):
+        if getattr(f, "size", 0) > 5 * 1024 * 1024:
+            raise serializers.ValidationError("File too large (max 5MB).")
+        return f
+
 
 
 # ----------------------------------------

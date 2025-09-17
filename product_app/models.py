@@ -16,6 +16,11 @@ class Category(models.Model):
 
 
 class Product(models.Model):
+    class Status(models.TextChoices):
+        DRAFT = "draft", "Draft"
+        ACTIVE = "active", "Active"
+        ARCHIVED = "archived", "Archived"
+
     category = models.ForeignKey(
         Category, related_name="products", on_delete=models.CASCADE
     )
@@ -30,8 +35,17 @@ class Product(models.Model):
     description = models.TextField(blank=True)
     price = models.DecimalField(max_digits=10, decimal_places=2)
     available = models.BooleanField(default=True)
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.ACTIVE,
+        db_index=True,
+    )
     created = models.DateTimeField(auto_now_add=True)
     updated = models.DateTimeField(auto_now=True)
+    # Keep for DB compatibility (MySQL strict error 1364): ensure default exists
+    version = models.PositiveIntegerField(default=1)
+    product_version = models.PositiveIntegerField(default=1) 
     image = models.ImageField(upload_to="products", blank=True, null=True)
 
     def __str__(self) -> str:
