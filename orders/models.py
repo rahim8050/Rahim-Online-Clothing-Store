@@ -1,14 +1,14 @@
+# orders/models.py
 from uuid import uuid4
 from decimal import Decimal, ROUND_HALF_UP
 
 from django.conf import settings
 from django.core.validators import MinValueValidator, MaxValueValidator
-from django.db import models
+from django.db import models, transaction
 from django.db.models import CheckConstraint, Index, Q
 from django.utils import timezone
 
 from product_app.models import Product, Warehouse
-
 
 # 6-decimal quantum for geo coordinates
 Q6 = Decimal("0.000001")
@@ -23,7 +23,7 @@ class Order(models.Model):
     address = models.CharField(max_length=250)
 
     # (Optional) caller-provided coords — keep nullable
-    latitude  = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     location_address = models.TextField(null=True, blank=True)
     coords_locked = models.BooleanField(default=False)
@@ -56,7 +56,7 @@ class Order(models.Model):
 
     class Meta:
         constraints = [
-            # latitude/longitude either both NULL or both in range
+            # latitude/longitude either both NULL or valid range
             CheckConstraint(
                 check=(Q(latitude__gte=-90) & Q(latitude__lte=90)) | Q(latitude__isnull=True),
                 name="order_lat_range",
@@ -101,6 +101,11 @@ class Order(models.Model):
     def __str__(self):
         return f"Order #{self.id} for {self.full_name}"
 
+    @property
+    def is_editable(self) -> bool:
+        """Allow editing only while unpaid and stock not reserved."""
+        return (not self.paid) and (not self.stock_updated)
+
 
 class OrderItem(models.Model):
     DELIVERY_STATUS_CHOICES = [
@@ -112,6 +117,9 @@ class OrderItem(models.Model):
 
     order = models.ForeignKey(Order, related_name="items", on_delete=models.CASCADE)
     product = models.ForeignKey(Product, related_name="order_items", on_delete=models.CASCADE)
+    # keep versioning hook for catalogs that mutate Product fields
+    product_version = models.PositiveIntegerField(default=1)
+
     price = models.DecimalField(
         max_digits=10,
         decimal_places=2,
@@ -154,24 +162,21 @@ def channel_key_default() -> str:
 
 class Delivery(models.Model):
     class Status(models.TextChoices):
-        PENDING   = "pending", "Pending"
-        ASSIGNED  = "assigned", "Assigned"
+        PENDING = "pending", "Pending"
+        ASSIGNED = "assigned", "Assigned"
         PICKED_UP = "picked_up", "Picked up"
-        EN_ROUTE  = "en_route", "En route"
+        EN_ROUTE = "en_route", "En route"
         DELIVERED = "delivered", "Delivered"
         CANCELLED = "cancelled", "Cancelled"
 
     order = models.ForeignKey("orders.Order", related_name="deliveries", on_delete=models.CASCADE)
     driver = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        null=True,
-        blank=True,
-        related_name="deliveries",
-        on_delete=models.SET_NULL,
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        related_name="deliveries", on_delete=models.SET_NULL,
     )
 
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING, db_index=True)
-    assigned_at  = models.DateTimeField(null=True, blank=True)
+    assigned_at = models.DateTimeField(null=True, blank=True)
     picked_up_at = models.DateTimeField(null=True, blank=True)
     delivered_at = models.DateTimeField(null=True, blank=True)
 
@@ -199,6 +204,7 @@ class Delivery(models.Model):
         max_digits=9, decimal_places=6, null=True, blank=True,
         validators=[MinValueValidator(-180), MaxValueValidator(180)],
     )
+
     last_ping_at = models.DateTimeField(null=True, blank=True)
 
     channel_key = models.CharField(max_length=32, unique=True, default=channel_key_default, editable=False)
@@ -208,12 +214,11 @@ class Delivery(models.Model):
 
     class Meta:
         constraints = [
-            # when "moving", driver must be set
+            # if moving (not pending/delivered/cancelled) -> driver required
             CheckConstraint(
                 name="delivery_driver_required_when_moving",
                 check=Q(status__in=["pending", "delivered", "cancelled"]) | Q(driver__isnull=False),
             ),
-            # allow NULL or valid range for all coords
             CheckConstraint(
                 name="delivery_dest_lat_range_or_null",
                 check=Q(dest_lat__isnull=True) | (Q(dest_lat__gte=-90) & Q(dest_lat__lte=90)),
@@ -244,6 +249,7 @@ class Delivery(models.Model):
         return f"delivery.{self.pk}"
 
     def snapshot_endpoints_from_order(self):
+        """Copy order endpoints to delivery (origin from first item's warehouse if available)."""
         self.dest_lat = self.order.dest_lat
         self.dest_lng = self.order.dest_lng
         item = self.order.items.select_related("warehouse").first()
@@ -252,17 +258,120 @@ class Delivery(models.Model):
             self.origin_lat = wh.latitude
             self.origin_lng = wh.longitude
 
-    def mark_assigned(self, driver):
+    # ---------- state transitions (idempotent + persisted) ----------
+    @transaction.atomic
+    def mark_assigned(self, driver, when=None):
+        """pending/assigned -> assigned; forbid after delivered/cancelled."""
+        when = when or timezone.now()
+        if self.status in (self.Status.DELIVERED, self.Status.CANCELLED):
+            raise ValueError("Cannot assign a delivered or cancelled delivery")
         self.driver = driver
+        if not self.assigned_at:
+            self.assigned_at = when
         self.status = self.Status.ASSIGNED
-        self.assigned_at = timezone.now()
+        self.save(update_fields=["driver", "assigned_at", "status", "updated_at"])
+
+    @transaction.atomic
+    def mark_picked_up(self, by=None, when=None):
+        """assigned -> picked_up (idempotent)."""
+        when = when or timezone.now()
+        if self.status not in {self.Status.ASSIGNED, self.Status.PICKED_UP}:
+            raise ValueError("Can only pick up from ASSIGNED")
+        if not self.picked_up_at:
+            self.picked_up_at = when
+        self.status = self.Status.PICKED_UP
+        self.save(update_fields=["picked_up_at", "status", "updated_at"])
+
+    @transaction.atomic
+    def mark_en_route(self, by=None, when=None):
+        """assigned/picked_up -> en_route; set picked_up_at if missing."""
+        when = when or timezone.now()
+        if self.status not in {self.Status.ASSIGNED, self.Status.PICKED_UP, self.Status.EN_ROUTE}:
+            raise ValueError("Can only go EN_ROUTE from ASSIGNED/PICKED_UP")
+        if not self.picked_up_at:
+            self.picked_up_at = when
+        self.status = self.Status.EN_ROUTE
+        self.save(update_fields=["picked_up_at", "status", "updated_at"])
+
+    @transaction.atomic
+    def mark_delivered(self, by=None, when=None):
+        """picked_up/en_route -> delivered (idempotent)."""
+        when = when or timezone.now()
+        if self.status not in {self.Status.PICKED_UP, self.Status.EN_ROUTE, self.Status.DELIVERED}:
+            raise ValueError("Can only DELIVER from PICKED_UP/EN_ROUTE")
+        if not self.picked_up_at:
+            self.picked_up_at = when
+        if not self.delivered_at:
+            self.delivered_at = when
+        self.status = self.Status.DELIVERED
+        self.save(update_fields=["picked_up_at", "delivered_at", "status", "updated_at"])
+
+    # ---------- location hygiene ----------
+    def _norm_pair(self, lat, lng):
+        if lat is None or lng is None:
+            return lat, lng
+        try:
+            lat = float(lat)
+            lng = float(lng)
+        except Exception:
+            return lat, lng
+        if abs(lat) > 90 and abs(lng) <= 180:  # obvious swap
+            lat, lng = lng, lat
+        lat = max(-90.0, min(90.0, lat))
+        lng = max(-180.0, min(180.0, lng))
+        lat = Decimal(str(lat)).quantize(Q6, rounding=ROUND_HALF_UP)
+        lng = Decimal(str(lng)).quantize(Q6, rounding=ROUND_HALF_UP)
+        return lat, lng
 
     def save(self, *args, **kwargs):
-        for f in ("origin_lat", "origin_lng", "dest_lat", "dest_lng", "last_lat", "last_lng"):
+        # normalize coordinate fields
+        self.origin_lat, self.origin_lng = self._norm_pair(self.origin_lat, self.origin_lng)
+        self.dest_lat, self.dest_lng = self._norm_pair(self.dest_lat, self.dest_lng)
+        self.last_lat, self.last_lng = self._norm_pair(self.last_lat, self.last_lng)
+        super().save(*args, **kwargs)
+
+
+# =========================
+# Delivery history (optional trail)
+# =========================
+class DeliveryPing(models.Model):
+    delivery = models.ForeignKey(Delivery, related_name="pings", on_delete=models.CASCADE)
+    lat = models.DecimalField(max_digits=9, decimal_places=6)
+    lng = models.DecimalField(max_digits=9, decimal_places=6)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            Index(fields=["delivery", "created_at"]),
+            Index(fields=["created_at"]),
+        ]
+
+    def save(self, *args, **kwargs):
+        # normalize to 6 dp
+        for f in ("lat", "lng"):
             v = getattr(self, f, None)
             if v is not None:
                 setattr(self, f, Decimal(v).quantize(Q6, rounding=ROUND_HALF_UP))
-        super().save(*args, **kwargs)
+        return super().save(*args, **kwargs)
+
+
+class DeliveryEvent(models.Model):
+    TYPE_CHOICES = (
+        ("assign", "Assigned"),
+        ("unassign", "Unassigned"),
+        ("picked", "Picked up"),
+        ("en_route", "En route"),
+        ("delivered", "Delivered"),
+        ("position", "Position"),
+    )
+    delivery = models.ForeignKey('orders.Delivery', on_delete=models.CASCADE, related_name='events')
+    actor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+    type = models.CharField(max_length=20, choices=TYPE_CHOICES)
+    at = models.DateTimeField(auto_now_add=True)
+    note = models.JSONField(null=True, blank=True)
+
+    class Meta:
+        indexes = [Index(fields=["delivery", "at"]), Index(fields=["at"])]
 
 
 # =========================
@@ -288,6 +397,17 @@ class Transaction(models.Model):
     )
 
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+
+    # idempotency for webhooks (raw body hash)
+    body_sha256 = models.CharField(
+        max_length=64,
+        unique=True,
+        db_index=True,
+        null=True,
+        blank=True,
+        help_text="SHA256 of the raw webhook body for idempotency"
+    )
+
     order = models.ForeignKey(Order, on_delete=models.CASCADE)
     email = models.EmailField(blank=True, null=True)
     amount = models.DecimalField(max_digits=10, decimal_places=2)

@@ -1,0 +1,100 @@
+/* Material You (M3) design tokens
+   - Light and Dark color schemes
+   - Elevation, radii, state layers, focus ring
+   - Hybrid theme overlays via [data-theme='hybrid']
+*/
+
+:root {
+  /* Color tokens (light) */
+  --m3-primary:        #6750A4;
+  --m3-on-primary:     #FFFFFF;
+  --m3-primary-container: #EADDFF;
+  --m3-on-primary-container: #21005D;
+
+  --m3-secondary:      #625B71;
+  --m3-on-secondary:   #FFFFFF;
+  --m3-secondary-container: #E8DEF8;
+  --m3-on-secondary-container: #1D192B;
+
+  --m3-tertiary:       #7D5260;
+  --m3-on-tertiary:    #FFFFFF;
+  --m3-tertiary-container: #FFD8E4;
+  --m3-on-tertiary-container: #31111D;
+
+  --m3-surface:        #FFFBFE;
+  --m3-surface-variant:#E7E0EC;
+  --m3-on-surface:     #1C1B1F;
+  --m3-on-surface-variant:#49454F;
+  --m3-outline:        #79747E;
+  --m3-outline-variant:#C4C7C5;
+
+  --m3-error:          #B3261E;
+  --m3-on-error:       #FFFFFF;
+  --m3-error-container:#F9DEDC;
+  --m3-on-error-container:#410E0B;
+
+  /* Elevation (shadows) */
+  --m3-elevation-0: none;
+  --m3-elevation-1: 0 1px 2px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
+  --m3-elevation-2: 0 2px 4px rgba(0,0,0,0.14), 0 3px 6px rgba(0,0,0,0.10);
+  --m3-elevation-3: 0 4px 8px rgba(0,0,0,0.14), 0 6px 12px rgba(0,0,0,0.10);
+  --m3-elevation-4: 0 8px 16px rgba(0,0,0,0.18);
+  --m3-elevation-5: 0 12px 20px rgba(0,0,0,0.22);
+
+  /* Radii & Spacing */
+  --m3-radius-sm: 8px;
+  --m3-radius-md: 12px;
+  --m3-radius-lg: 16px;
+  --m3-radius-xl: 28px;
+  --m3-spacing:    8px;
+
+  /* State layers */
+  --m3-state-hover: rgba(0,0,0,0.08);
+  --m3-state-focus: rgba(0,0,0,0.12);
+  --m3-state-pressed: rgba(0,0,0,0.16);
+
+  /* Focus ring */
+  --m3-focus: 0 0 0 3px rgba(103,80,164,0.40);
+}
+
+.dark {
+  --m3-primary:        #D0BCFF;
+  --m3-on-primary:     #381E72;
+  --m3-primary-container: #4F378B;
+  --m3-on-primary-container: #EADDFF;
+
+  --m3-secondary:      #CCC2DC;
+  --m3-on-secondary:   #332D41;
+  --m3-secondary-container: #4A4458;
+  --m3-on-secondary-container: #E8DEF8;
+
+  --m3-tertiary:       #EFB8C8;
+  --m3-on-tertiary:    #492532;
+  --m3-tertiary-container: #633B48;
+  --m3-on-tertiary-container: #FFD8E4;
+
+  --m3-surface:        #1C1B1F;
+  --m3-surface-variant:#49454F;
+  --m3-on-surface:     #E6E1E5;
+  --m3-on-surface-variant:#CAC4D0;
+  --m3-outline:        #938F99;
+  --m3-outline-variant:#444746;
+
+  --m3-error:          #F2B8B5;
+  --m3-on-error:       #601410;
+  --m3-error-container:#8C1D18;
+  --m3-on-error-container:#F9DEDC;
+
+  --m3-state-hover: rgba(255,255,255,0.08);
+  --m3-state-focus: rgba(255,255,255,0.12);
+  --m3-state-pressed: rgba(255,255,255,0.16);
+  --m3-focus: 0 0 0 3px rgba(208,188,255,0.40);
+}
+
+/* Hybrid theme extras (visual only): gradients and enhanced shadows */
+html[data-theme='hybrid'] {
+  --hybrid-appbar-gradient: linear-gradient(45deg, rgba(103,80,164,0.9), rgba(79,55,139,0.9));
+  --hybrid-fab-gradient: linear-gradient(135deg, #7C4DFF, #448AFF);
+  --hybrid-shadow: 0 16px 32px rgba(0,0,0,0.22);
+}
+

@@ -4,15 +4,18 @@ from django.apps import apps
 from django.http import HttpResponseForbidden
 
 from users.constants import VENDOR
-from users.utils import is_vendor_or_staff
+from users.utils import is_vendor_or_staff  # keep resolve_vendor_owner_for only if you actually use it
+
 
 def _vendor_id_for(user):
-    """Return vendor_id for a Vendor or VendorStaff user; else None."""
+    """Return vendor_id for a Vendor owner or an active VendorStaff; else None."""
     vid = getattr(user, "vendor_id", None)
     if vid:
         return vid
+    # Owner: in VENDOR group → treat user's own id as owner id
     if user.groups.filter(name=VENDOR).exists():
         return user.id
+    # Active staff: map to owner_id via VendorStaff
     try:
         VendorStaff = apps.get_model("users", "VendorStaff")
         return (
@@ -23,6 +26,7 @@ def _vendor_id_for(user):
         )
     except Exception:
         return None
+
 
 @login_required
 def vendor_dashboard(request):
@@ -39,18 +43,20 @@ def vendor_dashboard(request):
         return render(request, "dashboards/vendor.html", {
             "stats": {"products_total": 0, "active_products": 0, "order_items_total": 0},
             "products": [], "order_items": [],
-            "note": "Your account is not linked to a vendor profile yet."
+            "note": "Your account is not linked to a vendor profile yet.",
         })
 
-    # Stats (cheap counts)
+    # Stats
     products_qs = Product.objects.filter(owner_id=vendor_id)
     stats = {
         "products_total": products_qs.count(),
         "active_products": products_qs.filter(available=True).count(),
-        "order_items_total": OrderItem.objects.filter(product__owner_id=vendor_id).count(),
+        "order_items_total": apps.get_model("orders", "OrderItem").objects.filter(
+            product__owner_id=vendor_id
+        ).count(),
     }
 
-    # Lists (limited + narrow field selection)
+    # Lists (lightweight)
     products = (
         products_qs
         .only("id", "name", "price", "available")
@@ -71,3 +77,12 @@ def vendor_dashboard(request):
         "order_items": order_items,
         "note": "",
     })
+
+
+@login_required
+def vendor_live(request):
+    """Live board that the front-end populates (polls APIs / websockets)."""
+    u = request.user
+    if not is_vendor_or_staff(u):
+        return HttpResponseForbidden("Insufficient role")
+    return render(request, "dashboards/vendor_live.html", {})

@@ -13,6 +13,7 @@ from .models import Category,Product
 
 
 def product_list(request, category_slug=None):
+    print("🔥 product_list view triggered")
     categories = Category.objects.all()
     category = None
 
@@ -53,11 +54,15 @@ def product_list(request, category_slug=None):
         'total_pages': 1
     }
 
+    initial_data = {
+        'products': product_list,
+        'categories': category_list,
+        'pagination': pagination_data,
+    }
+
     return render(request, 'products/product/list.html', {
-        'categories': json.dumps(category_list),
-        'products': json.dumps(product_list),
+        'initial_data_json': mark_safe(json.dumps(initial_data)),
         'category': category,
-        'pagination_data': json.dumps(pagination_data),
     })
 
 
@@ -102,12 +107,45 @@ def SearchProduct(request, category_slug=None):
 
     paginator = Paginator(products, 12)
     page_number = request.GET.get('page')
-    products = paginator.get_page(page_number)
+    page_obj = paginator.get_page(page_number)
+
+    # Serialize current page products
+    product_list = []
+    for product in page_obj.object_list:
+        product_list.append({
+            'id': product.id,
+            'name': product.name,
+            'description': product.description,
+            'price': str(product.price),
+            'image_url': product.image.url if product.image else '',
+            'category_slug': product.category.slug if product.category else '',
+            'detail_url': product.get_absolute_url()
+        })
+
+    # Serialize categories
+    categories = Category.objects.all()
+    category_list = []
+    for cat in categories:
+        category_list.append({
+            'id': cat.id,
+            'name': cat.name,
+            'slug': cat.slug
+        })
+
+    pagination_data = {
+        'current_page': page_obj.number,
+        'total_pages': paginator.num_pages,
+    }
+
+    initial_data = {
+        'products': product_list,
+        'categories': category_list,
+        'pagination': pagination_data,
+    }
 
     return render(request, 'products/product/list.html', {
         'category': category,
-        'products': products,
-        'categories': Category.objects.all()
+        'initial_data_json': mark_safe(json.dumps(initial_data)),
     })
 
 # def SearchProduct(request):
