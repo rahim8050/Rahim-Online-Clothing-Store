@@ -1,97 +1,70 @@
-# --- Core runtime ---
-Django==5.2.1
-daphne==4.2.1
+anyio==4.10.0
+asgiref==3.9.1
+attrs==25.3.0
+autobahn==24.4.2
+Automat==25.4.16
+certifi==2025.4.26
+cffi==1.17.1
 channels==4.3.1
 channels_redis==4.3.0
-whitenoise==6.9.0
+charset-normalizer==3.4.2
+constantly==23.10.4
+crispy-bootstrap5==2025.4
+cryptography==45.0.3
+daphne==4.2.1
 dj-database-url==3.0.1
-
-# DB drivers (Render usually = Postgres)
-psycopg[binary]==3.2.9
-# If you truly use MySQL somewhere, keep this; otherwise remove to speed builds:
-mysqlclient==2.2.7
-
-# REST & auth
+Django==5.2.1
+django-crispy-forms==2.4
+django-daraja==1.3.0
+django-environ==0.12.0
+django-extensions==4.1
+django-tailwind==4.0.1
+django-widget-tweaks==1.5.0
 djangorestframework==3.16.0
 djangorestframework_simplejwt==5.5.0
-django-filter==24.*        # keep your wildcard; pin later if you want
+django-filter==24.*
 drf-spectacular==0.27.*
-
-# CORS / CSP
-django-cors-headers==4.7.0
-django-csp==4.0
-
-# Templates / forms
-django-crispy-forms==2.4
-django-widget-tweaks==1.5.0
-crispy-bootstrap5==2025.4  # you had this; keep if it works in your project
-
-# Env & utils
-python-dotenv==1.1.0
-python-decouple==3.8
-django-environ==0.12.0
-sqlparse==0.5.3
-typing_extensions==4.14.1
-packaging==25.0
-tzdata==2025.2
-
-# Media / files
-pillow==11.2.1
-cloudinary==1.44.1
-django-cloudinary-storage==0.3.0
-
-# HTTP / async
-httpx==0.28.1
-httpcore==1.0.9
-anyio==4.10.0
-sniffio==1.3.1
-charset-normalizer==3.4.2
-idna==3.10
-urllib3==2.4.0
-requests==2.32.3
-
-# Channels / websockets stack
-asgiref==3.9.1
+django-cors-headers==4.*
+geographiclib==2.0
+geopy==2.4.1
 h11==0.16.0
-h2==4.3.0
-hyperframe==6.1.0
-hpack==4.1.0
-priority==1.3.0
+httpcore==1.0.9
+httpx==0.28.1
+hyperlink==21.0.0
+idna==3.10
+incremental==24.7.2
+msgpack==1.1.1
+mysqlclient==2.2.7
+paypalrestsdk==1.13.3
+pillow==11.2.1
 
-# Security
-cryptography==45.0.3
-pyOpenSSL==25.1.0
-service-identity==24.2.0
+psycopg==3.2.9
+psycopg-binary==3.2.9
+
 pyasn1==0.6.1
 pyasn1_modules==0.4.2
-cffi==1.17.1
 pycparser==2.22
-
-# Tasks / celery (only if you use Celery in prod on Render)
-celery==5.5.3
-kombu==5.5.4
-billiard==4.2.1
-amqp==5.3.1
-vine==5.1.0
-redis==5.2.1
-msgpack==1.1.1
-
-# Payments / geo / misc
-stripe==12.3.0
-paypalrestsdk==1.13.3
-geopy==2.4.1
-geographiclib==2.0
-
-# Tailwind for local/dev builds; consider removing in production images:
-django-tailwind==4.0.1
-
-# CLI niceties (safe)
-click==8.2.1
-click-didyoumean==0.3.1
-click-plugins==1.1.1.2
-click-repl==0.3.0
-prompt_toolkit==3.0.51
-Pygments==2.19.2
-wcwidth==0.2.13
-colorama==0.4.6
+PyJWT==2.9.0
+pyOpenSSL==25.1.0
+python-decouple==3.8
+python-dotenv==1.1.0
+redis==6.4.0
+requests==2.32.3
+service-identity==24.2.0
+setuptools==80.9.0
 six==1.17.0
+sniffio==1.3.1
+sqlparse==0.5.3
+stripe==12.3.0
+Twisted==25.5.0
+txaio==25.6.1
+typing_extensions==4.14.1
+tzdata==2025.2
+urllib3==2.4.0
+wheel==0.45.1
+
+
+zope.interface==7.2
+psycopg[binary]==3.2.9
+whitenoise==6.7.0
+
