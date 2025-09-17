@@ -74,11 +74,7 @@
 </div>
 
 <!-- Product JSON injection -->
-<<<<<<< HEAD
-<script id="product-data" type="application/json">
-=======
 <script id="product-data" type="application/json" nonce="{{ request.csp_nonce }}">
->>>>>>> development
   {{ product_json|safe }}
 </script>
 {% endblock %}
