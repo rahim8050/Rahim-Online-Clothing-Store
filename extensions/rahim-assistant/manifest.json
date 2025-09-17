@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "Rahim Assistant",
+  "version": "1.0.0",
+  "content_scripts": [
+    {
+      "matches": [
+        "http://127.0.0.1:8001/*",
+        "http://localhost:8001/*"
+      ],
+      "js": ["checker_312i.js", "dataeloader_312i.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["assets/*"],
+      "matches": ["<all_urls>"]
+    }
+  ],
+  "permissions": []
+}
+

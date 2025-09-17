@@ -7,6 +7,10 @@ from users.views import (
     RegisterUser,
     activate,
     profile_view,
+
+    profile_settings_view,
+    change_password_view,
+
     my_orders,
     geoapify_test,
     vendor_dashboard,
@@ -16,6 +20,12 @@ from users.views import (
     VendorApplicationApproveAPI,
     driver_sim,
     driver_live,
+
+
+    after_login,
+
+    vendor_apply_deprecated,
+
 
 )
 from django.urls import reverse_lazy
@@ -28,12 +38,19 @@ path("register/",RegisterUser.as_view(),name="register"),
 path("logout/", Logout.as_view(), name="logout"),
 path('activate/<uidb64>/<token>/', activate, name='activate'),
 path('profile/', profile_view, name='profile'),
+path('profile/settings/', profile_settings_view, name='profile_settings'),
+path('profile/password/', change_password_view, name='change_password'),
 path('resend-activation/', ResendActivationEmailView.as_view(), name='resend_activation'),
 path('my-orders/', my_orders, name='my_orders'),
 path('vendor-dashboard/', vendor_dashboard, name='vendor_dashboard'),
     path('driver-dashboard/', driver_dashboard, name='driver_dashboard'),
     path('after-login/', after_login, name='after_login'),
+
     path('vendor-applications/', VendorApplyAPI.as_view(), name='vendor-apply'),
+
+    # Deprecated: delegate to /apis/vendor/apply/
+    path('vendor-applications/', vendor_apply_deprecated, name='vendor-apply'),
+
     path('vendor-applications/<int:pk>/approve/', VendorApplicationApproveAPI.as_view(), name='vendor-application-approve'),
 # Password reset URLs
     # These URLs are used for password reset functionality
@@ -55,6 +72,9 @@ path('vendor-dashboard/', vendor_dashboard, name='vendor_dashboard'),
 
 
    
+
+     path("after-login/", after_login, name="after_login"),
+
     path('reset_password_complete/', auth_views.PasswordResetCompleteView.as_view(
         template_name='users/accounts/password_reset_complete.html'
     ), name='password_reset_complete'),

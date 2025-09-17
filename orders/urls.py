@@ -1,63 +1,51 @@
+# orders/urls.py
 from django.urls import path
-
-from .views import (
-    order_create,
-    order_confirmation,
-    stripe_checkout,
-    paystack_checkout,
-    paypal_checkout,
-    paypal_execute,
-    paypal_payment,
-    payment_success,
-    payment_cancel,
-    Stripe_payment_success,
-    stripe_webhook,
-    paystack_webhook,
-    paypal_webhook,
-    paystack_payment_confirm,
-    get_location_info,
-    save_location,
-    geo_autocomplete,
-    track_order,
-    driver_deliveries_page,
-    driver_deliveries_api,  
-    driver_location_api,
-    driver_action_api,
-    driver_route_api,
-)
+from . import views
 
 app_name = "orders"
 
 urlpatterns = [
-    path('create', order_create, name="order_create"),
-    path("confirmation/<int:order_id>", order_confirmation, name="order_confirmation"),
-    # Reverse geocode API
-    path('api/reverse-geocode/', get_location_info, name='reverse_geocode'),
-    path("api/geo/autocomplete/", geo_autocomplete, name="geo-autocomplete"),
-    # Stripe payment urls (not linked from UI)
-    path('stripe/<int:order_id>/', stripe_checkout, name='stripe_checkout'),
-    path("success/<int:order_id>/", Stripe_payment_success, name="payment_success"),
-    path("webhook/stripe/", stripe_webhook, name="stripe-webhook"),
-    # Paystack payment urls
-    path('paystack/<int:order_id>/', paystack_checkout, name='paystack_checkout'),
-    path('paystack/confirm/', paystack_payment_confirm, name='paystack_payment_confirm'),
-    # ✅ New - maps directly to /webhook/paystack/
-    path('orders/paystack/confirm/', paystack_payment_confirm, name='paystack_payment_confirm'),
-    #  New - maps directly to /webhook/paystack/
-    path("paystack/", paystack_webhook, name="paystack_webhook"),
-    # PayPal payment urls
-    path('paypal/<int:order_id>/', paypal_checkout, name='paypal_checkout'),
-    path('paypal/execute/<int:order_id>/', paypal_execute, name='paypal_execute'),
-    path('webhook/paypal/', paypal_webhook, name='paypal_webhook'),
-    path("orders/paypal/<int:order_id>/", paypal_payment, name="paypal-payment"),
-    path('payment/success/<int:order_id>/', payment_success, name='payment_success'),
-    path('payment/cancel/<int:order_id>/', payment_cancel, name='payment_cancel'),
-    path('save-location/', save_location, name='save_location'),
-    path("orders/<int:order_id>/track/", track_order, name="order-track"),
-    path("driver/deliveries/", driver_deliveries_page, name="driver-deliveries"),  # HTML page
-    path("apis/driver/deliveries/", driver_deliveries_api, name="driver-deliveries-api"),  # JSON
-    path("apis/driver/location/", driver_location_api, name="driver-location-api"), 
-     path("apis/driver/action/",     driver_action_api,     name="driver-action-api"),
-     path("apis/driver/route/<int:delivery_id>/", driver_route_api, name="driver-route-api"),
+    # Orders (HTML)
+    path("create/", views.order_create, name="order_create"),
+    path("confirmation/<int:order_id>/", views.order_confirmation, name="order_confirmation"),
+    path("edit/<int:order_id>/", views.order_edit, name="order_edit"),
+    path("orders/<int:order_id>/track/", views.track_order, name="order-track"),
 
+    # Location helpers
+    path("api/reverse-geocode/", views.get_location_info, name="reverse_geocode"),
+    path("api/geo/autocomplete/", views.geo_autocomplete, name="geo-autocomplete"),
+    path("save-location/", views.save_location, name="save_location"),
+
+    # Stripe
+    path("stripe/<int:order_id>/", views.stripe_checkout, name="stripe_checkout"),
+    path("stripe/success/<int:order_id>/", views.Stripe_payment_success, name="stripe-payment-success"),
+    path("webhook/stripe/", views.stripe_webhook, name="stripe-webhook"),
+
+    # Paystack
+    path("paystack/<int:order_id>/", views.paystack_checkout, name="paystack_checkout"),
+    path("paystack/confirm/", views.paystack_payment_confirm, name="paystack_payment_confirm"),
+    path("webhook/paystack/", views.paystack_webhook, name="paystack-webhook"),
+
+    # PayPal
+    path("paypal/<int:order_id>/", views.paypal_checkout, name="paypal_checkout"),
+    path("paypal/execute/<int:order_id>/", views.paypal_execute, name="paypal_execute"),
+    path("webhook/paypal/", views.paypal_webhook, name="paypal-webhook"),
+    path("orders/paypal/<int:order_id>/", views.paypal_payment, name="paypal-payment"),
+
+    # Generic payment result pages (if you still use them)
+    path("payment/success/<int:order_id>/", views.payment_success, name="payment_success"),
+    path("payment/cancel/<int:order_id>/", views.payment_cancel, name="payment_cancel"),
+
+    # Driver UI + APIs
+    path("driver/deliveries/", views.driver_deliveries_page, name="driver-deliveries"),            # HTML page
+    path("apis/driver/deliveries/", views.driver_deliveries_api, name="driver-deliveries-api"),   # JSON
+    path("apis/driver/location/", views.driver_location_api, name="driver-location-api"),
+    path("apis/driver/action/", views.driver_action_api, name="driver-action-api"),
+    path("apis/driver/route/<int:delivery_id>/", views.driver_route_api, name="driver-route-api"),
 ]
+
+# Optional: include delivery pings API if present in views
+if hasattr(views, "delivery_pings_api"):
+    urlpatterns.append(
+        path("apis/delivery/<int:delivery_id>/pings/", views.delivery_pings_api, name="delivery-pings-api")
+    )

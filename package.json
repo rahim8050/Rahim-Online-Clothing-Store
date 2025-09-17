@@ -1,10 +1,14 @@
 {
   "name": "codealpa_online_clothesstore",
   "version": "1.0.0",
+  "type": "module",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "watch:css": "npx @tailwindcss/cli -i ./static/src/styles.css -o ./static/dist/styles.css --watch"
+    "watch:css": "npx @tailwindcss/cli -i ./static/src/styles.css -o ./static/dist/styles.css --watch",
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview --strictPort"
   },
   "repository": {
     "type": "git",
@@ -18,13 +22,15 @@
   },
   "homepage": "https://github.com/rahim8050/CodeAlpa_Online_ClothesStore#readme",
   "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.1",
     "autoprefixer": "^10.4.21",
     "postcss": "^8.5.6",
-    "tailwindcss": "^4.1.11"
+    "tailwindcss": "^4.1.12",
+    "vite": "^5.4.0"
   },
   "dependencies": {
     "@tailwindcss/cli": "^4.0.12",
-    "vue": "^3.5.17"
+    "vue": "^3.5.21"
   },
   "description": ""
 }

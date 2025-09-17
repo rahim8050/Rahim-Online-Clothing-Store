@@ -5,6 +5,7 @@
 {% block content %}
 <div class="max-w-4xl mx-auto px-4 py-6">
   <h1 class="text-3xl font-bold text-blue-600 mb-4">My Orders</h1>
+<<<<<<< HEAD
 
   {% if orders %}
     <div class="space-y-4">
@@ -71,6 +72,83 @@
 {% endwith %}
 
 
+=======
+
+  {% if orders %}
+    <div class="space-y-4">
+      {% for order in orders %}
+        <div class="border rounded-lg p-4 shadow-sm">
+          <p><span class="font-semibold">Order ID:</span> {{ order.id }}</p>
+          <p><span class="font-semibold">Placed on:</span> {{ order.created_at|date:"Y-m-d H:i" }}</p>
+
+          <p><span class="font-semibold">Status:</span>
+            {% if order.paid %}
+              {% if order.last_tx and order.last_tx.callback_received %}
+                <span class="text-green-600 font-medium">Paid (verified)</span>
+              {% else %}
+                <span class="text-yellow-600 font-medium">Paid (awaiting confirmation)</span>
+              {% endif %}
+            {% else %}
+              <span class="text-red-500 font-medium">Awaiting Payment</span>
+            {% endif %}
+          </p>
+
+          {% comment %} Show Edit button when order is safely editable: unpaid, stock not reserved, and no deliveries {% endcomment %}
+          {% if not order.paid and not order.stock_updated and order.delivery_count == 0 %}
+            <div class="mt-2">
+              <a href="{% url 'orders:order_edit' order.id %}"
+                 class="inline-block bg-yellow-500 hover:bg-yellow-600 text-white text-sm font-medium px-3 py-2 rounded">
+                Edit Order
+              </a>
+            </div>
+          {% endif %}
+
+          <p><span class="font-semibold">Address:</span> {{ order.address }}</p>
+
+          {% with dlv=order.deliveries.all.0 %}
+            {% for item in order.items.all %}
+              <div class="border rounded p-2 mt-2">
+                <p>{{ item.quantity }} × {{ item.product.name }}</p>
+
+                {% if item.delivery %}
+                  {% with cur=item.delivery %}
+                    <p class="text-sm">Delivery status: {{ cur.get_status_display }}</p>
+                    <button
+                      class="track-item-btn px-3 py-1 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+                      data-delivery-id="{{ cur.id }}"
+                      data-order-id="{{ order.id }}"
+                      data-item-id="{{ item.id }}"
+                      data-clat="{{ order.latitude|default_if_none:'' }}"
+                      data-clng="{{ order.longitude|default_if_none:'' }}"
+                      data-whlat="{{ item.warehouse.latitude|default_if_none:'' }}"
+                      data-whlng="{{ item.warehouse.longitude|default_if_none:'' }}"
+                    >Track</button>
+                  {% endwith %}
+                {% elif dlv %}
+                  {% with cur=dlv %}
+                    <p class="text-sm">Delivery status: {{ cur.get_status_display }}</p>
+                    <button
+                      class="track-item-btn px-3 py-1 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+                      data-delivery-id="{{ cur.id }}"
+                      data-order-id="{{ order.id }}"
+                      data-item-id="{{ item.id }}"
+                      data-clat="{{ order.latitude|default_if_none:'' }}"
+                      data-clng="{{ order.longitude|default_if_none:'' }}"
+                      data-whlat="{{ item.warehouse.latitude|default_if_none:'' }}"
+                      data-whlng="{{ item.warehouse.longitude|default_if_none:'' }}"
+                    >Track</button>
+                  {% endwith %}
+                {% else %}
+                  <p class="text-sm">Delivery status: not assigned</p>
+                  <button class="px-3 py-1 rounded bg-gray-300 text-gray-700 cursor-not-allowed" disabled>Track</button>
+                {% endif %}
+
+                <div id="map-{{ order.id }}-{{ item.id }}" class="w-full h-64 rounded hidden mt-2"></div>
+                <div id="note-{{ order.id }}-{{ item.id }}" class="text-sm text-gray-500 mt-1"></div>
+              </div>
+            {% endfor %}
+          {% endwith %}
+>>>>>>> development
         </div>
       {% endfor %}
     </div>
@@ -85,7 +163,7 @@
 <script src="https://unpkg.com/leaflet/dist/leaflet.js" defer></script>
 <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js" defer></script>
 
-<script>
+<script nonce="{{ request.csp_nonce }}">
 (function () {
   const wsScheme = location.protocol === 'https:' ? 'wss' : 'ws';
   const TICK_SNAP_NEAREST_EVERY = 5;
@@ -136,12 +214,21 @@
     const btn = e.target.closest('.track-item-btn');
     if (!btn) return;
 
+<<<<<<< HEAD
     const orderId = btn.dataset.orderId;
     const itemId  = btn.dataset.itemId;
     const deliveryId = btn.dataset.deliveryId;
     if (!deliveryId) return;
 
     const dest = [toNum(btn.dataset.clat), toNum(btn.dataset.clng)];
+=======
+    const orderId   = btn.dataset.orderId;
+    const itemId    = btn.dataset.itemId;
+    const deliveryId= btn.dataset.deliveryId;
+    if (!deliveryId) return;
+
+    const dest  = [toNum(btn.dataset.clat),  toNum(btn.dataset.clng)];
+>>>>>>> development
     const start = [toNum(btn.dataset.whlat), toNum(btn.dataset.whlng)];
 
     const mapDiv  = document.getElementById(`map-${orderId}-${itemId}`);
@@ -150,11 +237,6 @@
 
     mapDiv.classList.remove('hidden');
     const map = ensureMap(mapDiv);
-
-    // Close any previous socket for this map
-    if (mapDiv._ws && mapDiv._ws.readyState === WebSocket.OPEN) {
-      try { mapDiv._ws.close(1000, 'restart'); } catch {}
-    }
 
     // Parse/validate coords
     let startLL = (start[0] !== null && start[1] !== null) ? start : null;
@@ -166,7 +248,7 @@
       if (destLL)  destLL  = await nearestRoad(destLL);
     } catch (_) {}
 
-    // Render static markers
+    // Static markers
     if (startLL) {
       if (!mapDiv._startMarker) mapDiv._startMarker = L.marker(startLL).addTo(map).bindTooltip('Start');
       else mapDiv._startMarker.setLatLng(startLL);
@@ -183,7 +265,7 @@
       map.setView(startLL, 14);
     }
 
-    // Fetch & draw route if we have destination
+    // Draw route (best effort)
     mapDiv._route = null;
     if (startLL && destLL) {
       try {
@@ -202,16 +284,46 @@
       mapDiv._noDestMsg = true;
     }
 
+<<<<<<< HEAD
     // Open WebSocket
     const ws = new WebSocket(`${wsScheme}://${location.host}/ws/delivery/track/${deliveryId}/`);
+=======
+    // ---- Open (or reuse) WebSocket for this item ----
+    const url = `${wsScheme}://${location.host}/ws/delivery/track/${deliveryId}/`;
+    if (mapDiv._ws && mapDiv._ws.url === url && mapDiv._ws.readyState === WebSocket.OPEN) {
+      console.log('[WS] reusing existing connection');
+      return;
+    }
+    if (mapDiv._ws && mapDiv._ws.readyState === WebSocket.OPEN) {
+      try { mapDiv._ws.close(1000, 'switching-url'); } catch {}
+    }
+    const ws = new WebSocket(url);
+>>>>>>> development
     mapDiv._ws = ws;
+
+    ws.onopen  = () => { console.log('WS OPEN', ws.url); noteDiv && (noteDiv.textContent = 'Live tracking connected.'); };
+    ws.onerror = (e)  => { console.log('WS ERROR', e);   noteDiv && (noteDiv.textContent = 'WebSocket error'); };
 
     let tick = 0;
     ws.onmessage = async (evt) => {
       try {
         const d = JSON.parse(evt.data);
+<<<<<<< HEAD
+        if (d.type !== 'position_update') return;
+=======
+>>>>>>> development
+
+        // Status broadcasts
+        if (d.type === 'status' || d.type === 'status_update') {
+          noteDiv && (noteDiv.textContent = `Status: ${d.status}`);
+          return;
+        }
         if (d.type !== 'position_update') return;
 
+        // Ensure map exists
+        ensureMap(mapDiv);
+
+        // Parse/snap position
         let pos = [toNum(d.lat), toNum(d.lng)];
         if (pos[0] === null || pos[1] === null) return;
 
@@ -221,22 +333,38 @@
           try { pos = await nearestRoad(pos); } catch (_) {}
         }
 
+        // Create/update marker + trail
         if (!mapDiv._liveMarker) {
-          mapDiv._liveMarker = L.marker(pos).addTo(map).bindTooltip('Live');
+          mapDiv._liveMarker = L.marker(pos).addTo(mapDiv._map).bindTooltip('Live');
+          mapDiv._trail = L.polyline([pos], { weight: 3 }).addTo(mapDiv._map);
+          mapDiv._map.setView(pos, 14);
         } else {
           mapDiv._liveMarker.setLatLng(pos);
+          if (mapDiv._trail) mapDiv._trail.addLatLng(pos);
         }
 
+<<<<<<< HEAD
         const c = map.getCenter();
         if (c.distanceTo(L.latLng(pos)) > 30) map.panTo(pos, { animate: true });
       } catch (_) {}
+=======
+        // Follow smoothly
+        const c = mapDiv._map.getCenter();
+        if (c.distanceTo(L.latLng(pos)) > 30) mapDiv._map.panTo(pos, { animate: true });
+
+        // Quick visual proof
+        noteDiv && (noteDiv.textContent = `lat=${pos[0].toFixed(6)}, lng=${pos[1].toFixed(6)}`);
+      } catch (err) {
+        console.warn('WS message error', err);
+      }
+>>>>>>> development
     };
 
     ws.onclose = (e) => {
       if (e.code >= 4000 && noteDiv) {
         noteDiv.textContent = `${e.code}: socket closed`;
       }
-      console.log('WS CLOSE', e.code);
+      console.log('WS CLOSE', e.code, e.reason || '');
     };
   });
 
