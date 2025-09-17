@@ -23,6 +23,7 @@ django-csp==4.0
 
 # Templates / forms
 django-crispy-forms==2.4
+django-widget-tweaks==1.5.0
 crispy-bootstrap5==2025.4  # you had this; keep if it works in your project
 
 # Env & utils
