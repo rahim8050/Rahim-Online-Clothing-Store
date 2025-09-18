@@ -31,7 +31,7 @@ from payments.notify import emit_once, send_payment_email, send_refund_email
 # Checkout (requires session)
 # ---------------------------
 @method_decorator(login_required, name="dispatch")
-@method_decorator(csrf_exempt, name="dispatch")  # API-style: session-auth + exempt CSRF
+@method_decorator(csrf_exempt, name="dispatch")  # API-style: session-auth + CSRF exempt
 class CheckoutView(View):
     http_method_names = ["post"]
 
@@ -49,6 +49,7 @@ class CheckoutView(View):
         from orders.models import Order
 
         order = get_object_or_404(Order, pk=data["order_id"], user=request.user)
+
         # Strict amount check (Decimal)
         amount = Decimal(str(data["amount"]))
         if amount != order.get_total_cost():
@@ -72,7 +73,7 @@ class CheckoutView(View):
                 "ok": True,
                 "reference": txn.reference,
                 "gateway": txn.gateway,
-                "next_action": {},  # you can populate per-gateway init instructions here
+                "next_action": {},  # populate per-gateway init instructions if needed
             }
         )
 

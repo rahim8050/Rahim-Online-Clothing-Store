@@ -1,4 +1,4 @@
-# payments/service.py (or wherever this module lives)
+# payments/service.py
 from __future__ import annotations
 
 import hashlib
@@ -266,7 +266,7 @@ def issue_refund(txn: Transaction, request_id: str = "") -> None:
 
         payload = {
             # Prefer gateway_reference, fallback to init reference
-            "transaction": txn.gateway_reference or txn.reference,
+            "transaction": txn.gateway_reference_or_reference if hasattr(txn, "gateway_reference_or_reference") else (txn.gateway_reference or txn.reference),
         }
         headers = {
             "Authorization": f"Bearer {secret}",
@@ -290,5 +290,5 @@ def issue_refund(txn: Transaction, request_id: str = "") -> None:
         AuditLog.log(event="REFUND_ISSUED", transaction=txn, order=txn.order, request_id=request_id)
         return
 
-    # M-Pesa or other gateways: usually manual reversal
+    # M-Pesa or other gateways: usually manual reversal — record for ops
     AuditLog.log(event="REFUND_ISSUE_MANUAL", transaction=txn, order=txn.order, request_id=request_id)

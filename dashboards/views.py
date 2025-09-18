@@ -12,21 +12,22 @@ def _vendor_id_for(user):
     Return vendor owner_id for a Vendor or VendorStaff user; else None.
 
     Priority:
-    1) user.vendor_id attribute (if your User model exposes it)
-    2) resolve_vendor_owner_for(user) helper
-    3) group 'VENDOR' ⇒ treat the user as the owner (user.id)
-    4) VendorStaff(owner_id) lookup fallback
+      1) user.vendor_id attribute (if your User model exposes it)
+      2) resolve_vendor_owner_for(user) helper
+      3) group 'VENDOR' ⇒ treat the user as the owner (user.id)
+      4) VendorStaff(owner_id) lookup fallback
     """
     vid = getattr(user, "vendor_id", None)
     if vid:
         return vid
 
-    # Try the project helper first (if it raises, ignore gracefully)
+    # Project helper (best source of truth if available)
     try:
         owner_id = resolve_vendor_owner_for(user)
         if owner_id:
             return owner_id
     except Exception:
+        # Be graceful if helper isn't wired everywhere yet
         pass
 
     # Group-based owner
@@ -52,7 +53,7 @@ def vendor_dashboard(request):
     if not is_vendor_or_staff(u):
         return HttpResponseForbidden("Insufficient role")
 
-    Product   = apps.get_model("product_app", "Product")
+    Product = apps.get_model("product_app", "Product")
     OrderItem = apps.get_model("orders", "OrderItem")
 
     vendor_id = _vendor_id_for(u)

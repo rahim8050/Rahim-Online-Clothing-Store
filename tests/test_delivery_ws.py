@@ -78,4 +78,3 @@ async def test_delivery_ws_group_receive_position(monkeypatch, settings):
     await comm.send_input({"type": "websocket.disconnect"})
 
 
-

@@ -12,7 +12,7 @@ from .views import (
 
     # Payments: Stripe / Paystack / PayPal
     stripe_checkout,
-    Stripe_payment_success,   # will be named "stripe_payment_success" below
+    Stripe_payment_success,  # we expose as "stripe_payment_success" below
     stripe_webhook,
 
     paystack_checkout,
@@ -25,10 +25,10 @@ from .views import (
     paypal_webhook,
 
     # Generic payment result pages
-    payment_success,          # keep canonical name "payment_success" here
+    payment_success,
     payment_cancel,
 
-    # Tracking & driver APIs
+    # Tracking & driver endpoints
     track_order,
     driver_deliveries_page,
     driver_deliveries_api,
@@ -49,17 +49,16 @@ urlpatterns = [
     path("api/geo/autocomplete/", geo_autocomplete, name="geo-autocomplete"),
     path("save-location/", save_location, name="save_location"),
 
-    # ----- Stripe (not linked from UI) -----
+    # ----- Stripe (dedicated names/paths) -----
     path("stripe/<int:order_id>/", stripe_checkout, name="stripe_checkout"),
-    # FIX: give Stripe its own distinct name to avoid clashing with the generic page
     path("stripe/success/<int:order_id>/", Stripe_payment_success, name="stripe_payment_success"),
-    path("webhook/stripe/", stripe_webhook, name="stripe-webhook"),
+    path("webhook/stripe/", stripe_webhook, name="stripe_webhook"),
 
     # ----- Paystack -----
     path("paystack/<int:order_id>/", paystack_checkout, name="paystack_checkout"),
-    # Client-side/redirect confirmation endpoint you call after TX ref check
+    # Client confirmation after verifying TX reference on your server
     path("paystack/confirm/", paystack_payment_confirm, name="paystack_payment_confirm"),
-    # FIX: put webhook at a stable URL (as your comment intended)
+    # Stable webhook endpoint for Paystack events
     path("webhook/paystack/", paystack_webhook, name="paystack_webhook"),
 
     # ----- PayPal -----
@@ -69,7 +68,6 @@ urlpatterns = [
     path("paypal/payment/<int:order_id>/", paypal_payment, name="paypal-payment"),
 
     # ----- Generic payment result pages (shared UI) -----
-    # NOTE: keep canonical name "payment_success" here; Stripe uses "stripe_payment_success" above
     path("payment/success/<int:order_id>/", payment_success, name="payment_success"),
     path("payment/cancel/<int:order_id>/", payment_cancel, name="payment_cancel"),
 

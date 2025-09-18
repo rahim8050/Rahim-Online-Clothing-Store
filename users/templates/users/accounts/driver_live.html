@@ -15,7 +15,7 @@
       <p class="text-sm text-gray-500">Stream your location to the order in real time.</p>
     </div>
 
-    <!-- WS chip -->
+    <!-- WebSocket status chip -->
     <div id="chip-conn"
          class="inline-flex items-center gap-2 rounded-full px-3 py-1 border text-xs font-medium bg-white/70 backdrop-blur">
       <span id="chip-dot" class="h-2.5 w-2.5 rounded-full bg-gray-300"></span>
@@ -90,7 +90,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-  {# Tiny CSP-safe boot payload only (logic lives in static/js/driver-live.js) #}
+  {# CSP-safe boot payload; the main logic lives in static/js/driver-live.js #}
   <script nonce="{{ request.csp_nonce }}">
     window.DRIVER_LIVE_BOOT = {
       deliveryId: {{ delivery_id|default:"0" }},

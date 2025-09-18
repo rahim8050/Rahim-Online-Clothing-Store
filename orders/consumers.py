@@ -1,3 +1,4 @@
+# orders/consumers.py
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
 from channels.db import database_sync_to_async
 from django.utils import timezone
@@ -6,7 +7,8 @@ from django.apps import apps
 from decimal import Decimal, ROUND_HALF_UP, InvalidOperation
 import math
 
-Q6 = Decimal("0.000001")  # 6dp quantization (~0.11m lat, ~0.11m @ equator)
+Q6 = Decimal("0.000001")  # 6 dp (~0.11m at equator)
+
 
 class DeliveryTrackerConsumer(AsyncJsonWebsocketConsumer):
     async def connect(self):
@@ -22,6 +24,7 @@ class DeliveryTrackerConsumer(AsyncJsonWebsocketConsumer):
             await self.close()
             return
 
+        # Allow both assigned driver and order owner to subscribe
         if not await self._can_subscribe(self.delivery_id, self.user_id):
             await self.close()
             return
@@ -30,7 +33,7 @@ class DeliveryTrackerConsumer(AsyncJsonWebsocketConsumer):
         await self.channel_layer.group_add(self.group_name, self.channel_name)
         await self.accept()
 
-        # Per-connection throttling state
+        # Per-connection throttling state for DB writes
         self._last_saved_at_ms = 0
         self._last_saved_ll = None  # (lat, lng) float tuple
 
@@ -41,7 +44,16 @@ class DeliveryTrackerConsumer(AsyncJsonWebsocketConsumer):
         except Exception:
             pass
 
+    # ---- Incoming messages ----
     async def receive_json(self, content, **kwargs):
+        """
+        Accepts both legacy and current payloads:
+
+        - {"type":"position_update", "lat": ..., "lng": ...}
+        - {"op":"update", "lat": ..., "lng": ...}
+        - {"type":"status", "status":"picked_up" | "en_route" | "delivered"}
+        - {"op":"ping"}  -> replies {"type":"pong"}
+        """
         msg_type = content.get("type") or content.get("op")
 
         if msg_type in ("position_update", "update", "position"):
@@ -73,6 +85,7 @@ class DeliveryTrackerConsumer(AsyncJsonWebsocketConsumer):
             return
 
     async def status_update(self, event):
+        # Emitted by post_save signals via group_send(type="status.update")
         await self.send_json({
             "type": "status_update",
             "id": event.get("id"),
@@ -81,6 +94,16 @@ class DeliveryTrackerConsumer(AsyncJsonWebsocketConsumer):
             "picked_up_at": event.get("picked_up_at"),
             "delivered_at": event.get("delivered_at"),
         })
+
+    # Back-compat for older senders using type="tracker.update"
+    async def tracker_update(self, event):
+        data = event.get("data", {}) or {}
+        await self.send_json({"type": "position_update", **data})
+
+    # Back-compat for staff debug sender using type="broadcast"
+    async def broadcast(self, event):
+        payload = event.get("payload") or {}
+        await self.send_json(payload)
 
     # ---- Helpers ----
     @staticmethod
@@ -114,10 +137,12 @@ class DeliveryTrackerConsumer(AsyncJsonWebsocketConsumer):
     @database_sync_to_async
     def _save_position(self, delivery_id: int, user_id: int, lat: Decimal, lng: Decimal):
         """
-        Persist position for the assigned driver. Returns (changed: bool, new_status: str|None)
+        Persist position for the assigned driver.
+        Returns (changed: bool, new_status: str|None).
         """
         Delivery = apps.get_model("orders", "Delivery")
         DeliveryPing = apps.get_model("orders", "DeliveryPing")
+
         try:
             d = Delivery.objects.get(pk=int(delivery_id), driver_id=user_id)
         except Delivery.DoesNotExist:
@@ -139,6 +164,7 @@ class DeliveryTrackerConsumer(AsyncJsonWebsocketConsumer):
                 d.status = Delivery.Status.EN_ROUTE
                 new_status = d.status
         except Exception:
+            # Enum/choices not available? ignore gracefully
             pass
 
         fields = ["last_lat", "last_lng", "last_ping_at", "updated_at"]
@@ -147,7 +173,7 @@ class DeliveryTrackerConsumer(AsyncJsonWebsocketConsumer):
         d.save(update_fields=fields)
 
         if changed:
-            # Best-effort history + audit
+            # History + audit (best-effort)
             try:
                 DeliveryPing.objects.create(delivery=d, lat=lat, lng=lng)
             except Exception:
@@ -177,8 +203,8 @@ class DeliveryTrackerConsumer(AsyncJsonWebsocketConsumer):
         if status_new not in allowed:
             return False
 
-        d.status = status_new
         now = timezone.now()
+        d.status = status_new
         if status_new == Delivery.Status.PICKED_UP:
             d.picked_up_at = now
         if status_new == Delivery.Status.DELIVERED:
@@ -191,7 +217,7 @@ class DeliveryTrackerConsumer(AsyncJsonWebsocketConsumer):
         lat_raw = content.get("lat")
         lng_raw = content.get("lng")
 
-        # Persist/broadcast only if sender is the assigned driver
+        # Only assigned driver can persist/broadcast positions
         if not await self._is_owner_driver(self.delivery_id, self.user_id):
             await self.send_json({"type": "error", "error": "forbidden"})
             return
@@ -208,7 +234,7 @@ class DeliveryTrackerConsumer(AsyncJsonWebsocketConsumer):
             await self.send_json({"type": "error", "error": "out_of_range"})
             return
 
-        # Global throttle per (driver, delivery): 5s
+        # Global throttle per (driver, delivery): 5s using cache
         cache_key = f"ws:last:{self.user_id}:{self.delivery_id}"
         last = cache.get(cache_key)
         now_ms = int(timezone.now().timestamp() * 1000)
@@ -235,7 +261,7 @@ class DeliveryTrackerConsumer(AsyncJsonWebsocketConsumer):
                     {"type": "delivery.event", "kind": "status", "status": new_status},
                 )
 
-        # Always broadcast to group for live UX (only after permission checks)
+        # Always broadcast (after permission checks) for live UX
         await self.channel_layer.group_send(
             self.group_name,
             {
@@ -252,12 +278,12 @@ class DeliveryTrackerConsumer(AsyncJsonWebsocketConsumer):
         if not isinstance(status_new, str) or not status_new:
             return
 
-        # Only the assigned driver can broadcast status
+        # Only the assigned driver can broadcast status hints
         if not await self._is_owner_driver(self.delivery_id, self.user_id):
             await self.send_json({"type": "error", "error": "forbidden"})
             return
 
-        # Pure broadcast (does not mutate DB). If you want to persist, call _update_status here.
+        # Pure broadcast (UI hint). To persist, call _update_status instead.
         await self.channel_layer.group_send(
             self.group_name,
             {"type": "delivery.event", "kind": "status", "status": status_new},

@@ -8,6 +8,7 @@ import logging
 import math
 import time
 from decimal import Decimal, ROUND_HALF_UP, InvalidOperation
+from typing import Any
 
 import paypalrestsdk
 import requests
@@ -17,28 +18,20 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.db import transaction
-from django.http import (
-    HttpResponse,
-    HttpResponseForbidden,
-    JsonResponse,
-)
+from django.http import HttpResponse, HttpResponseForbidden, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
-from django.views.decorators.http import (
-    require_GET,
-    require_POST,
-    require_http_methods,
-)
+from django.views.decorators.http import require_GET, require_POST, require_http_methods
 
 from cart.models import Cart
 from orders.forms import OrderForm
 from orders.models import (
     Delivery,
     DeliveryPing,
-    EmailDispatchLog,  # kept import if used elsewhere
+    EmailDispatchLog,  # kept if referenced in templates/elsewhere
     Order,
     OrderItem,
     PaymentEvent,
@@ -55,7 +48,7 @@ from users.utils import is_vendor_or_staff
 
 logger = logging.getLogger(__name__)
 
-# ---------- Third-party SDK config ----------
+# ---------- Third-party SDK config (defensive) ----------
 stripe.api_key = getattr(settings, "STRIPE_SECRET_KEY", "")
 paypalrestsdk.configure(
     {
@@ -70,16 +63,16 @@ Q6 = Decimal("0.000001")
 Q2 = Decimal("0.01")
 
 
-def _q6(x) -> Decimal:
+def _q6(x: Any) -> Decimal:
     return Decimal(str(x)).quantize(Q6, rounding=ROUND_HALF_UP)
 
 
-def q2(x) -> Decimal:
-    x = x if isinstance(x, Decimal) else Decimal(str(x))
-    return x.quantize(Q2, rounding=ROUND_HALF_UP)
+def q2(x: Any) -> Decimal:
+    d = x if isinstance(x, Decimal) else Decimal(str(x))
+    return d.quantize(Q2, rounding=ROUND_HALF_UP)
 
 
-def _parse_coord(val):
+def _parse_coord(val: Any) -> Decimal:
     return Decimal(str(val))
 
 
@@ -96,6 +89,7 @@ _ROUTE_TTL = 60  # seconds
 
 
 def _route_cache_key(a_lat, a_lng, b_lat, b_lng) -> str:
+    # round to ~11m precision to improve hit rate
     return f"{round(a_lat,5)},{round(a_lng,5)}:{round(b_lat,5)},{round(b_lng,5)}"
 
 
@@ -104,7 +98,7 @@ def _cache_get(k: str):
     if not item:
         return None
     ts, payload = item
-    if time.time() - ts > _route_TTL:
+    if time.time() - ts > _ROUTE_TTL:
         _ROUTE_CACHE.pop(k, None)
         return None
     return payload
@@ -207,7 +201,6 @@ def driver_deliveries_api(request):
             "id": d.id,
             "order_id": d.order_id,
             "status": d.status,
-            # Use canonical destination fields on Order
             "dest_lat": float(d.order.dest_lat) if d.order.dest_lat is not None else None,
             "dest_lng": float(d.order.dest_lng) if d.order.dest_lng is not None else None,
             "last_lat": float(d.last_lat) if d.last_lat is not None else None,
@@ -273,9 +266,7 @@ def driver_action_api(request):
         d.delivered_at = now
         if d.dest_lat is not None and d.dest_lng is not None:
             d.last_lat, d.last_lng = d.dest_lat, d.dest_lng
-            d.save(
-                update_fields=["status", "delivered_at", "last_lat", "last_lng", "updated_at"]
-            )
+            d.save(update_fields=["status", "delivered_at", "last_lat", "last_lng", "updated_at"])
         else:
             d.save(update_fields=["status", "delivered_at", "updated_at"])
     elif action == "cancel":
@@ -386,7 +377,7 @@ def order_create(request):
         messages.warning(request, "Your cart is empty")
         return redirect("cart:cart_detail")
 
-    # Allow GET fallback with ?selected=1,2,3
+    # Allow GET fallback with ?selected=1,2,3 (useful if JS blocked)
     if request.method == "GET":
         sel = (request.GET.get("selected") or "").strip()
         if sel:
@@ -394,10 +385,15 @@ def order_create(request):
             if ids:
                 cart.items.update(is_selected=False)
                 cart.items.filter(product_id__in=ids).update(is_selected=True)
-
         form = OrderForm()
     else:
         # POST
+        # If the form included selected_items, respect it
+        selected_items = request.POST.getlist("selected_items")
+        if selected_items:
+            cart.items.update(is_selected=False)
+            cart.items.filter(product_id__in=selected_items).update(is_selected=True)
+
         form = OrderForm(request.POST)
         if form.is_valid():
             try:
@@ -458,9 +454,7 @@ def order_create(request):
     cart_items = cart.items.filter(is_selected=True)
     if not cart_items.exists():
         cart_items = cart.items.all()
-    selected_total = q2(
-        sum((i.product.price * i.quantity for i in cart_items), Decimal("0.00"))
-    )
+    selected_total = q2(sum((i.product.price * i.quantity for i in cart_items), Decimal("0.00")))
 
     return render(
         request,
@@ -585,26 +579,35 @@ def get_location_info(request):
 @login_required
 def paystack_checkout(request, order_id: int):
     order = get_object_or_404(Order, id=order_id, user=request.user)
-    payer_email = getattr(request.user, "email", None) or "customer@example.com"
-    payment_method = "paystack"
-    channel = request.GET.get("channel", "card")  # or "mobile_money"
+
+    # channel resolution
+    payment_method = (request.GET.get("payment_method") or request.POST.get("payment_method") or "card").lower()
+    if payment_method not in {"card", "mpesa"}:
+        messages.error(request, "Invalid payment method")
+        return redirect("orders:order_confirmation", order.id)
+    channel = "card" if payment_method == "card" else "mobile_money"
+
+    payer_email = order.email or getattr(order.user, "email", None)
+    if not payer_email:
+        messages.error(request, "No valid email found for Paystack checkout.")
+        return redirect("orders:order_confirmation", order.id)
+
+    total_dec = safe_order_total(order)  # pure Decimal
+
+    headers = {
+        "Authorization": f"Bearer {getattr(settings, 'PAYSTACK_SECRET_KEY', '')}",
+        "Content-Type": "application/json",
+    }
+    data = {
+        "email": payer_email,
+        "amount": to_minor_units(total_dec),  # integer minor units
+        "currency": getattr(settings, "PAYSTACK_CURRENCY", "KES"),
+        "callback_url": request.build_absolute_uri(reverse("orders:paystack_payment_confirm")),
+        "metadata": {"order_id": order.id, "payment_method": payment_method},
+        "channels": [channel],
+    }
 
     try:
-        total_dec = q2(order.get_total_cost())
-        headers = {
-            "Authorization": f"Bearer {getattr(settings, 'PAYSTACK_SECRET_KEY', '')}",
-            "Content-Type": "application/json",
-        }
-        data = {
-            "email": payer_email,
-            "amount": to_minor_units(total_dec),  # int minor units
-            "currency": getattr(settings, "PAYSTACK_CURRENCY", "KES"),
-            "callback_url": request.build_absolute_uri(
-                reverse("orders:paystack_payment_confirm")
-            ),
-            "metadata": {"order_id": order.id, "payment_method": payment_method},
-            "channels": [channel],
-        }
         response = requests.post(
             "https://api.paystack.co/transaction/initialize",
             json=data,
@@ -647,7 +650,7 @@ def paystack_webhook(request):
     raw = request.body  # bytes
     signature = (request.META.get("HTTP_X_PAYSTACK_SIGNATURE", "") or "").strip().lower()
     expected = hmac.new(
-        (getattr(settings, "PAYSTACK_SECRET_KEY", "")).encode("utf-8"),
+        getattr(settings, "PAYSTACK_SECRET_KEY", "").encode("utf-8"),
         raw,
         hashlib.sha512,
     ).hexdigest().lower()
@@ -839,7 +842,8 @@ def send_payment_receipt_email(transaction: Transaction, order: Order):
     subject = f"🧾 Payment Receipt for Order #{order.id}"
     recipient = [transaction.email]
     message = render_to_string(
-        "emails/payment_receipt.html", {"user": transaction.user, "order": order, "transaction": transaction}
+        "emails/payment_receipt.html",
+        {"user": transaction.user, "order": order, "transaction": transaction},
     )
     from django.core.mail import send_mail
 
@@ -888,16 +892,12 @@ def stripe_checkout(request, order_id):
 def Stripe_payment_success(request, order_id):
     session_id = request.GET.get("session_id")
     if not session_id:
-        return render(
-            request, "orders/payment_failed.html", {"message": "No session ID provided."}
-        )
+        return render(request, "orders/payment_failed.html", {"message": "No session ID provided."})
     try:
         session = stripe.checkout.Session.retrieve(session_id)
         payment_intent = stripe.PaymentIntent.retrieve(session.payment_intent)
     except Exception as e:
-        return render(
-            request, "orders/payment_failed.html", {"message": f"Stripe error: {str(e)}"}
-        )
+        return render(request, "orders/payment_failed.html", {"message": f"Stripe error: {str(e)}"})
 
     order = get_object_or_404(Order, id=order_id, user=request.user)
     order.payment_status = "paid"
@@ -1089,12 +1089,11 @@ def paypal_payment(request, order_id):
         for link in payment.links:
             if link.method == "REDIRECT":
                 return redirect(link.href)
-    else:
-        try:
-            logger.error("🚨 PayPal Payment Error: %s", json.dumps(payment.error, indent=2))
-        except Exception:
-            logger.error("🚨 PayPal Payment Error (no details)")
 
+    try:
+        logger.error("🚨 PayPal Payment Error: %s", json.dumps(payment.error, indent=2))
+    except Exception:
+        logger.error("🚨 PayPal Payment Error (no details)")
     messages.error(request, "Unable to create PayPal payment")
     return redirect("orders:order_confirmation", order_id)
 

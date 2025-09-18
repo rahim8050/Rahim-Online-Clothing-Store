@@ -1,12 +1,29 @@
-# Order live tracking and DRF API v1
+# Order Live Tracking & DRF API (v1/v2)
 
-Run the ASGI server with Daphne or Django runserver:
+This document consolidates the live‑tracking (WebSocket) and REST API runbook for the project. All merge markers have been resolved and duplicated blocks removed.
+
+---
+
+## Quick Start (Dev)
 
 ```bash
-python manage.py runserver 8000
-# or
-daphne -b 127.0.0.1 -p 8000 Rahim_Online_ClothesStore.asgi:application
+pip install -r requirements.txt
+python manage.py makemigrations   # should result in no model changes
+python manage.py migrate
+python manage.py createsuperuser
+python manage.py runserver 8000    # http://127.0.0.1:8000/
+# OR ASGI via Daphne
+# daphne -b 127.0.0.1 -p 8000 Rahim_Online_ClothesStore.asgi:application
 ```
+
+### Redis / Channel Layer
+
+* In development you may use the in‑memory channel layer.
+* In production, set `REDIS_URL` to enable Redis for Channels and cache.
+
+  * Configure password/SSL as required by your host (e.g., `rediss://:password@host:port/0`).
+
+### Warehouse Assignment (utility)
 
 Assign warehouses to pending items:
 
@@ -14,164 +31,181 @@ Assign warehouses to pending items:
 python manage.py assign_warehouses_to_items
 ```
 
-Quick manual WS test from the browser console:
+---
+
+## Live Tracking (WebSocket)
+
+**Endpoint**: `/ws/delivery/track/<DELIVERY_ID>/`
+
+**Manual browser test** (replace `DELIVERY_ID`):
 
 ```javascript
-
-
-const ws = new WebSocket('ws://127.0.0.1:8000/ws/delivery/track/DELIVERY_ID/');
-ws.onmessage = (e) => console.log(JSON.parse(e.data));
-```
-
-Replace `DELIVERY_ID` with a real identifier.
-
-Messages follow a unified schema:
-
-```
-{"type": "position_update", "lat": 1.23, "lng": 4.56}
-{"type": "status", "status": "EN_ROUTE"}
-```
-
-Redis (set via `REDIS_URL`) powers the channel layer and cache; configure it in production with password/SSL as needed.
-
-```
-
-```
-{"type": "position_update", "lat": 1.23, "lng": 4.56}
-{"type": "status", "status": "EN_ROUTE"}
-```
-
-=======
 const wsScheme = location.protocol === "https:" ? "wss" : "ws";
 const ws = new WebSocket(`${wsScheme}://${location.host}/ws/delivery/track/DELIVERY_ID/`);
-ws.onmessage = (e) => console.log(JSON.parse(e.data));
+ws.onopen = () => console.log("WS connected");
+ws.onmessage = (e) => console.log("WS msg:", JSON.parse(e.data));
+ws.onclose = () => console.log("WS closed");
 ```
 
-Replace `DELIVERY_ID` with a real identifier. Messages follow a unified schema:
+**Message schema** (examples):
 
-```
+```json
 {"type": "position_update", "lat": 1.23, "lng": 4.56}
 {"type": "status", "status": "EN_ROUTE"}
 ```
 
+> **Notes**
+>
+> * Ensure ASGI is active (Daphne/Uvicorn) in production. Django’s dev server is fine for local.
+> * Verify your Channels routing and auth middleware if you gate driver/customer access.
+> * Throttling, lat/lng quantization, and validation should be enforced server‑side (already implemented in consumers).
 
-Redis (set via `REDIS_URL`) powers the channel layer and cache; configure it in production with password/SSL as needed.
+---
 
 ## DRF API v1
 
-- OpenAPI schema: `GET /apis/v1/schema/`
-- Swagger UI: `GET /apis/v1/docs/`
-- JWT auth:
-  - `POST /apis/v1/auth/jwt/create/` {"username","password"}
-  - `POST /apis/v1/auth/jwt/refresh/` {"refresh"}
+* **OpenAPI schema**: `GET /apis/v1/schema/`
+* **Swagger UI**: `GET /apis/v1/docs/`
 
-### Optional HMAC for catalog reads
-You can protect `GET /apis/v1/catalog/*` with a signed request using custom headers:
-- `X-Api-KeyId`: public key identifier
-- `X-Api-Timestamp`: ISO8601 or unix seconds (UTC)
-- `X-Api-Signature`: hex HMAC-SHA256 of canonical string
+### Authentication (JWT)
 
-Canonical string to sign:
+* **Create**: `POST /apis/v1/auth/jwt/create/` with body `{ "username": "<user>", "password": "<pass>" }`
+* **Refresh**: `POST /apis/v1/auth/jwt/refresh/` with body `{ "refresh": "<token>" }`
+
+**Example**
+
+```bash
+# Get tokens
+curl -sS -X POST http://127.0.0.1:8000/apis/v1/auth/jwt/create/ \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"admin","password":"pass"}'
+
+# Use access token
+curl -sS 'http://127.0.0.1:8000/apis/v1/catalog/products/?search=shirt' \
+  -H "Authorization: Bearer $ACCESS"
+```
+
+### Routers Mounted
+
+* **Catalog**: `/apis/v1/catalog/` (categories, products)
+* **Cart**: `/apis/v1/cart/` (carts + actions)
+* **Orders**: `/apis/v1/orders/` (orders + checkout)
+* **Payments**: `/apis/v1/payments/` (checkout init)
+* **Users**: `/apis/v1/users/` (profile/me)
+
+### Optional HMAC for Catalog Reads
+
+To allow signed, key‑based *read‑only* access (without user auth), enable HMAC:
+
+**Headers**
+
+* `X-Api-KeyId`: public key identifier
+* `X-Api-Timestamp`: ISO‑8601 or unix seconds (UTC)
+* `X-Api-Signature`: hex HMAC‑SHA256 over canonical string
+
+**Canonical string**
+
 ```
 {timestamp}\n{METHOD}\n{PATH_WITH_QUERY}\n{sha256_hex(body)}
 ```
 
-Keys live in `settings.API_KEYS`, e.g.:
-```
+**Settings**
+
+```python
 API_KEYS = {
   "demo-key": {"secret": "<base64/hex/plain-secret>", "scopes": ["catalog:read"]}
 }
 ```
-Requests with a valid signature and `catalog:read` scope pass via `HasScope('catalog:read')` even without user auth. Otherwise, normal DRF permissions (JWT/Session) apply.
 
-Mounted routers:
-- Catalog: `/apis/v1/catalog/` (categories, products)
-- Cart: `/apis/v1/cart/` (carts + actions)
-- Orders: `/apis/v1/orders/` (orders + checkout)
-- Payments: `/apis/v1/payments/` (checkout init)
-- Users: `/apis/v1/users/` (me)
+Requests with a valid signature and `catalog:read` scope pass via `HasScope('catalog:read')`. Otherwise normal DRF permissions (JWT/Session) apply.
 
-Example cURL:
-```
-curl -X POST http://127.0.0.1:8000/apis/v1/auth/jwt/create/ \
-  -H 'Content-Type: application/json' \
-  -d '{"username":"admin","password":"pass"}'
+**Example (Python sign)**
 
-curl http://127.0.0.1:8000/apis/v1/catalog/products/?search=shirt \
-  -H "Authorization: Bearer $ACCESS"
+```python
+import hmac, hashlib
+
+def sign_request(secret: bytes, timestamp: str, method: str, path_with_query: str, body: bytes) -> str:
+    c = f"{timestamp}\n{method.upper()}\n{path_with_query}\n{hashlib.sha256(body or b'').hexdigest()}".encode()
+    return hmac.new(secret, c, hashlib.sha256).hexdigest()
 ```
 
-Runbook:
-```
-pip install -r requirements.txt
-python manage.py makemigrations  # should be no model changes
-python manage.py migrate
-python manage.py createsuperuser
-python manage.py runserver 8000
-# Open http://127.0.0.1:8000/apis/v1/docs/
-```
+---
 
-## DRF API v2 (Cart)
+## DRF API v2 — Cart
 
-- User carts (authenticated) live under `/apis/v2/cart/` and are strictly scoped to the current user. Exactly one ACTIVE cart per user is enforced by code and a DB constraint.
-- Guest carts (anonymous) live under `/apis/v2/cart/guest/` and are addressed only via a signed cookie `guest_cart_id` (7 days, HttpOnly, SameSite=Lax).
+* **User carts (authenticated)**: `/apis/v2/cart/` — strictly scoped to the current user. Enforced: exactly one **ACTIVE** cart per user (code + DB constraint).
+* **Guest carts (anonymous)**: `/apis/v2/cart/guest/` — identified solely by a **signed** cookie `guest_cart_id` (7 days, HttpOnly, SameSite=Lax).
 
-Guest endpoints (AllowAny):
-- `POST /apis/v2/cart/guest/carts/my_active/` → create or return the cookie-bound cart; sets `guest_cart_id` cookie when created.
-- `POST /apis/v2/cart/guest/carts/{id}/add_item/` { product, quantity }
-- `POST /apis/v2/cart/guest/carts/{id}/update_item/` { item_id, quantity }
-- `POST /apis/v2/cart/guest/carts/{id}/remove_item/` { item_id }
-- `POST /apis/v2/cart/guest/carts/{id}/clear/`
+**Guest endpoints (AllowAny)**
 
-Login merge flow:
-- On `user_logged_in`, the project merges the guest cart (if any) into the user's ACTIVE cart by summing quantities (no duplicates). The guest cart is deleted afterwards.
-- The `guest_cart_id` cookie is cleared after authentication by `cart.middleware.ClearGuestCookieOnLoginMiddleware`.
+* `POST /apis/v2/cart/guest/carts/my_active/` → create/return cookie‑bound cart; sets `guest_cart_id` when created.
+* `POST /apis/v2/cart/guest/carts/{id}/add_item/` `{ product, quantity }`
+* `POST /apis/v2/cart/guest/carts/{id}/update_item/` `{ item_id, quantity }`
+* `POST /apis/v2/cart/guest/carts/{id}/remove_item/` `{ item_id }`
+* `POST /apis/v2/cart/guest/carts/{id}/clear/`
 
-Security notes:
-- Guest endpoints never accept arbitrary cart IDs; they derive the cart solely from the signed cookie and then confirm the path `{id}` matches.
-- User endpoints remain `IsAuthenticated` only and return 404 for other users' carts.
+**Login merge flow**
+
+* On `user_logged_in`, merge guest → user ACTIVE cart by summing quantities (no duplicates). Delete guest cart afterward.
+* `cart.middleware.ClearGuestCookieOnLoginMiddleware` clears `guest_cart_id` post‑auth.
+
+**Security notes**
+
+* Guest endpoints never accept arbitrary cart IDs; they derive the cart from the signed cookie, then assert path `{id}` matches.
+* User endpoints require `IsAuthenticated`; other users’ carts return 404.
+
+---
 
 ## Paystack Webhook Hardening
 
-- HMAC-SHA512 over raw request body using `PAYSTACK_SECRET_KEY`.
-- Signature header: `x-paystack-signature` (lowercase/stripped). We verify with constant-time compare.
-- Idempotency via SHA-256 of the raw body stored on `orders.PaymentEvent`; identical bodies ack with 200 and no side-effects.
-- Endpoints:
-  - Project: `/webhook/paystack/` (payments.views.PaystackWebhookView)
-  - Orders app: `orders:paystack_webhook` (orders.views.paystack_webhook)
+* Verify `x-paystack-signature` (lowercased/stripped) using **HMAC‑SHA512** over the **raw request body** with `PAYSTACK_SECRET_KEY`.
+* Idempotency: compute SHA‑256 of the raw body and store on `orders.PaymentEvent`. Duplicate bodies ACK with 200 and cause no side‑effects.
 
-Environment variables
-- `PAYSTACK_SECRET_KEY`: `sk_test_xxx_or_sk_live_xxx`
-- `DJANGO_SETTINGS_MODULE`: `Rahim_Online_ClothesStore.settings`
+**Endpoints**
 
-Local testing
-- Compute signature (Python):
-  `python - <<PY\nimport hmac, hashlib\nraw=b'{"event":"charge.success","data":{"reference":"ref_123","amount":30000,"currency":"KES"}}'\nsecret=b'sk_test_example'\nprint(hmac.new(secret, raw, hashlib.sha512).hexdigest())\nPY`
+* Project: `/webhook/paystack/` → `payments.views.PaystackWebhookView`
+* Orders app: `orders:paystack_webhook` → `orders.views.paystack_webhook`
 
-- Run tests:
-  - `pytest -q`
-  - `python manage.py test orders.tests.test_webhook_paystack -v`
+**Environment**
 
-- Replay a payload locally:
-  `python manage.py replay_paystack --order 123 --status success --verbose-json`
-<<<<<<< HEAD
+* `PAYSTACK_SECRET_KEY` = `sk_test_xxx` or `sk_live_xxx`
+* `DJANGO_SETTINGS_MODULE` = `Rahim_Online_ClothesStore.settings`
 
-## Roles & permissions
+**Local check**
 
-The project provisions Django groups for five roles: **Admin**, **Customer**,
-**Vendor**, **Vendor Staff**, and **Driver**.
+```bash
+python - <<'PY'
+import hmac, hashlib
+raw=b'{"event":"charge.success","data":{"reference":"ref_123","amount":30000,"currency":"KES"}}'
+secret=b'sk_test_example'
+print(hmac.new(secret, raw, hashlib.sha512).hexdigest())
+PY
+```
 
-Apply migrations and sync the role groups:
+**Tests / Replay**
+
+```bash
+pytest -q
+python manage.py test orders.tests.test_webhook_paystack -v
+python manage.py replay_paystack --order 123 --status success --verbose-json
+```
+
+---
+
+## Roles & Permissions
+
+The project provisions Groups for five roles: **Admin**, **Customer**, **Vendor**, **Vendor Staff**, **Driver**.
+
+**Sync roles**
 
 ```bash
 python manage.py migrate
 python manage.py sync_roles
 ```
 
-Running `sync_roles` multiple times is safe and updates any missing groups or
-permissions.
+* Safe to run repeatedly; missing groups/permissions are added idempotently.
 
-### Smoke test
+**Smoke test**
 
 ```bash
 python manage.py migrate
@@ -179,17 +213,29 @@ python manage.py sync_roles
 python manage.py test users
 ```
 
-## Auth tokens
+> If vendor/driver dashboards are enabled in your build, they’re typically available at:
+>
+> * `/users/vendor-dashboard/`
+> * `/users/driver-dashboard/`
 
-Obtain JWTs for API access:
+---
 
-```
-POST /api/auth/token/ {"username": "<user>", "password": "<pass>"}
-POST /api/auth/token/refresh/ {"refresh": "<token>"}
-```
+## Troubleshooting
 
-Dashboards are available for vendors and drivers at `/users/vendor-dashboard/`
-and `/users/driver-dashboard/` respectively. Matching read-only APIs live under
-`/api/vendor/products/` and `/api/driver/deliveries/`.
+* **WS 403/CSRF**: Ensure correct auth middleware for Channels and that your origin/hosts are allowed.
+* **Redis SSL**: Use `rediss://` for SSL endpoints and set CA certs if your host requires verification.
+* **Docs 404**: Confirm DRF schema/Swagger URLs are included in `urls.py` under the `/apis/v1/` prefix.
+* **JWT 401**: Check clock skew; refresh tokens if expired. Verify `AUTHENTICATION_BACKENDS` and SimpleJWT settings.
 
+---
 
+## Useful URLs (Dev)
+
+* Swagger: `http://127.0.0.1:8000/apis/v1/docs/`
+* OpenAPI JSON: `http://127.0.0.1:8000/apis/v1/schema/`
+* Example search: `http://127.0.0.1:8000/apis/v1/catalog/products/?search=shirt`
+* Live tracking (replace ID): `ws://127.0.0.1:8000/ws/delivery/track/<DELIVERY_ID>/`
+
+---
+
+**End of document.**
