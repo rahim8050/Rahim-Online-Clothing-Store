@@ -445,3 +445,4 @@ class PaymentEvent(models.Model):
 
     class Meta:
         indexes = [models.Index(fields=["provider", "reference"])]
+

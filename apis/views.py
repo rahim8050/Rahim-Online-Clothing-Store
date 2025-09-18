@@ -74,6 +74,12 @@ from .serializers import (
     ProductListSerializer,
     VendorProductCreateSerializer,
     ProductOutSerializer,
+
+
+
+    VendorApplySerializer,                 # if not used, you may remove
+
+
     VendorApplicationCreateSerializer,
     VendorStaffCreateSerializer,
     VendorStaffOutSerializer,
