@@ -55,7 +55,6 @@ node_modules/
 package-lock.json
 pnpm-lock.yaml
 yarn.lock
-tailwind.config.js
 postcss.config.js
 
 # ===== Build artifacts (optional) =====
@@ -82,3 +81,5 @@ node_modules/
 tailwindcss
 tailwindcss.exe
 static/dist/*
+static/dist/*
+!static/dist/.gitkeep
