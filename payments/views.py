@@ -1,6 +1,9 @@
+# payments/views.py
 from decimal import Decimal
 import json
 import uuid
+import hashlib
+
 from django.db import transaction as dbtx
 from django.http import JsonResponse, HttpResponse
 from django.core.exceptions import ValidationError
@@ -24,34 +27,36 @@ from .enums import TxnStatus
 from payments.notify import emit_once, send_payment_email, send_refund_email
 
 
-@method_decorator(csrf_exempt, name="dispatch")
+# ---------------------------
+# Checkout (requires session)
+# ---------------------------
 @method_decorator(login_required, name="dispatch")
+@method_decorator(csrf_exempt, name="dispatch")  # API-style: session-auth + CSRF exempt
 class CheckoutView(View):
     http_method_names = ["post"]
 
     def post(self, request, *args, **kwargs):
         try:
-            data = json.loads(request.body.decode())
+            data = json.loads(request.body.decode("utf-8"))
         except json.JSONDecodeError:
             return JsonResponse({"ok": False, "error": "invalid_json"}, status=400)
-        required = [
-            "order_id",
-            "amount",
-            "currency",
-            "gateway",
-            "method",
-            "idempotency_key",
-        ]
+
+        required = ["order_id", "amount", "currency", "gateway", "method", "idempotency_key"]
         for key in required:
             if key not in data:
                 return JsonResponse({"ok": False, "error": f"missing_{key}"}, status=400)
+
         from orders.models import Order
 
         order = get_object_or_404(Order, pk=data["order_id"], user=request.user)
+
+        # Strict amount check (Decimal)
         amount = Decimal(str(data["amount"]))
         if amount != order.get_total_cost():
             return JsonResponse({"ok": False, "error": "amount_mismatch"}, status=400)
+
         reference = f"ORD-{order.id}-{uuid.uuid4().hex[:8]}"
+
         txn = init_checkout(
             order=order,
             user=request.user,
@@ -62,220 +67,300 @@ class CheckoutView(View):
             idempotency_key=data["idempotency_key"],
             reference=reference,
         )
+
         return JsonResponse(
             {
                 "ok": True,
                 "reference": txn.reference,
                 "gateway": txn.gateway,
-                "next_action": {},
+                "next_action": {},  # populate per-gateway init instructions if needed
             }
         )
 
 
+# ---------------------------
+# Stripe Webhook
+# ---------------------------
 @method_decorator(csrf_exempt, name="dispatch")
 class StripeWebhookView(View):
     def post(self, request, *args, **kwargs):
-        request_id = getattr(request, "request_id", "")
+        request_id = hashlib.sha256(request.body).hexdigest()[:16]
+
+        # 1) Verify signature -> event
         try:
             event = verify_stripe(request)
-            sig_valid = True
-        except Exception as e:
+        except ValidationError as e:
             AuditLog.log(event="WEBHOOK_SIGNATURE_INVALID", request_id=request_id, message=str(e))
             return JsonResponse({"ok": False}, status=400)
-        obj = event.get("data", {}).get("object", {})
-        reference = obj.get("metadata", {}).get("reference")
-        if not reference:
-            AuditLog.log(event="WEBHOOK_MISSING_REFERENCE", request_id=request_id)
-            return JsonResponse({"ok": True}, status=202)
+
+        event_type = event.get("type")
+        obj = (event.get("data") or {}).get("object", {}) or {}
+
+        # Prefer explicit reference (metadata/client_reference_id).
+        reference = (
+            (obj.get("metadata") or {}).get("reference")
+            or obj.get("client_reference_id")
+        )
+
+        # For success, we also want the gateway payment intent id
+        payment_intent = obj.get("payment_intent") or obj.get("id")  # PI id or Session id
+
+        # 2) Resolve transaction
         with dbtx.atomic():
-            try:
-                txn = Transaction.objects.select_for_update().get(reference=reference)
-            except Transaction.DoesNotExist:
-                AuditLog.log(event="WEBHOOK_UNKNOWN_REFERENCE", request_id=request_id, meta={"reference": reference})
+            txn = None
+            if reference:
+                try:
+                    txn = Transaction.objects.select_for_update().get(reference=reference)
+                except Transaction.DoesNotExist:
+                    txn = None
+
+            # Fallback: try by gateway_reference if your model stores it
+            if txn is None and payment_intent:
+                try:
+                    txn = Transaction.objects.select_for_update().get(gateway_reference=payment_intent)
+                except Transaction.DoesNotExist:
+                    txn = None
+
+            if txn is None:
+                AuditLog.log(
+                    event="WEBHOOK_UNKNOWN_REFERENCE",
+                    request_id=request_id,
+                    meta={"reference": reference, "gateway_ref": payment_intent},
+                )
                 return JsonResponse({"ok": True}, status=202)
+
             txn.callback_received = True
-            txn.signature_valid = sig_valid
+            txn.signature_valid = True
             txn.raw_event = event
             txn.save(update_fields=["callback_received", "signature_valid", "raw_event", "updated_at"])
-            payment_intent = obj.get("payment_intent") or obj.get("id")
-            event_type = event.get("type")
+
+            # 3) Process
             if event_type in ("payment_intent.succeeded", "checkout.session.completed"):
                 txn = process_success(txn=txn, gateway_reference=payment_intent, request_id=request_id)
-                # Notify payer on success (idempotent and post-commit)
-                to_email = getattr(getattr(txn, "user", None), "email", None)
-                if to_email:
-                    emit_once(
-                        event_key=f"payment_success:{txn.reference}",
-                        user=getattr(txn, "user", None),
-                        channel="email",
-                        payload={"order_id": txn.order_id, "amount": str(txn.amount)},
-                        send_fn=lambda: send_payment_email(to_email, txn.order_id, txn.amount, txn.reference, "received"),
-                    )
-                # If duplicate auto-refund occurred, also notify refund completion
-                if (
-                    getattr(txn, "status", None) == TxnStatus.REFUNDED
-                    and to_email
-                    and getattr(txn, "refund_reference", None)
-                ):
+                outcome = "received"
+                notif_key = f"payment_success:{txn.reference}"
+            elif event_type in ("payment_intent.payment_failed", "checkout.session.expired"):
+                txn = process_failure(txn=txn, request_id=request_id)
+                outcome = "failed"
+                notif_key = f"payment_failed:{txn.reference}"
+            else:
+                # Unhandled event; acknowledge so Stripe doesn't retry
+                return JsonResponse({"ok": True}, status=200)
+
+        # 4) Post-commit notifications (idempotent)
+        to_email = getattr(getattr(txn, "user", None), "email", None)
+        if to_email:
+            if outcome == "received":
+                emit_once(
+                    event_key=notif_key,
+                    user=getattr(txn, "user", None),
+                    channel="email",
+                    payload={"order_id": txn.order_id, "amount": str(txn.amount)},
+                    send_fn=lambda: send_payment_email(
+                        to_email, txn.order_id, txn.amount, txn.reference, "received"
+                    ),
+                )
+                # If duplicate + auto-refund happened, also notify refund
+                if txn.status == TxnStatus.REFUNDED and getattr(txn, "refund_reference", None):
                     emit_once(
                         event_key=f"refund_completed:{txn.refund_reference}",
                         user=getattr(txn, "user", None),
                         channel="email",
                         payload={"order_id": txn.order_id, "amount": str(txn.amount)},
-                        send_fn=lambda: send_refund_email(to_email, txn.order_id, txn.amount, txn.refund_reference, "completed"),
+                        send_fn=lambda: send_refund_email(
+                            to_email, txn.order_id, txn.amount, txn.refund_reference, "completed"
+                        ),
                     )
-            elif event_type in ("payment_intent.payment_failed", "checkout.session.expired"):
-                txn = process_failure(txn=txn, request_id=request_id)
-                to_email = getattr(getattr(txn, "user", None), "email", None)
-                if to_email:
-                    emit_once(
-                        event_key=f"payment_failed:{txn.reference}",
-                        user=getattr(txn, "user", None),
-                        channel="email",
-                        payload={"order_id": txn.order_id, "amount": str(txn.amount)},
-                        send_fn=lambda: send_payment_email(to_email, txn.order_id, txn.amount, txn.reference, "failed"),
-                    )
+            else:  # failed
+                emit_once(
+                    event_key=notif_key,
+                    user=getattr(txn, "user", None),
+                    channel="email",
+                    payload={"order_id": txn.order_id, "amount": str(txn.amount)},
+                    send_fn=lambda: send_payment_email(
+                        to_email, txn.order_id, txn.amount, txn.reference, "failed"
+                    ),
+                )
+
         return JsonResponse({"ok": True})
 
 
+# ---------------------------
+# Paystack Webhook
+# ---------------------------
 @method_decorator(csrf_exempt, name="dispatch")
 class PaystackWebhookView(View):
     def post(self, request, *args, **kwargs):
-        request_id = getattr(request, "request_id", "")
+        request_id = hashlib.sha256(request.body).hexdigest()[:16]
+
+        # 1) Verify signature & parse
         try:
             data = verify_paystack(request)
-            sig_valid = True
         except ValidationError as e:
-            # Differentiate signature vs JSON issues without leaking secrets
             msg = (str(e) or "").lower()
             if "json" in msg:
                 return JsonResponse({"detail": "invalid json"}, status=400)
             AuditLog.log(event="WEBHOOK_SIGNATURE_INVALID", request_id=request_id, message="invalid signature")
             return JsonResponse({"detail": "invalid signature"}, status=401)
-        # Idempotency via body hash of raw request
-        import hashlib
-        raw = request.body
-        body_sha256 = hashlib.sha256(raw).hexdigest().lower()
-        ref = data.get("data", {}).get("reference")
+
+        # 2) Idempotency by body SHA256
+        body_sha256 = hashlib.sha256(request.body).hexdigest().lower()
+        ref = (data.get("data") or {}).get("reference")
         if not ref:
             AuditLog.log(event="WEBHOOK_MISSING_REFERENCE", request_id=request_id)
             return JsonResponse({"detail": "missing reference"}, status=400)
-        # Upsert PaymentEvent for idempotency; duplicate bodies are acknowledged with 200
+
         pe, created = PaymentEvent.objects.get_or_create(
             body_sha256=body_sha256,
             defaults={"provider": "paystack", "reference": ref, "body": data},
         )
         if not created:
-            return HttpResponse(status=200)
+            return HttpResponse(status=200)  # duplicate/retry => ack
+
+        # 3) Resolve & process
         with dbtx.atomic():
             try:
                 txn = Transaction.objects.select_for_update().get(reference=ref)
             except Transaction.DoesNotExist:
                 AuditLog.log(event="WEBHOOK_UNKNOWN_REFERENCE", request_id=request_id, meta={"reference": ref})
                 return JsonResponse({"ok": True}, status=202)
-            txn.callback_received = True
-            txn.signature_valid = sig_valid
-            txn.raw_event = data
-            txn.save(update_fields=["callback_received", "signature_valid", "raw_event", "updated_at"])
-            status_ = data.get("data", {}).get("status")
-            gateway_ref = data.get("data", {}).get("id") or ref
-            if status_ == "success":
-                txn = process_success(txn=txn, gateway_reference=gateway_ref, request_id=request_id)
-                to_email = getattr(getattr(txn, "user", None), "email", None)
-                if to_email:
-                    emit_once(
-                        event_key=f"payment_success:{txn.reference}",
-                        user=getattr(txn, "user", None),
-                        channel="email",
-                        payload={"order_id": txn.order_id, "amount": str(txn.amount)},
-                        send_fn=lambda: send_payment_email(to_email, txn.order_id, txn.amount, txn.reference, "received"),
-                    )
-                if (
-                    getattr(txn, "status", None) == TxnStatus.REFUNDED
-                    and to_email
-                    and getattr(txn, "refund_reference", None)
-                ):
-                    emit_once(
-                        event_key=f"refund_completed:{txn.refund_reference}",
-                        user=getattr(txn, "user", None),
-                        channel="email",
-                        payload={"order_id": txn.order_id, "amount": str(txn.amount)},
-                        send_fn=lambda: send_refund_email(to_email, txn.order_id, txn.amount, txn.refund_reference, "completed"),
-                    )
-            else:
-                txn = process_failure(txn=txn, request_id=request_id)
-                to_email = getattr(getattr(txn, "user", None), "email", None)
-                if to_email:
-                    emit_once(
-                        event_key=f"payment_failed:{txn.reference}",
-                        user=getattr(txn, "user", None),
-                        channel="email",
-                        payload={"order_id": txn.order_id, "amount": str(txn.amount)},
-                        send_fn=lambda: send_payment_email(to_email, txn.order_id, txn.amount, txn.reference, "failed"),
-                    )
-        return JsonResponse({"ok": True})
 
-
-@method_decorator(csrf_exempt, name="dispatch")
-class MPesaWebhookView(View):
-    def post(self, request, *args, **kwargs):
-        request_id = getattr(request, "request_id", "")
-        try:
-            data = verify_mpesa(request)
-        except Exception as e:
-            AuditLog.log(event="WEBHOOK_SIGNATURE_INVALID", request_id=request_id, message=str(e))
-            return JsonResponse({"ok": False}, status=400)
-        callback = data.get("Body", {}).get("stkCallback", {})
-        items = callback.get("CallbackMetadata", {}).get("Item", [])
-        meta = {i.get("Name"): i.get("Value") for i in items}
-        ref = callback.get("Reference") or callback.get("MerchantRequestID")
-        if not ref:
-            AuditLog.log(event="WEBHOOK_MISSING_REFERENCE", request_id=request_id)
-            return JsonResponse({"ok": True}, status=202)
-        with dbtx.atomic():
-            try:
-                txn = Transaction.objects.select_for_update().get(reference=ref)
-            except Transaction.DoesNotExist:
-                AuditLog.log(event="WEBHOOK_UNKNOWN_REFERENCE", request_id=request_id, meta={"reference": ref})
-                return JsonResponse({"ok": True}, status=202)
             txn.callback_received = True
             txn.signature_valid = True
             txn.raw_event = data
             txn.save(update_fields=["callback_received", "signature_valid", "raw_event", "updated_at"])
-            result_code = callback.get("ResultCode")
-            gateway_ref = meta.get("MpesaReceiptNumber")
-            if result_code == 0:
+
+            event_name = data.get("event")
+            status_ = (data.get("data") or {}).get("status")
+            gateway_ref = (data.get("data") or {}).get("id") or ref
+
+            if event_name == "charge.success" or status_ == "success":
                 txn = process_success(txn=txn, gateway_reference=gateway_ref, request_id=request_id)
-                to_email = getattr(getattr(txn, "user", None), "email", None)
-                if to_email:
-                    emit_once(
-                        event_key=f"payment_success:{txn.reference}",
-                        user=getattr(txn, "user", None),
-                        channel="email",
-                        payload={"order_id": txn.order_id, "amount": str(txn.amount)},
-                        send_fn=lambda: send_payment_email(to_email, txn.order_id, txn.amount, txn.reference, "received"),
-                    )
-                if (
-                    getattr(txn, "status", None) == TxnStatus.REFUNDED
-                    and to_email
-                    and getattr(txn, "refund_reference", None)
-                ):
+                outcome = "received"
+                notif_key = f"payment_success:{txn.reference}"
+            elif event_name in {"charge.failed", "charge.cancelled"} or status_ in {"failed", "cancelled"}:
+                txn = process_failure(txn=txn, request_id=request_id)
+                outcome = "failed"
+                notif_key = f"payment_failed:{txn.reference}"
+            else:
+                return JsonResponse({"ok": True}, status=200)
+
+        # 4) Post-commit notifications
+        to_email = getattr(getattr(txn, "user", None), "email", None)
+        if to_email:
+            if outcome == "received":
+                emit_once(
+                    event_key=notif_key,
+                    user=getattr(txn, "user", None),
+                    channel="email",
+                    payload={"order_id": txn.order_id, "amount": str(txn.amount)},
+                    send_fn=lambda: send_payment_email(
+                        to_email, txn.order_id, txn.amount, txn.reference, "received"
+                    ),
+                )
+                if txn.status == TxnStatus.REFUNDED and getattr(txn, "refund_reference", None):
                     emit_once(
                         event_key=f"refund_completed:{txn.refund_reference}",
                         user=getattr(txn, "user", None),
                         channel="email",
                         payload={"order_id": txn.order_id, "amount": str(txn.amount)},
-                        send_fn=lambda: send_refund_email(to_email, txn.order_id, txn.amount, txn.refund_reference, "completed"),
+                        send_fn=lambda: send_refund_email(
+                            to_email, txn.order_id, txn.amount, txn.refund_reference, "completed"
+                        ),
                     )
             else:
+                emit_once(
+                    event_key=notif_key,
+                    user=getattr(txn, "user", None),
+                    channel="email",
+                    payload={"order_id": txn.order_id, "amount": str(txn.amount)},
+                    send_fn=lambda: send_payment_email(
+                        to_email, txn.order_id, txn.amount, txn.reference, "failed"
+                    ),
+                )
+
+        return JsonResponse({"ok": True})
+
+
+# ---------------------------
+# M-Pesa (Daraja) Webhook
+# ---------------------------
+@method_decorator(csrf_exempt, name="dispatch")
+class MPesaWebhookView(View):
+    def post(self, request, *args, **kwargs):
+        request_id = hashlib.sha256(request.body).hexdigest()[:16]
+
+        try:
+            data = verify_mpesa(request)
+        except ValidationError as e:
+            AuditLog.log(event="WEBHOOK_SIGNATURE_INVALID", request_id=request_id, message=str(e))
+            return JsonResponse({"ok": False}, status=400)
+
+        callback = (data.get("Body") or {}).get("stkCallback", {}) or {}
+        items = (callback.get("CallbackMetadata") or {}).get("Item", []) or []
+        meta = {i.get("Name"): i.get("Value") for i in items}
+
+        ref = callback.get("Reference") or callback.get("MerchantRequestID")
+        if not ref:
+            AuditLog.log(event="WEBHOOK_MISSING_REFERENCE", request_id=request_id)
+            return JsonResponse({"ok": True}, status=202)
+
+        with dbtx.atomic():
+            try:
+                txn = Transaction.objects.select_for_update().get(reference=ref)
+            except Transaction.DoesNotExist:
+                AuditLog.log(event="WEBHOOK_UNKNOWN_REFERENCE", request_id=request_id, meta={"reference": ref})
+                return JsonResponse({"ok": True}, status=202)
+
+            txn.callback_received = True
+            txn.signature_valid = True  # if you add cert verification, set based on result
+            txn.raw_event = data
+            txn.save(update_fields=["callback_received", "signature_valid", "raw_event", "updated_at"])
+
+            result_code = callback.get("ResultCode")
+            gateway_ref = meta.get("MpesaReceiptNumber")
+
+            if result_code == 0:
+                txn = process_success(txn=txn, gateway_reference=gateway_ref, request_id=request_id)
+                outcome = "received"
+                notif_key = f"payment_success:{txn.reference}"
+            else:
                 txn = process_failure(txn=txn, request_id=request_id)
-                to_email = getattr(getattr(txn, "user", None), "email", None)
-                if to_email:
+                outcome = "failed"
+                notif_key = f"payment_failed:{txn.reference}"
+
+        # Post-commit notifications
+        to_email = getattr(getattr(txn, "user", None), "email", None)
+        if to_email:
+            if outcome == "received":
+                emit_once(
+                    event_key=notif_key,
+                    user=getattr(txn, "user", None),
+                    channel="email",
+                    payload={"order_id": txn.order_id, "amount": str(txn.amount)},
+                    send_fn=lambda: send_payment_email(
+                        to_email, txn.order_id, txn.amount, txn.reference, "received"
+                    ),
+                )
+                if txn.status == TxnStatus.REFUNDED and getattr(txn, "refund_reference", None):
                     emit_once(
-                        event_key=f"payment_failed:{txn.reference}",
+                        event_key=f"refund_completed:{txn.refund_reference}",
                         user=getattr(txn, "user", None),
                         channel="email",
                         payload={"order_id": txn.order_id, "amount": str(txn.amount)},
-                        send_fn=lambda: send_payment_email(to_email, txn.order_id, txn.amount, txn.reference, "failed"),
+                        send_fn=lambda: send_refund_email(
+                            to_email, txn.order_id, txn.amount, txn.refund_reference, "completed"
+                        ),
                     )
+            else:
+                emit_once(
+                    event_key=notif_key,
+                    user=getattr(txn, "user", None),
+                    channel="email",
+                    payload={"order_id": txn.order_id, "amount": str(txn.amount)},
+                    send_fn=lambda: send_payment_email(
+                        to_email, txn.order_id, txn.amount, txn.reference, "failed"
+                    ),
+                )
+
         return JsonResponse({"ok": True})

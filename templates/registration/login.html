@@ -5,14 +5,11 @@
   <meta charset="utf-8" />
   <title>Login</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-
   <link rel="stylesheet" href="{% static 'dist/styles.css' %}">
-
   <!-- Vue 3 (global build) -->
   <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
 </head>
 <body class="min-h-screen bg-[#F3EAD9] flex items-start sm:items-center justify-center">
-
   <div id="app" class="w-full max-w-md mx-auto mt-16 sm:mt-0 px-4">
     <!-- Heading -->
     <div class="text-center mb-6">
@@ -21,7 +18,6 @@
 
     <!-- Card -->
     <div class="bg-white rounded-2xl shadow-md p-6 sm:p-8">
-
       {% if form.errors %}
         <div class="mb-4 text-sm text-red-600">
           Invalid username or password. Please try again.
@@ -73,16 +69,13 @@
               </svg>
             </button>
           </div>
-          <!-- simple client hint -->
           <p v-if="password.length && password.length < 4" class="mt-1 text-xs text-gray-500">
             Tip: password looks short.
           </p>
         </div>
 
-        <!-- next passthrough -->
         <input type="hidden" name="next" value="{{ next }}"/>
 
-        <!-- Submit -->
         <button
           type="submit"
           class="w-full rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 transition disabled:opacity-60 disabled:cursor-not-allowed"
@@ -97,7 +90,6 @@
           </span>
         </button>
 
-        <!-- Links -->
         <div class="text-center text-sm mt-2 space-y-2">
           <p>
             <a href="{% url 'password_reset' %}" class="text-blue-700 hover:underline">Forgot your password?</a>
@@ -112,11 +104,11 @@
     createApp({
       data() {
         return {
-          username: '',        
+          username: '',
           password: '',
           showPass: false,
           loading: false,
-        }
+        };
       }
     }).mount('#app');
   </script>

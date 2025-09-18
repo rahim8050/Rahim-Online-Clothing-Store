@@ -1,47 +1,93 @@
-import requests
-from requests.structures import CaseInsensitiveDict
-from django.conf import settings
+# utils_payments_geo.py
+from __future__ import annotations
 
 from decimal import Decimal, ROUND_HALF_UP
-from typing import Optional
-Q2 = Decimal("0.01")
+from typing import Optional, Union, Any, Dict
 
-api_key = settings.GEOAPIFY_API_KEY
+import requests
+from django.conf import settings
+
+# ------------ Quantization constants ------------
+Q6 = Decimal("0.000001")  # 6 dp (geo)
+Q2 = Decimal("0.01")      # 2 dp (money)
+
+# Cache once; safe if missing
+api_key: Optional[str] = getattr(settings, "GEOAPIFY_API_KEY", None)
 
 
-def reverse_geocode(lat, lon):
-    url = f"https://api.geoapify.com/v1/geocode/reverse?lat={lat}&lon={lon}&apiKey={api_key}"
+# -------------------- Geo --------------------
+def reverse_geocode(
+    lat: Union[float, str, Decimal],
+    lon: Union[float, str, Decimal],
+    *,
+    timeout: int = 6,
+    session: Optional[requests.Session] = None,
+) -> Dict[str, Any]:
+    """
+    Reverse geocode via Geoapify.
 
-    headers = CaseInsensitiveDict()
-    headers["Accept"] = "application/json"
-
-    response = requests.get(url, headers=headers)
-    if response.status_code == 200:
-        return response.json()  # Parsed JSON response
-    else:
+    Returns parsed JSON (dict) on success, or:
+      {'error': '...', 'status_code': <int|None>, 'body': <json_or_text>}
+    on failure.
+    """
+    if not api_key:
         return {
-            "error": f"Failed to reverse geocode: {response.status_code}",
-            "status_code": response.status_code,
+            "error": "Geoapify API key missing in settings.GEOAPIFY_API_KEY",
+            "status_code": 500,
         }
 
+    # Normalize to 6 dp strings to avoid float artifacts
+    lat_q = str(Decimal(str(lat)).quantize(Q6, rounding=ROUND_HALF_UP))
+    lon_q = str(Decimal(str(lon)).quantize(Q6, rounding=ROUND_HALF_UP))
+
+    url = "https://api.geoapify.com/v1/geocode/reverse"
+    params = {"lat": lat_q, "lon": lon_q, "apiKey": api_key}
+    headers = {"Accept": "application/json"}
+
+    try:
+        req = session.get if session else requests.get
+        resp = req(url, params=params, headers=headers, timeout=timeout)
+        if resp.status_code == 200:
+            return resp.json()
+        return {
+            "error": f"Failed to reverse geocode: {resp.status_code}",
+            "status_code": resp.status_code,
+            "body": _safe_json(resp),
+        }
+    except requests.RequestException as e:
+        return {"error": f"HTTP error: {e.__class__.__name__}: {e}", "status_code": None}
 
 
+def _safe_json(resp: requests.Response) -> Any:
+    """Try json(); fall back to (trimmed) text."""
+    try:
+        return resp.json()
+    except ValueError:
+        txt = (resp.text or "").strip()
+        return txt[:1000]  # avoid huge logs/UI payloads
 
 
-
-def D(x):  # safe Decimal
+# -------------------- Money helpers --------------------
+def D(x: Any) -> Decimal:
+    """Safe Decimal constructor."""
     return x if isinstance(x, Decimal) else Decimal(str(x))
 
-def q2(x):  # 2dp HALF_UP
+
+def q2(x: Any) -> Decimal:
+    """Quantize to 2 dp, HALF_UP."""
     return D(x).quantize(Q2, rounding=ROUND_HALF_UP)
 
-def to_minor_units(amount) -> int:
+
+def to_minor_units(amount: Any) -> int:
+    """Convert a currency amount to minor units (e.g., KES cents)."""
     return int((q2(amount) * 100).to_integral_value(rounding=ROUND_HALF_UP))
 
 
 # -------------------- UI Status Normalizer --------------------
-def derive_ui_payment_status(order, last_tx: Optional[object] = None) -> str:
-    """Return a simple UI status: 'PAID', 'PENDING', 'FAILED', 'CANCELLED', 'REFUNDED', 'NOT_PAID'.
+def derive_ui_payment_status(order: Any, last_tx: Optional[Any] = None) -> str:
+    """
+    Return a simple UI status:
+      'PAID', 'PENDING', 'FAILED', 'CANCELLED', 'REFUNDED', 'NOT_PAID'.
 
     Uses Order fields (paid, payment_status) plus the latest Transaction when provided.
     """
@@ -50,11 +96,11 @@ def derive_ui_payment_status(order, last_tx: Optional[object] = None) -> str:
     tx_cb = bool(getattr(last_tx, "callback_received", False)) if last_tx else False
 
     # Final paid
-    if order.paid or st in {"paid", "success"}:
-        # If callback verified and success/refunded, mark as PAID; otherwise still treating as PAID for UI unless clearly pending
+    if getattr(order, "paid", False) or st in {"paid", "success"}:
+        # Prefer PAID if callback verified with success/refunded
         if tx_cb and tx_status in {"success", "refunded"}:
             return "PAID"
-        # Some gateways set paid only after verification; if we got here, prefer PAID unless explicitly pending
+        # If gateway looks pending and no callback yet, surface PENDING
         if tx_status in {"pending", "initialized", "unknown"} and not tx_cb:
             return "PENDING"
         return "PAID"
@@ -70,4 +116,5 @@ def derive_ui_payment_status(order, last_tx: Optional[object] = None) -> str:
         return "CANCELLED"
     if tx_status in {"refunded", "refunded_duplicate"}:
         return "REFUNDED"
+
     return "NOT_PAID"

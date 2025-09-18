@@ -4,6 +4,7 @@ from django.contrib.auth.models import Group
 from users.models import VendorStaff  # your model lives here
 from users.constants import VENDOR_STAFF as GROUP_VENDOR_STAFF
 
+
 @transaction.atomic
 def add_or_activate_staff(owner, staff, role="staff"):
     """
@@ -31,7 +32,9 @@ def add_or_activate_staff(owner, staff, role="staff"):
         g.user_set.add(staff)
     except Exception:
         pass
+
     return row
+
 
 @transaction.atomic
 def deactivate_staff(owner, staff):
@@ -93,3 +96,4 @@ def deactivate_vendor_staff(staff_or_membership, owner_id=None):
     except Exception:
         pass
     return row
+

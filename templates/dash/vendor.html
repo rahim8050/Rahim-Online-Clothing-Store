@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% load static %}
+
 {% block content %}
 <div class="max-w-7xl mx-auto p-4 space-y-6">
   <div class="flex items-center justify-between">
@@ -42,7 +43,7 @@
     {% endif %}
   </section>
 
-  <!-- Live deliveries (Vue 3 ESM) -->
+  <!-- Live deliveries (Vue app mounts here) -->
   <section>
     <h2 class="text-lg font-semibold mb-2">Active deliveries</h2>
     <div id="vendor-deliveries"></div>
@@ -61,7 +62,7 @@
   </section>
 </div>
 
-<!-- ESM entry (no CDN, no inline JS) -->
+<!-- ESM entry (no inline JS) -->
 <script type="module" src="{% static 'js/vendor-dashboard.esm.js' %}"></script>
 
 <!-- ===== Vue templates (safe; no scripts executed) ===== -->

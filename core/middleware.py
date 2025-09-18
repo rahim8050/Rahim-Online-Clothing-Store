@@ -1,4 +1,6 @@
 # core/middleware.py
+from __future__ import annotations
+
 import uuid
 from django.conf import settings
 
@@ -11,8 +13,31 @@ DEV_ORIGINS = (
 )
 
 
+def _set_header(resp, name: str, value: str) -> None:
+    """
+    Set a response header compatibly across Django versions.
+    Django 3.2+ has resp.headers; older uses mapping interface.
+    """
+    try:
+        resp.headers[name] = value
+    except AttributeError:
+        resp[name] = value
+
+
+def _get_header(resp, name: str, default: str = "") -> str:
+    """
+    Get a response header safely across Django versions.
+    """
+    try:
+        return resp.headers.get(name, default)
+    except AttributeError:
+        # Older Django: has_header + mapping access
+        return resp[name] if hasattr(resp, "has_header") and resp.has_header(name) else default
+
+
 class RequestIDMiddleware:
-    """Attach a request id and echo it back in the response."""
+    """Attach a request ID and echo it back in the response as X-Request-ID."""
+
     def __init__(self, get_response):
         self.get_response = get_response
 
@@ -20,33 +45,36 @@ class RequestIDMiddleware:
         rid = request.META.get("HTTP_X_REQUEST_ID") or uuid.uuid4().hex
         request.request_id = rid
         resp = self.get_response(request)
-        resp.headers["X-Request-ID"] = rid
+        _set_header(resp, "X-Request-ID", rid)
         return resp
 
 
 class PermissionsPolicyMiddleware:
     """
-    Set/override ONLY the geolocation directive.
+    Set/override ONLY the geolocation directive in the Permissions-Policy header.
 
     - DEBUG=True  -> allow geolocation for self + local dev origins
-    - DEBUG=False -> disable geolocation (adjust to your prod origins if needed)
+    - DEBUG=False -> disable geolocation (tight by default; adjust for prod as needed)
     """
+
     def __init__(self, get_response):
         self.get_response = get_response
 
     def __call__(self, request):
         resp = self.get_response(request)
 
-        # start with existing header and strip any existing geolocation=...
-        current = resp.headers.get("Permissions-Policy", "")
+        # Start with existing header and strip any existing geolocation=...
+        current = _get_header(resp, "Permissions-Policy", "")
         parts = [p.strip() for p in current.split(",") if p.strip()]
         parts = [p for p in parts if not p.lower().startswith("geolocation=")]
 
         if settings.DEBUG:
-            allow = ' '.join(f'"{o}"' for o in DEV_ORIGINS)
-            parts.append(f'geolocation=(self {allow})')
+            # Quote origins per spec: geolocation=(self "https://example.com" ...)
+            allow = " ".join(f'"{o}"' for o in DEV_ORIGINS)
+            parts.append(f"geolocation=(self {allow})")
         else:
-            parts.append('geolocation=()')
+            # Lock it down in prod unless explicitly allowed
+            parts.append("geolocation=()")
 
-        resp.headers["Permissions-Policy"] = ", ".join(parts)
+        _set_header(resp, "Permissions-Policy", ", ".join(parts))
         return resp

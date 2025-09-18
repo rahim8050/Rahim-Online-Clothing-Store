@@ -5,6 +5,7 @@ from django.apps import apps
 from django.db import transaction
 from notifications.services import create_and_push
 from notifications.ws import push_to_user
+
 import logging; logger = logging.getLogger(__name__)
 @receiver(user_logged_in)
 def restore_cart_session(sender, request, user, **kwargs):
@@ -101,3 +102,4 @@ def vendor_application_status_push(sender, instance, created, **kwargs):
         })
 
     transaction.on_commit(_after)
+

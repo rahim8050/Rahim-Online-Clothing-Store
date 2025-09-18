@@ -14,6 +14,7 @@ class IsVendorOrVendorStaff(BasePermission):
         if getattr(u, "is_superuser", False) or u.groups.filter(name="Admin").exists():
             return True
 
+
         in_vendor_group = u.groups.filter(name="Vendor").exists()
         try:
             from users.models import VendorStaff  # adjust app label
@@ -93,6 +94,7 @@ class HasVendorScope(BasePermission):
             return False
 
 
+
 class NotBuyingOwnListing(BasePermission):
     """Deny when the requester is the product owner OR active vendor staff for that owner."""
     message = 'You cannot purchase your own product.'
@@ -134,5 +136,6 @@ class IsDriver(BasePermission):
     def has_permission(self, request, view):
         u = getattr(request, "user", None)
         return bool(u and u.is_authenticated and u.groups.filter(name="Driver").exists())
+
 
 
