@@ -14,7 +14,7 @@ from django.contrib.admin.helpers import ActionForm  # ✅ import this
 from .models import CustomUser, VendorApplication, VendorStaff
 from users.services import deactivate_staff as deactivate_vendor_staff
 
-<<<<<<< HEAD
+
 
 admin.site.register(CustomUser, UserAdmin)
 
