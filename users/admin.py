@@ -1,17 +1,20 @@
 from django import forms
 from django.conf import settings
 from django.contrib import admin, messages
-from django.contrib.admin.helpers import ActionForm  # required for custom action form
+from django.contrib.admin.helpers import ActionForm
 from django.contrib.auth.admin import UserAdmin
 from django.core.mail import send_mail
+
 from django.utils import timezone
 from django.contrib.admin.helpers import ActionForm  # ✅ import this
+
 
 
 
 from .models import CustomUser, VendorApplication, VendorStaff
 from users.services import deactivate_staff as deactivate_vendor_staff
 
+<<<<<<< HEAD
 
 admin.site.register(CustomUser, UserAdmin)
 
@@ -118,6 +121,7 @@ from .models import CustomUser, VendorApplication, VendorStaff
 from users.services import deactivate_staff as deactivate_vendor_staff
 
 
+
 admin.site.register(CustomUser, UserAdmin)
 
 
@@ -209,5 +213,4 @@ class VendorStaffAdmin(admin.ModelAdmin):
         super().save_model(request, obj, form, change)
         if not obj.is_active:
             deactivate_vendor_staff(obj)
-
 
