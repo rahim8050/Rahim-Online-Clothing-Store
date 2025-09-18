@@ -435,6 +435,7 @@ from csp import constants as csp_constants
 
 
 
+
 CSP_DEFAULT_SRC = (csp_constants.SELF,)
 CSP_CONNECT_SRC = (csp_constants.SELF, "ws:", "wss:", "https://api.cloudinary.com")
 CSP_SCRIPT_SRC = (
@@ -469,6 +470,7 @@ CSP_FRAME_SRC = (
 )
 CSP_WORKER_SRC = (csp_constants.SELF, "blob:")
 CSP_FRAME_ANCESTORS = (csp_constants.SELF,)
+
 
 
 CONTENT_SECURITY_POLICY = {

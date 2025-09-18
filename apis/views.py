@@ -76,7 +76,9 @@ from .serializers import (
     ProductOutSerializer,
 
 
+
     VendorApplySerializer,                 # if not used, you may remove
+
 
     VendorApplicationCreateSerializer,
     VendorStaffCreateSerializer,

@@ -519,6 +519,7 @@ def vendor_apply_deprecated(request):
 class VendorApplyAPI(generics.CreateAPIView):
 
 
+
     serializer_class = apps.get_model("users", "VendorApplicationCreateSerializer")
 
 
