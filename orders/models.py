@@ -1,31 +1,47 @@
-# orders/models.py
-from uuid import uuid4
-from decimal import Decimal, ROUND_HALF_UP
+# core/permissions.py
+from __future__ import annotations
 
-from django.conf import settings
-from django.core.validators import MinValueValidator, MaxValueValidator
-from django.db import models, transaction
-from django.db.models import CheckConstraint, Index, Q
-from django.utils import timezone
+from typing import Any, Optional
 
-from product_app.models import Product, Warehouse
-
-# 6-decimal quantum for geo coordinates
-Q6 = Decimal("0.000001")
+from rest_framework.permissions import BasePermission
+from users.constants import VENDOR, VENDOR_STAFF, DRIVER
+from users.utils import in_groups as _in_groups
 
 
-def channel_key_default() -> str:
-    """Random channel key for WS auth/subscriptions."""
-    return uuid4().hex
+def _token_to_scopes(auth: Any) -> set[str]:
+    """
+    Normalize various auth representations into a set of scopes.
+    Supports:
+      - dict-like: {'scopes': [...]} or {'scope': 'a b c'} or {'permissions': [...]}
+      - SimpleJWT token: has .payload dict
+      - any object exposing .get(...) or .payload.get(...)
+    """
+    def _listify(x: Any) -> set[str]:
+        if isinstance(x, (list, tuple, set)):
+            return set(map(str, x))
+        if isinstance(x, str):
+            return set(x.split())
+        return set()
+
+    if auth is None:
+        return set()
+
+    # dict-like
+    if hasattr(auth, "get"):
+        scopes = auth.get("scopes")
+        if scopes is not None:
+            return _listify(scopes)
+        # fallbacks some providers use
+        perm = auth.get("permissions")
+        if perm is not None:
+            return _listify(perm)
+        scope_str = auth.get("scope")
+        return _listify(scope_str)
 
 
-# =========================
-# Orders
-# =========================
-class Order(models.Model):
-    full_name = models.CharField(max_length=100)
-    email = models.EmailField()
-    address = models.CharField(max_length=250)
+    # objects with .payload (e.g., SimpleJWT token)
+    payload = getattr(auth, "payload", None)
+   
 
     # (Optional) caller-provided coords ΓÇö keep nullable
     latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
@@ -445,3 +461,4 @@ class PaymentEvent(models.Model):
 
     class Meta:
         indexes = [models.Index(fields=["provider", "reference"])]
+

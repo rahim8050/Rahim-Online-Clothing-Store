@@ -106,6 +106,7 @@ class ProductListSerializer(serializers.ModelSerializer):
         return getattr(obj, f"{field}_id", None) == user.id
 
 
+
 class ProductOutSerializer(serializers.ModelSerializer):
     stocks = serializers.SerializerMethodField()
 

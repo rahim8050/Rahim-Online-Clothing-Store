@@ -11,6 +11,10 @@ from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from django.apps import apps
 from django.conf import settings
+
+
+from django.contrib.sites.shortcuts import get_current_site
+
 from django.contrib.auth import get_user_model
 from django.core.mail import EmailMultiAlternatives
 from django.core.signing import (
@@ -52,7 +56,13 @@ from users.permissions import (
 )
 from users.services import activate_vendor_staff  # group sync helper
 from users.utils import resolve_vendor_owner_for, vendor_owner_ids_for
+
+
+
+
 from core.siteutils import current_domain
+
+
 
 # If your serializers live elsewhere, adjust this import accordingly.
 from .serializers import (
@@ -64,6 +74,10 @@ from .serializers import (
     ProductListSerializer,
     VendorProductCreateSerializer,
     ProductOutSerializer,
+
+
+    VendorApplySerializer,                 # if not used, you may remove
+
     VendorApplicationCreateSerializer,
     VendorStaffCreateSerializer,
     VendorStaffOutSerializer,
@@ -549,8 +563,10 @@ class VendorStaffInviteAPI(APIView):
                         "staff": staff,
                         "owner": request.user,
                         "invite_link": invite_link,
+
                         "site_name": site_name,
                         "support_email": getattr(settings, "SUPPORT_EMAIL", settings.DEFAULT_FROM_EMAIL),
+
                     },
                 )
                 text_content = f"You've been invited as vendor staff.\n\nAccept your invite: {invite_link}"
