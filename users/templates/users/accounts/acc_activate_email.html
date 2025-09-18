@@ -39,7 +39,7 @@
   <!--[if mso]><style type="text/css">.btn{ font-family:Arial, sans-serif !important; }</style><![endif]-->
 </head>
 <body>
-  <div class="preheader">Welcome to Rahim Online Shop — confirm your email to activate your account.</div>
+  <div class="preheader">Welcome to {{ site_name }} — confirm your email to activate your account.</div>
   <table role="presentation" class="wrapper" width="100%" cellspacing="0" cellpadding="0">
     <tr>
       <td align="center">
@@ -48,7 +48,7 @@
             <td class="header">
               <table role="presentation" width="100%">
                 <tr>
-                  <td class="brand">Rahim Online Shop</td>
+                  <td class="brand">{{ site_name }}</td>
                   <td align="right" style="font:500 13px/1.2 system-ui; opacity:.9;">Account Activation</td>
                 </tr>
               </table>
@@ -61,21 +61,21 @@
 
               <!-- Outlook bulletproof button -->
               <!--[if mso]>
-              <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" href="{{ protocol }}://{{ domain }}{% url 'users:activate' uidb64=uid token=token %}" style="height:46px;v-text-anchor:middle;width:240px;" arcsize="14%" stroke="f" fillcolor="#10b981">
+              <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" href="{{ activation_url }}" style="height:46px;v-text-anchor:middle;width:240px;" arcsize="14%" stroke="f" fillcolor="#10b981">
                 <w:anchorlock/>
                 <center style="color:#ffffff;font-family:Arial,sans-serif;font-size:16px;font-weight:700;">Activate Account</center>
               </v:roundrect>
               <![endif]-->
               <!--[if !mso]><!-- -->
               <div class="btn-wrap">
-                <a class="btn" href="{{ protocol }}://{{ domain }}{% url 'users:activate' uidb64=uid token=token %}" target="_blank" rel="noopener">✅ Activate Account</a>
+                <a class="btn" href="{{ activation_url }}" target="_blank" rel="noopener">✅ Activate Account</a>
               </div>
               <!--<![endif]-->
 
               <div class="note">
                 If the button doesn’t work, copy this link into your browser:<br>
-                <a href="{{ protocol }}://{{ domain }}{% url 'users:activate' uidb64=uid token=token %}" style="word-break:break-all; color:#2563eb;">
-                  {{ protocol }}://{{ domain }}{% url 'users:activate' uidb64=uid token=token %}
+                <a href="{{ activation_url }}" style="word-break:break-all; color:#2563eb;">
+                  {{ activation_url }}
                 </a>
               </div>
 
@@ -84,8 +84,8 @@
           </tr>
           <tr>
             <td class="footer">
-              Sent by Rahim Online Shop • This is an automated message<br>
-              Need help? <a href="mailto:support@example.com">support@example.com</a>
+              Sent by {{ site_name }} • This is an automated message<br>
+              Need help? <a href="mailto:{{ support_email }}">{{ support_email }}</a>
             </td>
           </tr>
         </table>

@@ -45,7 +45,7 @@ def _safe_send(send_fn: Callable[[], None]) -> None:
 
 
 def _send_html_email(subject: str, to_email: str, text_body: str, html_body: str) -> None:
-    from_email = getattr(settings, "DEFAULT_FROM_EMAIL", "no-reply@example.com")
+    from_email = getattr(settings, "DEFAULT_FROM_EMAIL", f"no-reply@{settings.SITE_DOMAIN.split(":")[0]}")
     reply_to = [getattr(settings, "SUPPORT_EMAIL", from_email)]
     msg = EmailMultiAlternatives(subject, text_body, from_email, [to_email], reply_to=reply_to)
     msg.attach_alternative(html_body, "text/html")

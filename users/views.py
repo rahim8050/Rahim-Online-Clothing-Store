@@ -12,7 +12,6 @@ from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib.auth import get_user_model, login, update_session_auth_hash
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.views import LoginView, LogoutView
-from django.contrib.sites.shortcuts import get_current_site
 from django.core.cache import cache
 from django.core.exceptions import FieldError, ImproperlyConfigured
 from django.db import transaction
@@ -210,6 +209,11 @@ class CustomLoginView(LoginView):
             self.request.session["cart_id_backup"] = cart_id
 
         return super().form_valid(form)
+
+
+    def form_invalid(self, form):
+        logger.warning("Login failed for %s: %s", self.request.POST.get('username'), form.errors)
+        return super().form_invalid(form)
 
     def get_success_url(self):
         return self.get_redirect_url() or self.success_url
@@ -513,7 +517,9 @@ def vendor_apply_deprecated(request):
 
 # -------------------- Vendor Application APIs (DRF) --------------------
 class VendorApplyAPI(generics.CreateAPIView):
+
     serializer_class = apps.get_model("users", "VendorApplicationCreateSerializer")
+
     permission_classes = [permissions.IsAuthenticated]
 
     def get_serializer_class(self):

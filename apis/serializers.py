@@ -106,6 +106,32 @@ class ProductListSerializer(serializers.ModelSerializer):
         return getattr(obj, f"{field}_id", None) == user.id
 
 
+
+class ProductOutSerializer(serializers.ModelSerializer):
+    stocks = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Product
+        fields = [
+            "id",
+            "name",
+            "slug",
+            "description",
+            "price",
+            "available",
+            "category",
+            "owner",
+            "image",
+            "created",
+            "updated",
+            "stocks",
+        ]
+
+    def get_stocks(self, obj):
+        return list(
+            ProductStock.objects.filter(product=obj).values("warehouse_id", "quantity")
+        )
+
 # -----------------------
 # Delivery (model may be absent)
 # -----------------------
