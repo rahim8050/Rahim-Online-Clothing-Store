@@ -105,8 +105,8 @@
     return Number.isFinite(n) ? n : null;
   };
 
+  // start/dest as [lat, lng]
   async function fetchRoute(start, dest) {
-    // start/dest as [lat, lng]
     const url = `https://router.project-osrm.org/route/v1/driving/${start[1]},${start[0]};${dest[1]},${dest[0]}?overview=full&geometries=geojson`;
     const r = await fetch(url);
     const j = await r.json();
@@ -114,8 +114,8 @@
     return j.routes[0].geometry; // GeoJSON LineString
   }
 
+  // pos as [lat, lng]
   async function nearestRoad(pos) {
-    // pos as [lat, lng]
     const url = `https://router.project-osrm.org/nearest/v1/driving/${pos[1]},${pos[0]}?number=1`;
     const r = await fetch(url);
     const j = await r.json();
@@ -123,8 +123,8 @@
     return Array.isArray(loc) ? [loc[1], loc[0]] : pos; // -> [lat, lng]
   }
 
+  // pos as [lat, lng]
   function snapToRoute(geoLine, pos) {
-    // pos as [lat, lng]
     const pt = turf.point([pos[1], pos[0]]);
     const snapped = turf.nearestPointOnLine(geoLine, pt);
     const [lng, lat] = snapped.geometry.coordinates;
@@ -162,7 +162,7 @@
     if (!mapDiv) return;
 
     mapDiv.classList.remove('hidden');
-    const map = ensureMap(mapDiv);
+    const _map = ensureMap(mapDiv);
 
     // Parse/validate coords
     let startLL = (start[0] !== null && start[1] !== null) ? start : null;
@@ -176,19 +176,19 @@
 
     // Static markers
     if (startLL) {
-      if (!mapDiv._startMarker) mapDiv._startMarker = L.marker(startLL).addTo(map).bindTooltip('Start');
+      if (!mapDiv._startMarker) mapDiv._startMarker = L.marker(startLL).addTo(_map).bindTooltip('Start');
       else mapDiv._startMarker.setLatLng(startLL);
     }
     if (destLL) {
-      if (!mapDiv._destMarker) mapDiv._destMarker = L.marker(destLL).addTo(map).bindTooltip('Destination');
+      if (!mapDiv._destMarker) mapDiv._destMarker = L.marker(destLL).addTo(_map).bindTooltip('Destination');
       else mapDiv._destMarker.setLatLng(destLL);
     }
 
     // Fit view safely
     if (startLL && destLL) {
-      map.fitBounds(L.latLngBounds([startLL, destLL]), { padding: [24, 24] });
+      _map.fitBounds(L.latLngBounds([startLL, destLL]), { padding: [24, 24] });
     } else if (startLL) {
-      map.setView(startLL, 14);
+      _map.setView(startLL, 14);
     }
 
     // Draw route (best effort)
@@ -197,9 +197,9 @@
       try {
         const geo = await fetchRoute(startLL, destLL);
         mapDiv._route = geo;
-        if (mapDiv._routeLayer) map.removeLayer(mapDiv._routeLayer);
-        mapDiv._routeLayer = L.geoJSON(geo, { weight: 3, dashArray: '4,6' }).addTo(map);
-        map.fitBounds(mapDiv._routeLayer.getBounds(), { padding: [24, 24] });
+        if (mapDiv._routeLayer) _map.removeLayer(mapDiv._routeLayer);
+        mapDiv._routeLayer = L.geoJSON(geo, { weight: 3, dashArray: '4,6' }).addTo(_map);
+        _map.fitBounds(mapDiv._routeLayer.getBounds(), { padding: [24, 24] });
         if (noteDiv) noteDiv.textContent = '';
       } catch (err) {
         if (noteDiv) noteDiv.textContent = 'Could not fetch route; showing live trail only.';
@@ -236,9 +236,6 @@
           return;
         }
         if (d.type !== 'position_update') return;
-
-        // Ensure map exists
-        const _map = ensureMap(mapDiv);
 
         // Parse/snap position
         let pos = [toNum(d.lat), toNum(d.lng)];

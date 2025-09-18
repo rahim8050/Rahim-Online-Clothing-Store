@@ -33,7 +33,8 @@ def add_or_activate_staff(owner, staff, role="staff"):
     except Exception:
         pass
 
-#  return row
+    return row
+
 
 @transaction.atomic
 def deactivate_staff(owner, staff):

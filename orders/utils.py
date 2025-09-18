@@ -7,7 +7,7 @@ from typing import Optional, Union, Any, Dict
 import requests
 from django.conf import settings
 
-# Quantization constants
+# ------------ Quantization constants ------------
 Q6 = Decimal("0.000001")  # 6 dp (geo)
 Q2 = Decimal("0.01")      # 2 dp (money)
 
@@ -25,14 +25,18 @@ def reverse_geocode(
 ) -> Dict[str, Any]:
     """
     Reverse geocode via Geoapify.
+
     Returns parsed JSON (dict) on success, or:
       {'error': '...', 'status_code': <int|None>, 'body': <json_or_text>}
     on failure.
     """
     if not api_key:
-        return {"error": "Geoapify API key missing in settings.GEOAPIFY_API_KEY", "status_code": 500}
+        return {
+            "error": "Geoapify API key missing in settings.GEOAPIFY_API_KEY",
+            "status_code": 500,
+        }
 
-    # normalize to 6 dp strings to avoid float artifacts
+    # Normalize to 6 dp strings to avoid float artifacts
     lat_q = str(Decimal(str(lat)).quantize(Q6, rounding=ROUND_HALF_UP))
     lon_q = str(Decimal(str(lon)).quantize(Q6, rounding=ROUND_HALF_UP))
 
@@ -60,27 +64,27 @@ def _safe_json(resp: requests.Response) -> Any:
         return resp.json()
     except ValueError:
         txt = (resp.text or "").strip()
-        return txt[:1000]  # don’t blow up logs/UI
+        return txt[:1000]  # avoid huge logs/UI payloads
 
 
 # -------------------- Money helpers --------------------
-def D(x) -> Decimal:
+def D(x: Any) -> Decimal:
     """Safe Decimal constructor."""
     return x if isinstance(x, Decimal) else Decimal(str(x))
 
 
-def q2(x) -> Decimal:
+def q2(x: Any) -> Decimal:
     """Quantize to 2 dp, HALF_UP."""
     return D(x).quantize(Q2, rounding=ROUND_HALF_UP)
 
 
-def to_minor_units(amount) -> int:
+def to_minor_units(amount: Any) -> int:
     """Convert a currency amount to minor units (e.g., KES cents)."""
     return int((q2(amount) * 100).to_integral_value(rounding=ROUND_HALF_UP))
 
 
 # -------------------- UI Status Normalizer --------------------
-def derive_ui_payment_status(order, last_tx: Optional[object] = None) -> str:
+def derive_ui_payment_status(order: Any, last_tx: Optional[Any] = None) -> str:
     """
     Return a simple UI status:
       'PAID', 'PENDING', 'FAILED', 'CANCELLED', 'REFUNDED', 'NOT_PAID'.

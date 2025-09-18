@@ -83,7 +83,7 @@ INSTALLED_APPS = [
     "drf_spectacular",
     "django_extensions",
     "django_daraja",  # M-Pesa SDK
-    # "corsheaders",  # <- enable if you install it
+    # "corsheaders",  # <- auto-added below if importable
 
     # First-party apps
     "core",
@@ -100,10 +100,8 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
-    # CORS (must be high, before CommonMiddleware) — enable if app present
-    # "corsheaders.middleware.CorsMiddleware",
 
-    # CSP should be early
+    # CSP early
     "csp.middleware.CSPMiddleware",
 
     # Static
@@ -133,6 +131,7 @@ if corsheaders:
     if "corsheaders" not in INSTALLED_APPS:
         INSTALLED_APPS.insert(INSTALLED_APPS.index("channels"), "corsheaders")
     if "corsheaders.middleware.CorsMiddleware" not in MIDDLEWARE:
+        # Place high (after SecurityMiddleware) and before CommonMiddleware
         MIDDLEWARE.insert(1, "corsheaders.middleware.CorsMiddleware")
 
 TEMPLATES = [
@@ -225,6 +224,19 @@ else:
         }
     }
 
+# Optional override to force Redis cache (even if not using channel layer)
+USE_REDIS_CACHE = env.bool("USE_REDIS_CACHE", default=False)
+if USE_REDIS_CACHE and REDIS_URL:
+    _cache_opts = {"ssl": True} if REDIS_SSL else {}
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.redis.RedisCache",
+            "LOCATION": REDIS_URL,
+            "TIMEOUT": None,
+            "OPTIONS": _cache_opts,
+        }
+    }
+
 # ---------------------------------------------------------------------
 # DRF / Auth
 # ---------------------------------------------------------------------
@@ -262,9 +274,9 @@ AUTH_PASSWORD_VALIDATORS = [
 # I18N / Time
 # ---------------------------------------------------------------------
 LANGUAGE_CODE = "en-us"
-TIME_ZONE = "Africa/Nairobi"   # app-level tz for display
+TIME_ZONE = "Africa/Nairobi"   # App display timezone
 USE_I18N = True
-USE_TZ = True                  # DB stored in UTC (keep True)
+USE_TZ = True                  # DB stored in UTC
 
 # ---------------------------------------------------------------------
 # Static & Media (WhiteNoise)
@@ -402,8 +414,7 @@ from csp.constants import SELF, NONCE
 CSP_DEFAULT_SRC = (SELF,)
 CSP_CONNECT_SRC = (SELF, "ws:", "wss:", "https://api.cloudinary.com")
 CSP_SCRIPT_SRC = (
-    SELF,
-    NONCE,
+    SELF, NONCE,
     "https://cdn.tailwindcss.com",
     "https://cdn.jsdelivr.net",
     "https://unpkg.com",
@@ -415,8 +426,7 @@ CSP_SCRIPT_SRC = (
     "https://*.paystack.com",
 )
 CSP_STYLE_SRC = (
-    SELF,
-    NONCE,
+    SELF, NONCE,
     "https://cdnjs.cloudflare.com",
     "https://unpkg.com",
     "https://fonts.googleapis.com",
@@ -424,19 +434,14 @@ CSP_STYLE_SRC = (
 CSP_STYLE_SRC_ATTR = ("'unsafe-inline'",)
 CSP_FONT_SRC = (SELF, "https://fonts.gstatic.com", "https://cdnjs.cloudflare.com", "data:")
 CSP_IMG_SRC = (
-    SELF,
-    "data:",
-    "blob:",
+    SELF, "data:", "blob:",
     "https://res.cloudinary.com",
     "https://tile.openstreetmap.org",
     "https://*.tile.openstreetmap.org",
 )
 CSP_FRAME_SRC = (
-    "https://js.stripe.com",
-    "https://*.stripe.com",
-    "https://js.paystack.co",
-    "https://*.paystack.co",
-    "https://*.paystack.com",
+    "https://js.stripe.com", "https://*.stripe.com",
+    "https://js.paystack.co", "https://*.paystack.co", "https://*.paystack.com",
 )
 CSP_WORKER_SRC = (SELF, "blob:")
 CSP_FRAME_ANCESTORS = (SELF,)

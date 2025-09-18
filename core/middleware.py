@@ -1,4 +1,6 @@
 # core/middleware.py
+from __future__ import annotations
+
 import uuid
 from django.conf import settings
 
@@ -23,7 +25,9 @@ def _set_header(resp, name: str, value: str) -> None:
 
 
 def _get_header(resp, name: str, default: str = "") -> str:
-    """Get a response header safely if present."""
+    """
+    Get a response header safely across Django versions.
+    """
     try:
         return resp.headers.get(name, default)
     except AttributeError:
@@ -32,7 +36,7 @@ def _get_header(resp, name: str, default: str = "") -> str:
 
 
 class RequestIDMiddleware:
-    """Attach a request id and echo it back in the response."""
+    """Attach a request ID and echo it back in the response as X-Request-ID."""
 
     def __init__(self, get_response):
         self.get_response = get_response
@@ -47,10 +51,10 @@ class RequestIDMiddleware:
 
 class PermissionsPolicyMiddleware:
     """
-    Set/override ONLY the geolocation directive.
+    Set/override ONLY the geolocation directive in the Permissions-Policy header.
 
     - DEBUG=True  -> allow geolocation for self + local dev origins
-    - DEBUG=False -> disable geolocation (adjust to your prod origins if needed)
+    - DEBUG=False -> disable geolocation (tight by default; adjust for prod as needed)
     """
 
     def __init__(self, get_response):
@@ -65,11 +69,11 @@ class PermissionsPolicyMiddleware:
         parts = [p for p in parts if not p.lower().startswith("geolocation=")]
 
         if settings.DEBUG:
-            # quote origins per spec: geolocation=(self "https://example.com" ...)
+            # Quote origins per spec: geolocation=(self "https://example.com" ...)
             allow = " ".join(f'"{o}"' for o in DEV_ORIGINS)
             parts.append(f"geolocation=(self {allow})")
         else:
-            # lock it down in prod unless you explicitly allow origins
+            # Lock it down in prod unless explicitly allowed
             parts.append("geolocation=()")
 
         _set_header(resp, "Permissions-Policy", ", ".join(parts))

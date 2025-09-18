@@ -1,7 +1,10 @@
+from __future__ import annotations
+
+from django.conf import settings
+from django.core.validators import MinValueValidator
 from django.db import models
 from django.db.models import Sum, Q
-from django.core.validators import MinValueValidator
-from django.conf import settings
+
 from product_app.models import Product
 from orders.money import D
 
@@ -16,7 +19,7 @@ class Cart(models.Model):
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="carts",
-        null=True,
+        null=True,   # allow anonymous carts
         blank=True,
     )
     status = models.CharField(
@@ -29,17 +32,17 @@ class Cart(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     def get_total_price(self):
-        """Total price for all items as a Decimal."""
+        """Return the total price for all items as a Decimal."""
         return sum((item.get_total_price() for item in self.items.all()), D("0.00"))
 
     def get_selected_total_price(self):
-        """Total price for selected items only as a Decimal."""
+        """Return the total price for only selected items as a Decimal."""
         return sum(
             (item.get_total_price() for item in self.items.filter(is_selected=True)),
             D("0.00"),
         )
 
-    def total_items(self):
+    def total_items(self) -> int:
         """Sum of quantities across items."""
         return self.items.aggregate(total=Sum("quantity"))["total"] or 0
 
@@ -52,7 +55,8 @@ class Cart(models.Model):
             models.Index(fields=["created_at"]),
         ]
         constraints = [
-            # One ACTIVE cart per user. (Anonymous carts allowed: user can be NULL.)
+            # Enforce one ACTIVE cart per user (when user is set).
+            # Multiple anonymous (user=NULL) ACTIVE carts are allowed by DB semantics.
             models.UniqueConstraint(
                 fields=["user", "status"],
                 condition=Q(status="active"),
@@ -70,7 +74,7 @@ class CartItem(models.Model):
     product = models.ForeignKey(
         Product,
         related_name="cart_items",
-        on_delete=models.PROTECT,
+        on_delete=models.PROTECT,  # don't delete products referenced in carts
     )
     quantity = models.PositiveIntegerField(
         default=1,
@@ -80,7 +84,7 @@ class CartItem(models.Model):
     is_selected = models.BooleanField(default=False)
 
     def get_total_price(self):
-        """Cost of this cart item (price * quantity) as a Decimal."""
+        """Cost of this item (price * quantity) as a Decimal."""
         return D(self.product.price) * self.quantity
 
     def __str__(self):
@@ -92,7 +96,7 @@ class CartItem(models.Model):
             models.Index(fields=["product"]),
         ]
         constraints = [
-            # Prevent duplicates of the same product in the same cart.
+            # Prevent duplicate product rows in the same cart.
             models.UniqueConstraint(
                 fields=["cart", "product"],
                 name="uniq_product_per_cart",

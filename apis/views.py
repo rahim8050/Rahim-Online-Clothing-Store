@@ -1,53 +1,61 @@
 # apis/views.py
-from django.contrib.auth import get_user_model
-from django.db.models import Prefetch, Q
-from django.shortcuts import get_object_or_404
-from django.utils import timezone
-from django.urls import reverse
-from django.apps import apps
+from __future__ import annotations
+
+import csv
 import logging
-from django.conf import settings
-# apis/views.py (top)
-from users.utils import resolve_vendor_owner_for
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from io import StringIO
+from typing import Optional
+
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
-from rest_framework.authentication import SessionAuthentication
-
-
-
-
+from django.apps import apps
+from django.conf import settings
+from django.contrib.sites.shortcuts import get_current_site
+from django.contrib.auth import get_user_model
 from django.core.mail import EmailMultiAlternatives
-from django.core.signing import TimestampSigner, dumps as sign, BadSignature, SignatureExpired
+from django.core.signing import (
+    TimestampSigner,
+    BadSignature,
+    SignatureExpired,
+    dumps as sign,
+    loads as unsign,
+)
 from django.db import transaction
-
-
-# from .serializers import VendorStaffInviteSerializer
-from users.models import VendorStaff
-from django.core.signing import loads as unsign
-
-signer = TimestampSigner()
-
-from rest_framework import statusfrom rest_framework.generics import ListAPIView, CreateAPIView
+from django.db.models import Prefetch, Q
+from django.shortcuts import get_object_or_404
+from django.template.loader import render_to_string
+from django.urls import reverse
+from django.utils import timezone
+from rest_framework import permissions, status
+from rest_framework.authentication import SessionAuthentication
+from rest_framework.generics import ListAPIView, CreateAPIView
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from django.template.loader import render_to_string
-from django.core.mail import EmailMultiAlternatives
-from django.contrib.sites.shortcuts import get_current_site
-from core.permissions import InGroups
-from product_app.queries import shopable_products_q
-from product_app.models import Product
-from product_app.utils import get_vendor_field
-from orders.models import Delivery, OrderItem
-from orders.models import DeliveryEvent
-from users.constants import VENDOR, VENDOR_STAFF, DRIVER
-from users.models import VendorStaff  # <-- FIX: was missing
-from rest_framework import permissions
-from users.permissions import IsVendorOrVendorStaff, IsDriver, IsVendorOwner, HasVendorScope
 
-# If your vendor staff serializers live in apis.serializers, keep this.
-# If you followed the earlier split, switch to: from users.serializers_vendor_staff import ...from .serializers import (
+from core.models import log_action
+from core.permissions import InGroups
+from inventory.services import check_low_stock_and_notify
+from orders.models import Delivery, OrderItem, DeliveryEvent
+from product_app.models import Product
+from product_app.queries import shopable_products_q
+from product_app.utils import get_vendor_field
+from users.constants import DRIVER
+from users.models import VendorStaff, VendorApplication
+from users.permissions import (
+    IsVendorOrVendorStaff,
+    IsDriver,
+    IsVendorOwner,
+    HasVendorScope,
+)
+from users.services import activate_vendor_staff  # group sync helper
+from users.utils import resolve_vendor_owner_for, vendor_owner_ids_for
+
+# If your serializers live elsewhere, adjust this import accordingly.
+from .serializers import (
     ProductSerializer,
     DeliverySerializer,
     DeliveryAssignSerializer,
@@ -55,28 +63,29 @@ from users.permissions import IsVendorOrVendorStaff, IsDriver, IsVendorOwner, Ha
     DeliveryStatusSerializer,
     ProductListSerializer,
     VendorProductCreateSerializer,
-    ProductOutSerializer,            # <-- needed by VendorProductCreateAPI
-    VendorApplySerializer,
+    ProductOutSerializer,
+    VendorApplySerializer,                 # if not used, you may remove
     VendorApplicationCreateSerializer,
-    # vendor staff
-    VendorStaffCreateSerializer,     # <-- used in VendorStaffListCreateView.post
-    VendorStaffOutSerializer,        # <-- used in VendorStaffListCreateView.get/response
-    VendorStaffInviteSerializer,     # <-- now defined in apis/serializers.py
-    VendorStaffRemoveSerializer,     # <-- now defined in apis/serializers.py
+    VendorStaffCreateSerializer,
+    VendorStaffOutSerializer,
+    VendorStaffInviteSerializer,
+    VendorStaffRemoveSerializer,
     WhoAmISerializer,
 )
 
-
-from core.models import log_action
-from inventory.services import check_low_stock_and_notify
-
 logger = logging.getLogger(__name__)
 User = get_user_model()
+signer = TimestampSigner()
+Q6 = Decimal("0.000001")
 
-def _publish_delivery(delivery, kind: str, payload: dict | None = None):
+
+# -----------------------
+# Helpers
+# -----------------------
+def _publish_delivery(delivery: Delivery, kind: str, payload: Optional[dict] = None) -> None:
     """
     Publish a generic delivery event to the delivery's WS group.
-    kind: 'assign' | 'unassign' | 'accept' | 'status' | 'position'
+    kind: 'assign' | 'unassign' | 'accept' | 'status' | 'position_update'
     """
     layer = get_channel_layer()
     if not layer:
@@ -87,13 +96,19 @@ def _publish_delivery(delivery, kind: str, payload: dict | None = None):
     async_to_sync(layer.group_send)(delivery.ws_group, data)
 
 
+def _publish_vendor(owner_id: int, kind: str, payload: Optional[dict] = None) -> None:
+    """
+    Send an event to a vendor owner group.
+    """
+    layer = get_channel_layer()
+    if not layer:
+        return
+    data = {"type": "vendor.event", "t": kind}
+    if payload:
+        data.update(payload)
+    async_to_sync(layer.group_send)(f"vendor.{owner_id}", data)
 
-class WhoAmI(APIView):
-    permission_classes = [IsAuthenticated]
 
-    def get(self, request):
-        ser = WhoAmISerializer(request.user)
-        return Response(ser.data)
 def orderitem_reverse_name() -> str:
     rel_name = OrderItem._meta.get_field("product").remote_field.related_name
     if rel_name == "+":
@@ -101,7 +116,25 @@ def orderitem_reverse_name() -> str:
     return rel_name or "orderitem_set"
 
 
-# ---------- APIs ----------
+def _q6(x) -> Decimal:
+    # robust quantize for coords
+    return Decimal(str(x)).quantize(Q6, rounding=ROUND_HALF_UP)
+
+
+# -----------------------
+# Who am I
+# -----------------------
+class WhoAmI(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        ser = WhoAmISerializer(request.user)
+        return Response(ser.data)
+
+
+# -----------------------
+# Products (shop & vendor)
+# -----------------------
 class ShopablePagination(PageNumberPagination):
     page_size = 12
     page_size_query_param = "page_size"
@@ -123,43 +156,46 @@ class ShopableProductsAPI(ListAPIView):
             qs = qs.filter(Q(name__icontains=q) | Q(description__icontains=q))
         return qs
 
+
 class VendorProductsAPI(APIView):
     """
     Returns products for the vendor owner context of the caller.
     - Vendor owner: sees their own products
-    - Vendor staff: sees selected owner's products (owner_id) or explicit error if multiple allowed
-    - Vendor staff: sees the selected owner's products (owner_id query param) or
-      auto-resolved if they have exactly one allowed owner    """
+    - Vendor staff: sees selected owner's products (owner_id) or raises if multiple allowed
+    """
     permission_classes = [IsAuthenticated, IsVendorOrVendorStaff]
 
     def get(self, request):
-        # 1) Resolve owner context (owner_id may be omitted if user has exactly one)
-        raw_owner = request.query_params.get("owner_id", None)
+        raw_owner = request.query_params.get("owner_id")
         try:
             owner_id = resolve_vendor_owner_for(
                 request.user,
                 raw_owner,
-                require_explicit_if_multiple=True,  # set False to auto-pick first if you prefer
+                require_explicit_if_multiple=True,
             )
         except ValueError as e:
-            # Ambiguous or malformed owner_id -> 400 with clear message
             return Response({"owner_id": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-        # PermissionDenied will bubble to 403 automatically (good)
 
-        # 2) Filter products by the vendor field
-        field = get_vendor_field(Product)            # e.g. "vendor" or "owner"
-        vendor_field_id = f"{field}_id"              # FK filter by id without fetching the User
+        field = get_vendor_field(Product)          # e.g. "vendor" or "owner"
+        vendor_field_id = f"{field}_id"
+
         try:
             base_qs = Product.objects.filter(**{vendor_field_id: owner_id})
         except Exception:
             logger.warning("Product model missing vendor field '%s'", field, exc_info=True)
             base_qs = Product.objects.none()
 
-        # 4) Prefetch order items efficiently (works regardless of related_name)        rev = orderitem_reverse_name()
+        q = request.query_params.get("q")
+        if q:
+            base_qs = base_qs.filter(Q(name__icontains=q) | Q(description__icontains=q))
+
+        rev = orderitem_reverse_name()
         if rev:
-            oi_qs = (OrderItem.objects
-                     .select_related("order", "product")
-                     .only("id", "order_id", "product_id", "price", "quantity", "delivery_status"))
+            oi_qs = (
+                OrderItem.objects
+                .select_related("order", "product")
+                .only("id", "order_id", "product_id", "price", "quantity", "delivery_status")
+            )
             products = base_qs.prefetch_related(Prefetch(rev, queryset=oi_qs))
         else:
             products = base_qs
@@ -168,11 +204,15 @@ class VendorProductsAPI(APIView):
         return Response(serializer.data)
 
 
+# -----------------------
+# Deliveries
+# -----------------------
 class DriverDeliveriesAPI(APIView):
     permission_classes = [IsAuthenticated, IsDriver]
 
     def get(self, request):
-        qs = Delivery.objects.filter(driver=request.user).select_related("order").order_by("-id")        serializer = DeliverySerializer(qs, many=True, context={"request": request})
+        qs = Delivery.objects.filter(driver=request.user).select_related("order").order_by("-id")
+        serializer = DeliverySerializer(qs, many=True, context={"request": request})
         return Response(serializer.data)
 
 
@@ -180,15 +220,19 @@ class VendorDeliveriesAPI(APIView):
     permission_classes = [IsAuthenticated, IsVendorOrVendorStaff]
 
     def get(self, request):
-        # Deliveries whose order contains at least one product for this owner
-        Delivery = apps.get_model("orders", "Delivery")
-        Product = apps.get_model("product_app", "Product")
-        from product_app.utils import get_vendor_field
-        field = get_vendor_field(Product)  # e.g., "owner" or "vendor"
+        raw_owner = request.query_params.get("owner_id")
+        try:
+            owner_id = resolve_vendor_owner_for(request.user, raw_owner)
+        except ValueError as e:
+            return Response({"owner_id": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        ProductModel = apps.get_model("product_app", "Product")
+        field = get_vendor_field(ProductModel)  # e.g., "owner" or "vendor"
         vendor_field = f"order__items__product__{field}_id"
 
         qs = (
-            Delivery.objects            .filter(**{vendor_field: owner_id})
+            Delivery.objects
+            .filter(**{vendor_field: owner_id})
             .select_related("order", "driver")
             .distinct()
             .order_by("-updated_at")
@@ -209,34 +253,56 @@ class VendorDeliveriesAPI(APIView):
         return Response(data)
 
 
+class DeliveryAssignAPI(APIView):
+    permission_classes = [IsAuthenticated, IsVendorOrVendorStaff, HasVendorScope]
+    required_vendor_scope = "delivery"
+
+    def post(self, request, pk: int):
+        delivery = get_object_or_404(Delivery, pk=pk)
+        ser = DeliveryAssignSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        driver = get_object_or_404(User, pk=ser.validated_data["driver_id"])
+
         delivery.mark_assigned(driver)
         delivery.save(update_fields=["driver", "status", "assigned_at"])
+
         try:
-            DeliveryEvent.objects.create(delivery=delivery, actor=request.user, type="assign", note={"driver_id": driver.id})
+            DeliveryEvent.objects.create(
+                delivery=delivery,
+                actor=request.user,
+                type="assign",
+                note={"driver_id": driver.id},
+            )
         except Exception:
             pass
-        # Audit + vendor group event
+
         try:
-            owner_id = getattr(delivery.order.items.first().product, get_vendor_field(Product)+"_id", None)            log_action(request.user, owner_id, "delivery.assign", "delivery", delivery.id, {"driver_id": driver.id})
+            owner_id = getattr(
+                delivery.order.items.first().product,
+                get_vendor_field(Product) + "_id",
+                None
+            )
+            log_action(request.user, owner_id, "delivery.assign", "delivery", delivery.id, {"driver_id": driver.id})
             if owner_id:
                 _publish_vendor(owner_id, "delivery.assigned", {"rid": delivery.id})
         except Exception:
             pass
+
         _publish_delivery(delivery, "assign", {"driver_id": driver.id})
-        return Response(
-            DeliverySerializer(delivery, context={"request": request}).data
-        )
+        return Response(DeliverySerializer(delivery, context={"request": request}).data)
+
 
 class DeliveryUnassignAPI(APIView):
     permission_classes = [IsAuthenticated, IsVendorOrVendorStaff, HasVendorScope]
     required_vendor_scope = "delivery"
 
-    def post(self, request, pk):
+    def post(self, request, pk: int):
         delivery = get_object_or_404(Delivery, pk=pk)
         delivery.driver = None
         delivery.status = Delivery.Status.PENDING
         delivery.assigned_at = None
         delivery.save(update_fields=["driver", "status", "assigned_at"])
+
         try:
             DeliveryEvent.objects.create(delivery=delivery, actor=request.user, type="unassign")
         except Exception:
@@ -248,47 +314,46 @@ class DeliveryUnassignAPI(APIView):
                 get_vendor_field(Product) + "_id",
                 None
             )
-        # Audit + vendor group event
-        try:
-            owner_id = getattr(delivery.order.items.first().product, get_vendor_field(Product)+"_id", None)            log_action(request.user, owner_id, "delivery.unassign", "delivery", delivery.id)
+            log_action(request.user, owner_id, "delivery.unassign", "delivery", delivery.id)
             if owner_id:
                 _publish_vendor(owner_id, "delivery.unassigned", {"rid": delivery.id})
         except Exception:
             pass
+
         _publish_delivery(delivery, "unassign", {"driver_id": None})
-        return Response(
-            DeliverySerializer(delivery, context={"request": request}).data
-        )
+        return Response(DeliverySerializer(delivery, context={"request": request}).data)
+
 
 class DeliveryAcceptAPI(APIView):
     permission_classes = [IsAuthenticated, InGroups]
+    required_groups = [DRIVER]
 
-    def post(self, request, pk):
+    def post(self, request, pk: int):
         delivery = get_object_or_404(Delivery, pk=pk, driver__isnull=True)
         delivery.mark_assigned(request.user)
         delivery.save(update_fields=["driver", "status", "assigned_at"])
         _publish_delivery(delivery, "accept", {"driver_id": request.user.id})
         return Response(DeliverySerializer(delivery, context={"request": request}).data)
-        return Response(
-            DeliverySerializer(delivery, context={"request": request}).data
-        )
+
 
 class DeliveryStatusAPI(APIView):
     permission_classes = [IsAuthenticated, InGroups]
     required_groups = [DRIVER]
 
-    def post(self, request, pk):
+    def post(self, request, pk: int):
         delivery = get_object_or_404(Delivery, pk=pk, driver=request.user)
         ser = DeliveryStatusSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
-        new_status = ser.validated_data["status"]  # <-- FIX: avoid shadowing rest_framework.status
-        delivery.status = new_status        if new_status == Delivery.Status.PICKED_UP:
+        new_status = ser.validated_data["status"]  # avoid shadowing rest_framework.status
+
+        delivery.status = new_status
+        if new_status == Delivery.Status.PICKED_UP:
             delivery.picked_up_at = timezone.now()
             try:
                 DeliveryEvent.objects.create(delivery=delivery, actor=request.user, type="picked")
             except Exception:
                 pass
-        if new_status == Delivery.Status.DELIVERED:
+        elif new_status == Delivery.Status.DELIVERED:
             delivery.delivered_at = timezone.now()
             try:
                 DeliveryEvent.objects.create(delivery=delivery, actor=request.user, type="delivered")
@@ -303,59 +368,44 @@ class DeliveryStatusAPI(APIView):
 class DriverLocationAPI(APIView):
     permission_classes = [IsAuthenticated, InGroups]
     required_groups = [DRIVER]
-        delivery.save(update_fields=["status", "picked_up_at", "delivered_at"])
-        _publish_delivery(delivery, "status", {"status": new_status})
-        return Response(
-            DeliverySerializer(delivery, context={"request": request}).data
-        )
 
-
-from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework import status
-from django.shortcuts import get_object_or_404
-from django.utils import timezone
-
-Q6 = Decimal("0.000001")
-
-def _q6(x) -> Decimal:
-    # Robust: handle strings/numbers, avoid binary float issues
-    return Decimal(str(x)).quantize(Q6, rounding=ROUND_HALF_UP)
-
-class DriverLocationAPI(APIView):
-    permission_classes = [IsAuthenticated, InGroups]
     def post(self, request):
         # Expect: {"delivery_id": int, "lat": number|string, "lng": number|string}
         delivery_id = request.data.get("delivery_id")
         try:
             delivery_id = int(delivery_id)
         except (TypeError, ValueError):
-            return Response({"detail": "delivery_id required (int)"},
-                            status=status.HTTP_400_BAD_REQUEST)
+            return Response({"detail": "delivery_id required (int)"}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             lat = _q6(request.data.get("lat"))
             lng = _q6(request.data.get("lng"))
         except (InvalidOperation, TypeError, ValueError):
-            return Response({"detail": "lat/lng must be numeric"},
-                            status=status.HTTP_400_BAD_REQUEST)
+            return Response({"detail": "lat/lng must be numeric"}, status=status.HTTP_400_BAD_REQUEST)
 
-        if not (Decimal("-90") <= lat <= Decimal("90") and
-                Decimal("-180") <= lng <= Decimal("180")):
-            return Response({"detail": "lat/lng out of range"},
-                            status=status.HTTP_400_BAD_REQUEST)
+        if not (Decimal("-90") <= lat <= Decimal("90") and Decimal("-180") <= lng <= Decimal("180")):
+            return Response({"detail": "lat/lng out of range"}, status=status.HTTP_400_BAD_REQUEST)
 
         delivery = get_object_or_404(Delivery, pk=delivery_id, driver=request.user)
 
-        # Publish to WebSocket — use the canonical event name your consumer expects
+        now = timezone.now()
+        delivery.last_lat = lat
+        delivery.last_lng = lng
+        delivery.last_ping_at = now
+        delivery.save(update_fields=["last_lat", "last_lng", "last_ping_at", "updated_at"])
+
         _publish_delivery(
             delivery,
-            "position_update",                            # <- was "position"
-            {"lat": float(lat), "lng": float(lng), "ts": now.isoformat()}  # floats OK for JSON payload        )
+            "position_update",
+            {"lat": float(lat), "lng": float(lng), "ts": now.isoformat()},
+        )
+
         return Response({"ok": True, "status": "updated", "ts": now.isoformat()})
 
 
+# -----------------------
+# Products (create/import/export)
+# -----------------------
 class VendorProductCreateAPI(CreateAPIView):
     permission_classes = [IsAuthenticated, IsVendorOrVendorStaff]
     serializer_class = VendorProductCreateSerializer
@@ -369,12 +419,11 @@ class VendorProductCreateAPI(CreateAPIView):
         headers = {
             "Location": reverse(
                 "product_app:product_detail",
-                kwargs={"id": product.id, "slug": product.slug}
+                kwargs={"id": product.id, "slug": product.slug},
             )
         }
-        # Audit and low-stock notification
         try:
-            owner_id = getattr(product, get_vendor_field(Product)+"_id", None)
+            owner_id = getattr(product, get_vendor_field(Product) + "_id", None)
             log_action(request.user, owner_id, "product.create", "product", product.id)
             check_low_stock_and_notify(product)
         except Exception:
@@ -382,11 +431,87 @@ class VendorProductCreateAPI(CreateAPIView):
         return Response(out_ser.data, status=status.HTTP_201_CREATED, headers=headers)
 
 
+class VendorProductsImportCSV(APIView):
+    permission_classes = [IsAuthenticated, IsVendorOrVendorStaff, HasVendorScope]
+    required_vendor_scope = "catalog"
+
+    def post(self, request):
+        f = request.FILES.get("file")
+        if not f:
+            return Response({"detail": "file required"}, status=400)
+        try:
+            buf = f.read().decode("utf-8", errors="replace")
+        except Exception:
+            return Response({"detail": "unable to read file"}, status=400)
+
+        reader = csv.DictReader(StringIO(buf))
+        norm = lambda s: (s or "").strip().lower()
+        wanted = {"name", "sku", "price", "stock", "published"}
+        header = {norm(h): h for h in (reader.fieldnames or [])}
+        if not wanted.issubset(set(header.keys())):
+            return Response({"detail": "missing columns", "required": sorted(list(wanted))}, status=400)
+
+        try:
+            owner_id = resolve_vendor_owner_for(request.user, request.data.get("owner_id"))
+        except ValueError as e:
+            return Response({"owner_id": str(e)}, status=400)
+
+        created = 0
+        updated = 0
+        errors = []
+        field = get_vendor_field(Product)
+
+        for i, row in enumerate(reader, start=2):
+            try:
+                name = (row.get(header["name"]) or "").strip()
+                sku = (row.get(header["sku"]) or name).strip()
+                price = str(row.get(header["price"]) or "0").strip()
+                published = str(row.get(header["published"]) or "").strip().lower() in ("1", "true", "yes")
+                if not name:
+                    raise ValueError("name required")
+
+                obj, was_created = Product.objects.update_or_create(
+                    **{
+                        f"{field}_id": owner_id,
+                        "slug": sku.lower().replace(" ", "-"),
+                    },
+                    defaults={"name": name, "price": price, "available": published},
+                )
+                created += int(was_created)
+                updated += int(not was_created)
+            except Exception as e:
+                errors.append({"row": i, "error": str(e)})
+
+        return Response({"created": created, "updated": updated, "errors": errors})
 
 
+class VendorProductsExportCSV(APIView):
+    permission_classes = [IsAuthenticated, IsVendorOrVendorStaff, HasVendorScope]
+    required_vendor_scope = "catalog"
+
+    def get(self, request):
+        try:
+            owner_id = resolve_vendor_owner_for(request.user, request.query_params.get("owner_id"))
+        except ValueError as e:
+            return Response({"owner_id": str(e)}, status=400)
+
+        field = get_vendor_field(Product)
+        qs = Product.objects.filter(**{f"{field}_id": owner_id}).only(
+            "id", "name", "slug", "price", "available"
+        )
+
+        out = StringIO()
+        w = csv.writer(out)
+        w.writerow(["name", "sku", "price", "stock", "published"])
+        for p in qs:
+            w.writerow([p.name, "", p.price, "", str(bool(p.available)).lower()])
+
+        return Response(out.getvalue(), content_type="text/csv")
 
 
-from users.services import activate_vendor_staff  # group sync helper
+# -----------------------
+# Vendor Staff (invite/accept/list/remove/deactivate)
+# -----------------------
 class VendorStaffInviteAPI(APIView):
     permission_classes = [permissions.IsAuthenticated, IsVendorOwner]
 
@@ -404,18 +529,27 @@ class VendorStaffInviteAPI(APIView):
                 defaults={"is_active": False},
             )
 
-            # If it existed but was inactive, keep it inactive (pending) and (optionally) resend email
-            invite_link = None            payload = {"vs_id": vs.id, "staff_id": staff.id}
-            token = sign(payload)
+            if vs.is_active:
+                return Response(
+                    {"detail": "Staff is already active for this owner."},
+                    status=status.HTTP_409_CONFLICT,
+                )
+
+            token = sign({"vs_id": vs.id, "staff_id": staff.id})
             path = reverse("vendor-staff-accept", args=[token])
             invite_link = request.build_absolute_uri(path)
 
+            # Only send email on first creation; for re-sends you can adjust policy
             if created:
                 subject = f"You're invited to join {get_current_site(request).domain}"
                 html_content = render_to_string(
                     "emails/vendor_staff_invite.html",
-                    {"staff": staff, "owner": request.user, "invite_link": invite_link,
-                     "site_name": get_current_site(request).domain},
+                    {
+                        "staff": staff,
+                        "owner": request.user,
+                        "invite_link": invite_link,
+                        "site_name": get_current_site(request).domain,
+                    },
                 )
                 text_content = f"You've been invited as vendor staff.\n\nAccept your invite: {invite_link}"
 
@@ -435,6 +569,11 @@ class VendorStaffInviteAPI(APIView):
 
                 transaction.on_commit(_send)
 
+        try:
+            log_action(request.user, owner_id, "staff.invite", "user", staff.id)
+        except Exception:
+            pass
+
         return Response(
             {
                 "ok": True,
@@ -449,8 +588,6 @@ class VendorStaffInviteAPI(APIView):
             },
             status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
         )
-
-
 
 
 class VendorStaffAcceptAPI(APIView):
@@ -470,9 +607,22 @@ class VendorStaffAcceptAPI(APIView):
         if not vs_id or not staff_id:
             return Response({"detail": "Malformed invite token."}, status=400)
 
-            vs.save(update_fields=["is_active"])   # ← no status
+        if request.user.id != staff_id:
+            return Response({"detail": "This invite is not for the current user."}, status=403)
 
-        # Keep Django Group in sync when activating (best-effort)        try:
+        with transaction.atomic():
+            try:
+                vs = VendorStaff.objects.select_for_update().get(pk=vs_id, staff_id=staff_id)
+            except VendorStaff.DoesNotExist:
+                return Response({"detail": "Invite not found."}, status=404)
+
+            if vs.is_active:
+                return Response({"detail": "Already accepted."}, status=200)
+
+            vs.is_active = True
+            vs.save(update_fields=["is_active"])
+
+        try:
             activate_vendor_staff(request.user, vs.owner_id)
         except Exception:
             pass
@@ -483,143 +633,26 @@ class VendorStaffAcceptAPI(APIView):
         return Response({"ok": True, "message": "Invite accepted."}, status=200)
 
 
-class VendorStaffRemoveAPI(APIView):
-    permission_classes = [IsAuthenticated, IsVendorOwner]
-
-    def post(self, request, staff_id: int | None = None):
-        # Accept staff_id via URL or body (body wins if provided)
-        payload = dict(request.data)
-        if staff_id is not None and not payload.get("staff_id"):
-            payload["staff_id"] = staff_id
-
-        try:
-            owner_id = resolve_vendor_owner_for(request.user, payload.get("owner_id"))
-        except ValueError as e:
-            return Response({"owner_id": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
-        ser = VendorStaffRemoveSerializer(data=payload, context={"request": request})
-        ser.is_valid(raise_exception=True)
-        data = ser.save()
-
-        try:
-            log_action(request.user, owner_id, "staff.remove", "user", ser.validated_data.get("staff_id"))
-        except Exception:
-            pass
-
-        return Response(data)
-
-
-    def post(self, request, staff_id: int = None):
-        # Accept staff_id from URL or body; body wins if provided
-        payload = dict(request.data)
-        if staff_id is not None and not payload.get("staff_id"):
-            payload["staff_id"] = staff_id
-        ser = VendorStaffRemoveSerializer(data=payload, context={"request": request})
-        ser.is_valid(raise_exception=True)
-        data = ser.save()
-        try:
-            raw_owner = request.data.get("owner_id")
-            from users.utils import resolve_vendor_owner_for
-            owner_id = resolve_vendor_owner_for(request.user, raw_owner)
-            staff_id = ser.validated_data.get("staff_id")
-            log_action(request.user, owner_id, "staff.remove", "user", staff_id)
-        except Exception:
-            pass
-        return Response(data)
-
-
-
-
-
-
-
-from rest_framework.authentication import SessionAuthentication
-from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
-
-
-class VendorApplyAPI(APIView):
-    permission_classes = [permissions.IsAuthenticated]
-    authentication_classes = [SessionAuthentication]  # or [JWTAuthentication, SessionAuthentication]
-    parser_classes = [MultiPartParser, FormParser, JSONParser]
-
-    @transaction.atomic
-    def post(self, request):
-        user = request.user
-        VendorApplication = apps.get_model("users", "VendorApplication")
-
-        # 1) Block if already vendor/staff
-        is_vendor_group = user.groups.filter(name__in=["Vendor", "Vendor Staff"]).exists()
-        if is_vendor_group or VendorStaff.objects.filter(staff=user, is_active=True).exists():
-            return Response(
-                {"detail": "Already a vendor/staff."},
-                status=status.HTTP_409_CONFLICT,
-            )
-
-        # 2) Validate payload
-        ser = VendorApplicationCreateSerializer(data=request.data, context={'request': request})
-        ser.is_valid(raise_exception=True)
-
-        # 3) Idempotent: 1 pending per user (requires unique (user_id, status) index)
-        try:
-            app, created = VendorApplication.objects.get_or_create(
-                user=user,
-                status=VendorApplication.PENDING,
-                defaults=ser.validated_data,
-            )
-        except Exception as e:
-            # If uniqueness is enforced and a race occurs, fetch the existing row
-            app = (VendorApplication.objects
-                   .filter(user=user, status=VendorApplication.PENDING)
-                   .order_by('-id').first())
-            created = False
-
-        return Response(
-            {"status": "pending", "id": app.id, "created": created},
-            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
-        )
-
-
-
-from users.models import VendorApplication
-
-class VendorApplyStatusAPI(APIView):
-    permission_classes = [IsAuthenticated]
-    def get(self, request):
-        app = (VendorApplication.objects
-               .filter(user=request.user)
-               .order_by('-id')
-               .values('id','status')
-               .first())
-        return Response({
-          "has_applied": bool(app),
-          "status": app["status"] if app else None,
-          "application_id": app["id"] if app else None,
-        })
-
-
-
-
-
 class VendorStaffListCreateView(APIView):
     permission_classes = [permissions.IsAuthenticated, IsVendorOwner]
 
     def get(self, request):
-        # List staff for the resolved owner context only
         raw_owner = request.query_params.get("owner_id")
         try:
             owner_id = resolve_vendor_owner_for(request.user, raw_owner)
         except ValueError as e:
             return Response({"owner_id": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
         qs = VendorStaff.objects.filter(owner_id=owner_id).order_by("-id")
         return Response(VendorStaffOutSerializer(qs, many=True).data)
 
     def post(self, request):
-        # Force owner_id to resolved owner context; ignore client-supplied owner_id
         raw_owner = request.data.get("owner_id")
         try:
             owner_id = resolve_vendor_owner_for(request.user, raw_owner)
         except ValueError as e:
             return Response({"owner_id": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
         payload = dict(request.data)
         payload["owner_id"] = owner_id
         ser = VendorStaffCreateSerializer(data=payload, context={"request": request})
@@ -632,11 +665,112 @@ class VendorStaffListCreateView(APIView):
         return Response(VendorStaffOutSerializer(row).data, status=status.HTTP_201_CREATED)
 
 
-# ---- Extra vendor utilities ----
-from users.utils import vendor_owner_ids_for
-import csv
-from io import StringIO
+class VendorStaffRemoveAPI(APIView):
+    permission_classes = [IsAuthenticated, IsVendorOwner]
 
+    def post(self, request, staff_id: Optional[int] = None):
+        # accept staff_id via URL or body (body wins)
+        payload = dict(request.data)
+        if staff_id is not None and not payload.get("staff_id"):
+            payload["staff_id"] = staff_id
+
+        try:
+            owner_id = resolve_vendor_owner_for(request.user, payload.get("owner_id"))
+        except ValueError as e:
+            return Response({"owner_id": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        ser = VendorStaffRemoveSerializer(data=payload, context={"request": request})
+        ser.is_valid(raise_exception=True)
+        data = ser.save()
+        try:
+            log_action(request.user, owner_id, "staff.remove", "user", ser.validated_data.get("staff_id"))
+        except Exception:
+            pass
+        return Response(data)
+
+
+class VendorStaffDeactivateAPI(APIView):
+    permission_classes = [IsAuthenticated, IsVendorOwner]
+
+    def post(self, request, staff_id: int):
+        from users.services import deactivate_vendor_staff
+        try:
+            owner_id = resolve_vendor_owner_for(request.user, request.data.get("owner_id"))
+        except ValueError as e:
+            return Response({"owner_id": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            staff = get_object_or_404(User, pk=staff_id)
+            deactivate_vendor_staff(staff, owner_id)
+            log_action(request.user, owner_id, "staff.deactivate", "user", staff_id)
+        except Exception as e:
+            return Response({"detail": str(e)}, status=400)
+        return Response({"ok": True})
+
+
+# -----------------------
+# Vendor Application
+# -----------------------
+class VendorApplyAPI(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    authentication_classes = [SessionAuthentication]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+
+    @transaction.atomic
+    def post(self, request):
+        user = request.user
+
+        # 1) Block if already vendor/staff
+        is_vendor_group = user.groups.filter(name__in=["Vendor", "Vendor Staff"]).exists()
+        if is_vendor_group or VendorStaff.objects.filter(staff=user, is_active=True).exists():
+            return Response({"detail": "Already a vendor/staff."}, status=status.HTTP_409_CONFLICT)
+
+        # 2) Validate payload
+        ser = VendorApplicationCreateSerializer(data=request.data, context={'request': request})
+        ser.is_valid(raise_exception=True)
+
+        # 3) Idempotent pending app per user
+        try:
+            app, created = VendorApplication.objects.get_or_create(
+                user=user,
+                status=VendorApplication.PENDING,
+                defaults=ser.validated_data,
+            )
+        except Exception:
+            app = (
+                VendorApplication.objects
+                .filter(user=user, status=VendorApplication.PENDING)
+                .order_by('-id').first()
+            )
+            created = False
+
+        return Response(
+            {"status": "pending", "id": app.id, "created": created},
+            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+        )
+
+
+class VendorApplyStatusAPI(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        app = (
+            VendorApplication.objects
+            .filter(user=request.user)
+            .order_by('-id')
+            .values('id', 'status')
+            .first()
+        )
+        return Response({
+            "has_applied": bool(app),
+            "status": app["status"] if app else None,
+            "application_id": app["id"] if app else None,
+        })
+
+
+# -----------------------
+# Vendor owners list (for UI pickers)
+# -----------------------
 class VendorOwnersAPI(APIView):
     permission_classes = [IsAuthenticated, IsVendorOrVendorStaff]
 
@@ -650,91 +784,3 @@ class VendorOwnersAPI(APIView):
             for u in rows
         ]
         return Response(sorted(data, key=lambda x: x["name"].lower()))
-
-
-class VendorProductsImportCSV(APIView):
-    permission_classes = [IsAuthenticated, IsVendorOrVendorStaff, HasVendorScope]
-    required_vendor_scope = "catalog"
-
-    def post(self, request):
-        f = request.FILES.get("file")
-        if not f:
-            return Response({"detail": "file required"}, status=400)
-        try:
-            buf = f.read().decode("utf-8", errors="replace")
-        except Exception:
-            return Response({"detail": "unable to read file"}, status=400)
-        reader = csv.DictReader(StringIO(buf))
-        norm = lambda s: (s or "").strip().lower()
-        wanted = {"name", "sku", "price", "stock", "published"}
-        header = {norm(h): h for h in (reader.fieldnames or [])}
-        if not wanted.issubset(set(header.keys())):
-            return Response({"detail": "missing columns", "required": sorted(list(wanted))}, status=400)
-
-=======        try:
-            owner_id = resolve_vendor_owner_for(request.user, request.data.get("owner_id"))
-        except ValueError as e:
-            return Response({"owner_id": str(e)}, status=400)
-        created = 0
-        updated = 0
-        errors = []
-        field = get_vendor_field(Product)
-        for i, row in enumerate(reader, start=2):
-            try:
-                name = (row.get(header["name"]) or "").strip()
-                price = str(row.get(header["price"]) or "0").strip()
-                published = str(row.get(header["published"]) or "").strip().lower() in ("1", "true", "yes")
-                if not name:
-                    raise ValueError("name required")
-                obj, was_created = Product.objects.update_or_create(
-                    **{
-                        field + "_id": owner_id,
-                        "slug": (row.get(header.get("sku")) or name).strip().lower().replace(" ", "-")
-                    },
-                    **{field+"_id": owner_id, "slug": (row.get(header.get("sku")) or name).strip().lower().replace(" ", "-")},                    defaults={"name": name, "price": price, "available": published},
-                )
-                created += int(was_created)
-                updated += int(not was_created)
-            except Exception as e:
-                errors.append({"row": i, "error": str(e)})
-        return Response({"created": created, "updated": updated, "errors": errors})
-
-
-class VendorProductsExportCSV(APIView):
-    permission_classes = [IsAuthenticated, IsVendorOrVendorStaff, HasVendorScope]
-    required_vendor_scope = "catalog"
-
-    def get(self, request):
-        try:
-            owner_id = resolve_vendor_owner_for(request.user, request.query_params.get("owner_id"))
-        except ValueError as e:
-            return Response({"owner_id": str(e)}, status=400)
-
-        field = get_vendor_field(Product)
-        qs = Product.objects.filter(**{field + "_id": owner_id}).only("id", "name", "slug", "price", "available")
-
-        field = get_vendor_field(Product)
-        qs = Product.objects.filter(**{field+"_id": owner_id}).only("id", "name", "slug", "price", "available")        out = StringIO()
-        w = csv.writer(out)
-        w.writerow(["name", "sku", "price", "stock", "published"])  # sku/stock placeholders
-        for p in qs:
-            w.writerow([p.name, "", p.price, "", str(bool(p.available)).lower()])
-        return Response(out.getvalue(), content_type="text/csv")
-
-
-class VendorStaffDeactivateAPI(APIView):
-    permission_classes = [IsAuthenticated, IsVendorOwner]
-
-    def post(self, request, staff_id: int):
-        from users.services import deactivate_vendor_staff
-        try:
-            owner_id = resolve_vendor_owner_for(request.user, request.data.get("owner_id"))
-        except ValueError as e:
-            return Response({"owner_id": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-        try:
-            staff = get_object_or_404(User, pk=staff_id)
-            deactivate_vendor_staff(staff, owner_id)
-            log_action(request.user, owner_id, "staff.deactivate", "user", staff_id)
-        except Exception as e:
-            return Response({"detail": str(e)}, status=400)
-        return Response({"ok": True})

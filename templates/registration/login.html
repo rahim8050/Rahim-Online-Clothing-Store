@@ -1,76 +1,116 @@
-{% extends "base.html" %}
 {% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Login</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="stylesheet" href="{% static 'dist/styles.css' %}">
+  <!-- Vue 3 (global build) -->
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+</head>
+<body class="min-h-screen bg-[#F3EAD9] flex items-start sm:items-center justify-center">
+  <div id="app" class="w-full max-w-md mx-auto mt-16 sm:mt-0 px-4">
+    <!-- Heading -->
+    <div class="text-center mb-6">
+      <span class="inline-block px-3 py-1 rounded-md bg-blue-600 text-white font-semibold">Login</span>
+    </div>
 
-{% block title %}Track Order #{{ order.id }}{% endblock %}
+    <!-- Card -->
+    <div class="bg-white rounded-2xl shadow-md p-6 sm:p-8">
+      {% if form.errors %}
+        <div class="mb-4 text-sm text-red-600">
+          Invalid username or password. Please try again.
+        </div>
+      {% endif %}
 
-{% block content %}
-<div class="max-w-5xl mx-auto p-4">
-  <h2 class="text-xl font-semibold mb-2">Order {{ order.id }} Tracking</h2>
+      <form method="post" action="{% url 'login' %}" class="space-y-5" @submit="loading = true">
+        {% csrf_token %}
 
-  <div class="text-sm text-gray-600 mb-3 flex items-center gap-3">
-    <span>
-      Status:
-      <span data-status-chip class="inline-flex items-center rounded px-2 py-0.5 bg-gray-100">
-        {% if delivery %}
-          {{ delivery.get_status_display|default_if_none:delivery.status }}
-        {% else %}-{% endif %}
-      </span>
-    </span>
-    <span class="hidden md:inline">•</span>
-    <span>
-      ETA:
-      <span data-eta-badge class="inline-flex items-center rounded px-2 py-0.5 bg-orange-100 text-orange-700">-</span>
-    </span>
+        <!-- Username -->
+        <div>
+          <label class="block text-sm font-semibold text-gray-700 mb-1">Email or Username</label>
+          <input
+            type="text"
+            name="username"
+            autocomplete="username"
+            v-model="username"
+            value="{{ form.username.value|default_if_none:'' }}"
+            class="w-full rounded-lg border border-gray-300 focus:border-blue-600 focus:ring-blue-600 px-3 py-2 outline-none"
+            placeholder="demo_vendor1" />
+        </div>
+
+        <!-- Password -->
+        <div>
+          <label class="block text-sm font-semibold text-gray-700 mb-1">Password</label>
+          <div class="relative">
+            <input
+              :type="showPass ? 'text' : 'password'"
+              name="password"
+              autocomplete="current-password"
+              v-model="password"
+              class="w-full rounded-lg border border-gray-300 focus:border-blue-600 focus:ring-blue-600 px-3 py-2 pr-10 outline-none"
+              placeholder="••••••••" />
+            <button
+              type="button"
+              class="absolute inset-y-0 right-2 my-auto text-gray-500 hover:text-gray-700"
+              @click="showPass = !showPass"
+              :aria-label="showPass ? 'Hide password' : 'Show password'">
+              <!-- eye icon -->
+              <svg v-if="!showPass" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7-1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+              </svg>
+              <svg v-else xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M13.875 18.825A10.05 10.05 0 0112 19c-4.477 0-8.268-2.943-9.542-7a10.05 10.05 0 012.61-4.043M6.18 6.18A9.956 9.956 0 0112 5c4.477 0 8.268 2.943 9.542 7a10.07 10.07 0 01-3.04 4.5M3 3l18 18" />
+              </svg>
+            </button>
+          </div>
+          <p v-if="password.length && password.length < 4" class="mt-1 text-xs text-gray-500">
+            Tip: password looks short.
+          </p>
+        </div>
+
+        <input type="hidden" name="next" value="{{ next }}"/>
+
+        <button
+          type="submit"
+          class="w-full rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 transition disabled:opacity-60 disabled:cursor-not-allowed"
+          :disabled="loading">
+          <span v-if="!loading">Login</span>
+          <span v-else class="inline-flex items-center gap-2">
+            <svg class="animate-spin h-4 w-4" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+            </svg>
+            Signing in…
+          </span>
+        </button>
+
+        <div class="text-center text-sm mt-2 space-y-2">
+          <p>
+            <a href="{% url 'password_reset' %}" class="text-blue-700 hover:underline">Forgot your password?</a>
+          </p>
+        </div>
+      </form>
+    </div>
   </div>
 
-  <div
-    id="map"
-    class="w-full rounded-lg border"
-    style="height: 400px;"
-    {% if delivery %}data-delivery-id="{{ delivery.id }}"{% endif %}
-  ></div>
-
-  <noscript class="block mt-3 text-sm text-red-700">
-    Enable JavaScript to see live tracking.
-  </noscript>
-
-  {% if not delivery %}
-    <p class="mt-3 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">
-      No delivery assigned yet for this order, so live tracking is disabled.
-    </p>
-  {% endif %}
-</div>
-
-{# Leaflet (once) #}
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-<script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
-{# Safe JSON payload; renders as <script type="application/json" id="route-ctx">…</script> #}
-{{ route_ctx|json_script:"route-ctx" }}
-
-{# Bootstrap a usable context for tracking-route.js (CSP-safe via nonce) #}
-<script nonce="{{ request.csp_nonce }}">
-  (function () {
-    let ctx = {};
-    try {
-      const node = document.getElementById('route-ctx');
-      ctx = node ? JSON.parse(node.textContent || '{}') : {};
-    } catch (_) { ctx = {}; }
-
-    // Build wsUrl if the view didn't provide one
-    const mapEl = document.getElementById('map');
-    const deliveryId = mapEl && mapEl.dataset ? mapEl.dataset.deliveryId : null;
-    if (!ctx.wsUrl && deliveryId) {
-      const scheme = (location.protocol === 'https:') ? 'wss' : 'ws';
-      ctx.wsUrl = `${scheme}://${location.host}/ws/delivery/track/${deliveryId}/`;
-    }
-
-    // Expose for your tracking script (support both keys)
-    window.__ROUTE_CTX__ = ctx;
-    window.route_ctx = ctx;
-  })();
-</script>
-
-{# Your map/WS bootstrap (matches the script you shared earlier) #}
-<script defer src="{% static 'js/tracking-route.js' %}"></script>
-{% endblock %}
+  <script nonce="{{ request.csp_nonce }}">
+    const { createApp } = Vue;
+    createApp({
+      data() {
+        return {
+          username: '',
+          password: '',
+          showPass: false,
+          loading: false,
+        };
+      }
+    }).mount('#app');
+  </script>
+</body>
+</html>

@@ -1,6 +1,6 @@
 // static/js/tracking-route.js
 (function () {
-  // ---- context & inputs ----
+  // ---- Context & inputs ----
   const CTX = (window.__ROUTE_CTX__ || window.route_ctx || {}) || {};
   const el = document.querySelector("[data-delivery-id]");
   const deliveryId = CTX.delivery_id || (el && el.dataset.deliveryId);
@@ -27,8 +27,10 @@
     if (!mapDiv || typeof L === "undefined") return null;
     if (!map) {
       if (!mapDiv.style.height) mapDiv.style.height = "400px";
-      const startLat = Number((CTX.destination && CTX.destination.lat) ?? -1.286389); // Nairobi default
+
+      const startLat = Number((CTX.destination && CTX.destination.lat) ?? -1.286389); // Nairobi fallback
       const startLng = Number((CTX.destination && CTX.destination.lng) ?? 36.817223);
+
       map = L.map(mapDiv).setView([startLat, startLng], 13);
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19 }).addTo(map);
       setTimeout(() => { try { map.invalidateSize(); } catch {} }, 0);
@@ -89,9 +91,7 @@
       marker.setLatLng(ll);
       if (trail) trail.addLatLng(ll);
       try {
-        if (m.getCenter().distanceTo(L.latLng(ll)) > 30) {
-          m.panTo(ll, { animate: true });
-        }
+        if (m.getCenter().distanceTo(L.latLng(ll)) > 30) m.panTo(ll, { animate: true });
       } catch {}
     }
 
@@ -101,7 +101,7 @@
       const dLat = Number(dest.lat), dLng = Number(dest.lng);
       if (Number.isFinite(dLat) && Number.isFinite(dLng)) {
         const km = haversineKm({ lat: latN, lng: lngN }, { lat: dLat, lng: dLng });
-        const SPEED_KMPH = 30;
+        const SPEED_KMPH = 30; // conservative city avg
         const etaMin = Math.max(1, Math.round((km / SPEED_KMPH) * 60));
         if (Number.isFinite(etaMin)) setETA(`${km.toFixed(2)} km · ~${etaMin} min`);
       }
@@ -165,6 +165,19 @@
           updateMarker(data.lat, data.lng);
           return;
         }
+
+        // Optional: if server ever sends a full route payload
+        // { type: "route", coords: [[lat,lng],...], distance_km, duration_min }
+        if (data.type === "route" && Array.isArray(data.coords)) {
+          const m = ensureMap(); if (!m) return;
+          try { if (routeLine) m.removeLayer(routeLine); } catch {}
+          routeLine = L.polyline(data.coords, { weight: 3 }).addTo(m);
+          try { m.fitBounds(routeLine.getBounds(), { padding: [20, 20] }); } catch {}
+          if (typeof data.distance_km === "number" && typeof data.duration_min === "number") {
+            setETA(`${data.distance_km.toFixed(2)} km · ~${Math.round(data.duration_min)} min`);
+          }
+          return;
+        }
       };
 
       ws.onclose = (e) => {
@@ -173,7 +186,7 @@
         setTimeout(open, delay);
       };
 
-      // Optional: allow driver context pages to push position
+      // (Optional) allow driver pages to push position
       window.sendDriverPosition = function (lat, lng) {
         if (ws && ws.readyState === WebSocket.OPEN) {
           ws.send(JSON.stringify({ type: "position_update", lat, lng }));
