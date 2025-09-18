@@ -111,6 +111,8 @@ INSTALLED_APPS = [
     "apis.apps.ApisConfig",
     "dashboards",
     "notifications",
+    "vendor_app",
+    "invoicing",
 ]
 
 MIDDLEWARE = [
@@ -252,9 +254,34 @@ if USE_REDIS_CACHE and REDIS_URL:
         }
     }
 
+
 # ---------------------------------------------------------------------
 # DRF / Auth
 # ---------------------------------------------------------------------
+
+# ------------------------ Feature Flags ------------------------
+# Default on in DEBUG, off otherwise unless explicitly enabled via env.
+ETIMS_ENABLED = env.bool("ETIMS_ENABLED", default=bool(DEBUG))
+KPIS_ENABLED = env.bool("KPIS_ENABLED", default=bool(DEBUG))
+
+# ------------------------ Celery Beat --------------------------
+# Schedule daily Vendor KPI aggregation at 00:30 Africa/Nairobi
+try:
+    from celery.schedules import crontab  # type: ignore
+    _kpi_schedule = crontab(minute=30, hour=0)
+except Exception:  # pragma: no cover
+    _kpi_schedule = 24 * 60 * 60  # fallback: every 24h
+
+CELERY_TIMEZONE = "Africa/Nairobi"
+CELERY_BEAT_SCHEDULE = {
+    "vendor-kpis-daily": {
+        "task": "vendor_app.tasks.aggregate_kpis_daily_all",
+        "schedule": _kpi_schedule,
+        "options": {"queue": "default"},
+    }
+}
+# ------------------------- Auth / API -------------------------
+
 REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticatedOrReadOnly"],
     "DEFAULT_AUTHENTICATION_CLASSES": [
@@ -569,5 +596,25 @@ SPECTACULAR_SETTINGS = {
     "TITLE": "Rahim Online Clothing Store API",
     "DESCRIPTION": "Versioned DRF API for catalog, cart, orders, payments, and users.",
     "VERSION": "1.0.0",
+    # Disambiguate enums with the same field name across components
+    "ENUM_NAME_OVERRIDES": {
+        # Use fully qualified module paths and unify identical choice sets
+        # Model fields
+        "orders.models.Delivery.status": "DeliveryStatusEnum",
+        "users.models.VendorApplication.status": "VendorApplicationStatusEnum",
+        "orders.models.OrderItem.delivery_status": "OrderItemDeliveryStatusEnum",
+        "orders.models.Order.payment_status": "OrderPaymentStatusEnum",
+        # Serializer field uses the same choices as Delivery.status, keep same name
+        "apis.serializers.DeliveryStatusSerializer.status": "DeliveryStatusEnum",
+    },
+}
+
+# DRF: schema + throttle scopes (view-specific throttles)
+REST_FRAMEWORK = {
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    "DEFAULT_THROTTLE_RATES": {
+        # used by vendor_app.throttling.VendorOrgScopedRateThrottle
+        "vendor.org": "60/min",
+    },
 }
 

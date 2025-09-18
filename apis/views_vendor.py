@@ -7,9 +7,36 @@ from django.utils.timezone import now
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from rest_framework import serializers
+from drf_spectacular.utils import extend_schema
 from users.permissions import IsVendorOrVendorStaff
 from users.utils import resolve_vendor_owner_for
 from product_app.utils import get_vendor_field
+
+
+# --------- Doc helper serializers (module-level) ---------
+class VendorKPIsProductsSerializer(serializers.Serializer):  # guessed; refine as needed
+  total = serializers.IntegerField()
+  live = serializers.IntegerField()
+
+
+class VendorKPIsSeriesEntrySerializer(serializers.Serializer):  # guessed; refine as needed
+  date = serializers.DateField()
+  orders = serializers.IntegerField()
+  revenue = serializers.FloatField()
+
+
+class VendorKPIsLastPayoutSerializer(serializers.Serializer):  # guessed; refine as needed
+  amount = serializers.FloatField()
+  created_at = serializers.DateTimeField()
+
+
+class VendorKPIsResponseSerializer(serializers.Serializer):  # guessed; refine as needed
+  products = VendorKPIsProductsSerializer()
+  orders_30d = serializers.IntegerField()
+  revenue_30d = serializers.FloatField()
+  series_14d = VendorKPIsSeriesEntrySerializer(many=True)
+  last_payout = VendorKPIsLastPayoutSerializer(allow_null=True)
 
 
 class VendorKPIAPI(APIView):
@@ -19,7 +46,10 @@ class VendorKPIAPI(APIView):
   """
 
   permission_classes = [IsAuthenticated, IsVendorOrVendorStaff]
+  # no request body on GET
+  serializer_class = VendorKPIsResponseSerializer
 
+  @extend_schema(request=None, responses=VendorKPIsResponseSerializer)
   def get(self, request):
     Product = apps.get_model('product_app', 'Product')
     Order = apps.get_model('orders', 'Order')
