@@ -435,42 +435,6 @@ from csp import constants as csp_constants
 
 
 
-CSP_DEFAULT_SRC = (csp_constants.SELF,)
-CSP_CONNECT_SRC = (csp_constants.SELF, "ws:", "wss:", "https://api.cloudinary.com")
-CSP_SCRIPT_SRC = (
-    csp_constants.SELF, csp_constants.NONCE,
-    "https://cdn.tailwindcss.com",
-    "https://cdn.jsdelivr.net",
-    "https://unpkg.com",
-    "https://widget.cloudinary.com",
-    "https://js.stripe.com",
-    "https://*.stripe.com",
-    "https://js.paystack.co",
-    "https://*.paystack.co",
-    "https://*.paystack.com",
-)
-CSP_STYLE_SRC = (
-    csp_constants.SELF, csp_constants.NONCE,
-    "https://cdnjs.cloudflare.com",
-    "https://unpkg.com",
-    "https://fonts.googleapis.com",
-)
-CSP_STYLE_SRC_ATTR = ("'unsafe-inline'",)
-CSP_FONT_SRC = (csp_constants.SELF, "https://fonts.gstatic.com", "https://cdnjs.cloudflare.com", "data:")
-CSP_IMG_SRC = (
-    csp_constants.SELF, "data:", "blob:",
-    "https://res.cloudinary.com",
-    "https://tile.openstreetmap.org",
-    "https://*.tile.openstreetmap.org",
-)
-CSP_FRAME_SRC = (
-    "https://js.stripe.com", "https://*.stripe.com",
-    "https://js.paystack.co", "https://*.paystack.co", "https://*.paystack.com",
-)
-CSP_WORKER_SRC = (csp_constants.SELF, "blob:")
-CSP_FRAME_ANCESTORS = (csp_constants.SELF,)
-
-
 CONTENT_SECURITY_POLICY = {
     "DIRECTIVES": {
         "default-src": (csp_constants.SELF,),

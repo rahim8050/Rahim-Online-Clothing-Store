@@ -21,7 +21,7 @@ django-environ==0.12.0
 django-extensions==4.1
 django-tailwind==4.0.1
 django-widget-tweaks==1.5.0
-<<<<<<< HEAD
+
 djangorestframework==3.16.0
 djangorestframework_simplejwt==5.5.0
 django-filter==24.*
