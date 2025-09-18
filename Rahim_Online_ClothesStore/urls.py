@@ -52,11 +52,20 @@ urlpatterns = [
     path("apis/v1/auth/jwt/refresh/", TokenRefreshView.as_view(), name="v1-jwt-refresh"),
 
     # Per-app v1 routers
+
     path("apis/v1/catalog/", include("product_app.urls_v1")),
     path("apis/v1/cart/", include("cart.urls_v1")),
     path("apis/v1/orders/", include("orders.urls_v1")),
     path("apis/v1/payments/", include("payments.urls_v1")),
     path("apis/v1/users/", include("users.urls_v1")),
+
+    path('apis/v1/catalog/', include('product_app.urls_v1')),
+    path('apis/v1/cart/', include('cart.urls_v1')),
+    path('apis/v1/orders/', include('orders.urls_v1')),
+    path('apis/v1/payments/', include('payments.urls_v1')),
+    path('apis/v1/users/', include('users.urls_v1')),
+    path('apis/v1/invoicing/', include('invoicing.urls_v1')),
+    path('apis/v1/vendor/', include('vendor_app.urls_v1')),
 
     # v2 mounts (keep v1 intact)
     path("apis/v2/cart/", include("cart.urls_v2")),
@@ -68,9 +77,19 @@ urlpatterns = [
     path("webhook/paystack/", PaystackWebhookView.as_view(), name="paystack_webhook"),
     path("webhook/mpesa/", MPesaWebhookView.as_view(), name="mpesa_webhook"),
 
+
     # Health
     path("healthz", healthz, name="healthz"),  # keep path stable if already used
                                                  # (optionally change to "healthz/" and update probes)
+
+    path('payments/checkout/', CheckoutView.as_view(), name='payments_checkout'),
+    path('webhook/stripe/', StripeWebhookView.as_view(), name='stripe_webhook'),
+    path('webhook/paystack/', PaystackWebhookView.as_view(), name='paystack_webhook'),
+    path('webhook/mpesa/', MPesaWebhookView.as_view(), name='mpesa_webhook'),
+    path('healthz', healthz, name='healthz'),
+    path('readyz', __import__('core.views', fromlist=['readyz']).readyz, name='readyz'),
+
+
     # Product routes — keep AFTER dashboards so they don't shadow them
     path("products/search/", product_views.SearchProduct, name="product_search"),
     path(

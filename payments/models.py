@@ -7,11 +7,37 @@ from django.db.models import Q
 from django.utils import timezone
 
 from .enums import Gateway, TxnStatus, PaymentMethod
+from vendor_app.models import VendorOrg
+
+
+class IdempotencyKey(models.Model):
+    """Generic idempotency key storage.
+
+    Use to dedupe side-effecting operations across retries (e.g., payouts).
+    Keys are unique per scope to allow reuse in different domains.
+    """
+
+    scope = models.CharField(max_length=64, db_index=True)
+    key = models.CharField(max_length=128)
+    response_hash = models.CharField(max_length=64, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["scope", "key"], name="uniq_idem_scope_key"),
+        ]
+        indexes = [
+            models.Index(fields=["created_at"], name="idem_created_idx"),
+        ]
+
+    def __str__(self) -> str:  # pragma: no cover
+        return f"{self.scope}:{self.key}"
 
 
 class Transaction(models.Model):
     order = models.ForeignKey("orders.Order", on_delete=models.CASCADE, related_name="transactions")
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="transactions")
+    vendor_org = models.ForeignKey(VendorOrg, null=True, blank=True, on_delete=models.SET_NULL, related_name="transactions")
     method = models.CharField(max_length=20, choices=PaymentMethod.choices)
     gateway = models.CharField(max_length=20, choices=Gateway.choices)
     amount = models.DecimalField(max_digits=12, decimal_places=2)
@@ -29,6 +55,12 @@ class Transaction(models.Model):
 
     refund_reference = models.CharField(max_length=128, null=True, blank=True)
     refunded_at = models.DateTimeField(null=True, blank=True)
+
+    # Settlement breakdown
+    gross_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    fees_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    commission_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    net_to_vendor = models.DecimalField(max_digits=12, decimal_places=2, default=0)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -132,3 +164,33 @@ class Refund(models.Model):
     def __str__(self):
         return f"{self.transaction.reference} -> {self.status}"
     
+
+class PaymentEvent(models.Model):
+    provider = models.CharField(max_length=24)
+    reference = models.CharField(max_length=128, db_index=True)
+    vendor_org = models.ForeignKey(VendorOrg, null=True, blank=True, on_delete=models.SET_NULL, related_name="payment_events")
+    body_sha256 = models.CharField(max_length=64, unique=True)
+    body = models.JSONField(null=True, blank=True)
+    gross_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    fees_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    net_to_vendor = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [models.Index(fields=["reference", "created_at"])]
+
+
+class Payout(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        QUEUED = "queued", "Queued"
+        PAID = "paid", "Paid"
+        FAILED = "failed", "Failed"
+
+    vendor_org = models.ForeignKey(VendorOrg, on_delete=models.CASCADE, related_name="payouts")
+    transaction = models.OneToOneField(Transaction, on_delete=models.CASCADE, related_name="payout")
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    currency = models.CharField(max_length=10, default="KES")
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.PENDING)
+    created_at = models.DateTimeField(auto_now_add=True)
+    executed_at = models.DateTimeField(null=True, blank=True)
