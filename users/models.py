@@ -4,12 +4,7 @@ from django.core.exceptions import ValidationError
 from django.utils import timezone
 from django.conf import settings
 from django.contrib.auth import get_user_model
-
-from .constants import VENDOR
-
 from .constants import VENDOR, VENDOR_STAFF, DRIVER
-
-
 User = settings.AUTH_USER_MODEL
 
 
@@ -35,7 +30,6 @@ class CustomUser(AbstractUser):
     )
     def __str__(self):
         return self.username
-
 
     @property
     def effective_role(self) -> str:
@@ -108,7 +102,6 @@ class VendorApplication(models.Model):
     decided_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
-
     def save(self, *args, **kwargs):
         # Track status change for downstream signals, in addition to existing pre_save hook
         try:
@@ -147,10 +140,7 @@ class VendorStaff(models.Model):
     owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name="vendor_staff_owned")
     staff = models.ForeignKey(User, on_delete=models.CASCADE, related_name="vendor_staff_memberships")
     role = models.CharField(max_length=10, choices=Role.choices, default=Role.STAFF)
-
-    scopes = models.JSONField(default=list, blank=True)
-
-    is_active = models.BooleanField(default=True)
+    scopes = models.JSONField(default=list, blank=True)    is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -163,8 +153,4 @@ class VendorStaff(models.Model):
         if self.owner_id == self.staff_id:
             # only valid when role is owner
             if self.role != self.Role.OWNER:
-
                 raise ValidationError("Owner cannot be added as staff unless role='owner'.")
-
-                raise ValidationError("Owner cannot be added as staff unless role='owner'.")
-

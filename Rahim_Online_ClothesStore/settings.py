@@ -1,42 +1,30 @@
 """
-Unified settings for Rahim_Online_ClothesStore
-- DEV (default): DEBUG=True, sqlite, InMemory Channels, permissive CORS.
-- PROD (Render): DEBUG=False, Postgres via DATABASE_URL, Redis Channels, HTTPS security, WhiteNoise.
+Production settings for Rahim_Online_ClothesStore (Render).
 """
 
 from pathlib import Path
 from datetime import timedelta
 import os
 
+from django.core.management.utils import get_random_secret_key
 import environ
 import dj_database_url
 from django.contrib import messages
-from django.core.management.utils import get_random_secret_key
-from django.db.models import CharField
+from django.db import models
 from django.db.models.functions import Length
-from csp.constants import SELF  # NOTE: django-csp has SELF/NONE; NOT NONCE
 
-# --------------------------------------------------------------------------------------
-# Base & helpers
-# --------------------------------------------------------------------------------------
+# ---------------------------------------------------------------------
+# Paths / env
+# ---------------------------------------------------------------------
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-def env_bool(key: str, default: bool = False) -> bool:
-    v = os.getenv(key)
-    return default if v is None else str(v).lower() in {"1", "true", "yes", "on"}
-
-def env_list(key: str, default: str = "") -> list[str]:
-    raw = os.getenv(key, default)
-    return [x.strip() for x in raw.split(",") if x.strip()]
-
-# Load .env if present
 env = environ.Env(DEBUG=(bool, False))
 environ.Env.read_env(BASE_DIR / ".env")
 
-DEBUG = env.bool("DEBUG", True)
+DEBUG = env.bool("DEBUG", False)
+ENV = env("ENV", default=("prod" if not DEBUG else "dev")).lower()
 IS_PROD = not DEBUG
 
-# Secret key
 SECRET_KEY = env("SECRET_KEY", default=None)
 if not SECRET_KEY:
     if DEBUG:
@@ -44,38 +32,38 @@ if not SECRET_KEY:
     else:
         raise RuntimeError("SECRET_KEY is not set in environment.")
 
-# --------------------------------------------------------------------------------------
+# ---------------------------------------------------------------------
 # Hosts / CSRF / CORS
-# --------------------------------------------------------------------------------------
-# Start with env-provided hosts; add Render runtime hostname if present
-ALLOWED_HOSTS = env_list("ALLOWED_HOSTS", "codealpa-online-clothesstore.onrender.com")
+# ---------------------------------------------------------------------
+ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["codealpa-online-clothesstore.onrender.com"])
 if DEBUG:
     ALLOWED_HOSTS += ["127.0.0.1", "localhost", "[::1]"]
 
+# Render dynamic hostname
 RENDER_HOST = os.getenv("RENDER_EXTERNAL_HOSTNAME")
 if RENDER_HOST and RENDER_HOST not in ALLOWED_HOSTS:
     ALLOWED_HOSTS.append(RENDER_HOST)
 
-# CSRF origins: https://<host> for every allowed host
 def _with_scheme(host: str) -> str:
     return host if host.startswith(("http://", "https://")) else f"https://{host}"
-CSRF_TRUSTED_ORIGINS = env_list(
-    "CSRF_TRUSTED_ORIGINS",
-    ",".join(_with_scheme(h) for h in ALLOWED_HOSTS if h),
-)
 
-# Optional CORS (auto-added only if package installed)
-CORS_ALLOWED_ORIGINS = env_list("CORS_ALLOWED_ORIGINS", "")
-CORS_ALLOW_ALL_ORIGINS = DEBUG
+CSRF_TRUSTED_ORIGINS = env.list("CSRF_TRUSTED_ORIGINS", default=[_with_scheme(h) for h in ALLOWED_HOSTS])
+if DEBUG:
+    CSRF_TRUSTED_ORIGINS += ["https://127.0.0.1:8000", "https://localhost:8000"]
 
-# --------------------------------------------------------------------------------------
-# Django app plumbing
-# --------------------------------------------------------------------------------------
+# CORS (optional, only if you install `django-cors-headers`)
+CORS_ALLOWED_ORIGINS = env.list("CORS_ALLOWED_ORIGINS", default=[])
+CORS_ALLOW_ALL_ORIGINS = DEBUG  # dev convenience; keep False in prod unless you mean it
+
+# ---------------------------------------------------------------------
+# Core Django plumbing
+# ---------------------------------------------------------------------
 ROOT_URLCONF = "Rahim_Online_ClothesStore.urls"
 WSGI_APPLICATION = "Rahim_Online_ClothesStore.wsgi.application"
 ASGI_APPLICATION = "Rahim_Online_ClothesStore.asgi.application"
 
 INSTALLED_APPS = [
+    # ASGI server
     "daphne",
 
     # Django core
@@ -87,42 +75,41 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "django.contrib.humanize",
 
-    # ASGI / APIs
+    # Third-party
     "channels",
+    "csp",
     "rest_framework",
     "django_filters",
     "drf_spectacular",
-
-    # Forms/UI
-    "crispy_forms",
-    "crispy_bootstrap5",
-    "widget_tweaks",
-
-    # Tools
     "django_extensions",
-    "csp",
+    "django_daraja",  # M-Pesa SDK
+    # "corsheaders",  # <- enable if you install it
 
-    # Your apps
+    # First-party apps
+    "core",
+    "assistant",
+    "utilities",
     "product_app",
     "cart.apps.CartConfig",
     "orders.apps.OrdersConfig",
-    "users.apps.UsersConfig",
-    "utilities",
-    "apis.apps.ApisConfig",
     "payments.apps.PaymentsConfig",
-    "django_daraja",
-    "Mpesa",
+    "apis.apps.ApisConfig",
     "dashboards",
-    "assistant",
-    "core",
     "notifications",
 ]
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
-    "whitenoise.middleware.WhiteNoiseMiddleware",
+    # CORS (must be high, before CommonMiddleware) — enable if app present
+    # "corsheaders.middleware.CorsMiddleware",
+
+    # CSP should be early
     "csp.middleware.CSPMiddleware",
 
+    # Static
+    "whitenoise.middleware.WhiteNoiseMiddleware",
+
+    # Standard Django stack
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -130,18 +117,23 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 
+    # Custom
     "core.middleware.PermissionsPolicyMiddleware",
     "core.middleware.RequestIDMiddleware",
+    "cart.middleware.ClearGuestCookieOnLoginMiddleware",
 ]
 
-# If corsheaders is installed, enable it high in the stack automatically
+# If corsheaders is installed, add it dynamically (works in both dev/prod)
 try:
     import corsheaders  # noqa: F401
-    INSTALLED_APPS.append("corsheaders")
+except Exception:
+    corsheaders = None
+
+if corsheaders:
+    if "corsheaders" not in INSTALLED_APPS:
+        INSTALLED_APPS.insert(INSTALLED_APPS.index("channels"), "corsheaders")
     if "corsheaders.middleware.CorsMiddleware" not in MIDDLEWARE:
         MIDDLEWARE.insert(1, "corsheaders.middleware.CorsMiddleware")
-except Exception:
-    pass
 
 TEMPLATES = [
     {
@@ -161,9 +153,9 @@ TEMPLATES = [
     },
 ]
 
-# --------------------------------------------------------------------------------------
+# ---------------------------------------------------------------------
 # Database
-# --------------------------------------------------------------------------------------
+# ---------------------------------------------------------------------
 DATABASES = {
     "default": dj_database_url.config(
         default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
@@ -172,29 +164,59 @@ DATABASES = {
     )
 }
 
-# --------------------------------------------------------------------------------------
-# Channels & Cache (Redis in prod, in-memory in dev)
-# --------------------------------------------------------------------------------------
-REDIS_URL = os.getenv("REDIS_URL", "")
-if IS_PROD and not REDIS_URL:
+# MySQL options (if used)
+if DATABASES["default"].get("ENGINE") == "django.db.backends.mysql":
+    DATABASES["default"].setdefault("OPTIONS", {})
+    DATABASES["default"]["OPTIONS"].update({
+        "init_command": "SET sql_mode='STRICT_TRANS_TABLES', time_zone='+00:00'",
+        "charset": "utf8mb4",
+        "use_unicode": True,
+    })
+    DATABASES["default"]["CONN_HEALTH_CHECKS"] = True
+
+# In-tests: in-memory sqlite
+if os.environ.get("PYTEST_CURRENT_TEST"):
+    DATABASES = {"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": ":memory:"}}
+
+# ---------------------------------------------------------------------
+# Sessions
+# ---------------------------------------------------------------------
+SESSION_ENGINE = "django.contrib.sessions.backends.db"
+SESSION_SERIALIZER = "django.contrib.sessions.serializers.JSONSerializer"
+
+# ---------------------------------------------------------------------
+# Channels (Redis)
+# ---------------------------------------------------------------------
+REDIS_URL = env("REDIS_URL", default="")
+USE_REDIS = bool(REDIS_URL)
+REDIS_SSL = REDIS_URL.startswith("rediss://") if REDIS_URL else False
+
+if IS_PROD and not USE_REDIS:
     raise RuntimeError("REDIS_URL is required in production for Channels & cache.")
 
-if REDIS_URL:
+if USE_REDIS:
     CHANNEL_LAYERS = {
         "default": {
             "BACKEND": "channels_redis.core.RedisChannelLayer",
             "CONFIG": {"hosts": [REDIS_URL]},
         }
     }
+else:
+    CHANNEL_LAYERS = {"default": {"BACKEND": "channels.layers.InMemoryChannelLayer"}}
+
+# ---------------------------------------------------------------------
+# Cache
+# ---------------------------------------------------------------------
+if USE_REDIS:
     CACHES = {
         "default": {
             "BACKEND": "django.core.cache.backends.redis.RedisCache",
             "LOCATION": REDIS_URL,
             "TIMEOUT": None,
+            "OPTIONS": {"ssl": True} if REDIS_SSL else {},
         }
     }
 else:
-    CHANNEL_LAYERS = {"default": {"BACKEND": "channels.layers.InMemoryChannelLayer"}}
     CACHES = {
         "default": {
             "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
@@ -203,25 +225,20 @@ else:
         }
     }
 
-# --------------------------------------------------------------------------------------
-# REST / Auth
-# --------------------------------------------------------------------------------------
+# ---------------------------------------------------------------------
+# DRF / Auth
+# ---------------------------------------------------------------------
 REST_FRAMEWORK = {
-    "DEFAULT_PERMISSION_CLASSES": [
-        "rest_framework.permissions.IsAuthenticatedOrReadOnly",
-    ],
+    "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticatedOrReadOnly"],
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "core.authentication.HMACAuthentication",
         "rest_framework_simplejwt.authentication.JWTAuthentication",
         "rest_framework.authentication.SessionAuthentication",
     ],
-    "DEFAULT_FILTER_BACKENDS": [
-        "django_filters.rest_framework.DjangoFilterBackend",
-        "rest_framework.filters.SearchFilter",
-        "rest_framework.filters.OrderingFilter",
-    ],
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 20,
+    "DEFAULT_THROTTLE_CLASSES": ["rest_framework.throttling.UserRateThrottle"],
+    "DEFAULT_THROTTLE_RATES": {"user": "120/min"},
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
 }
 
@@ -231,25 +248,27 @@ SIMPLE_JWT = {
 }
 
 AUTH_USER_MODEL = "users.CustomUser"
-AUTHENTICATION_BACKENDS = [
-    "users.backends.EmailOrUsernameModelBackend",
-    "django.contrib.auth.backends.ModelBackend",
-]
-
 LOGIN_REDIRECT_URL = "/dashboard/"
 LOGOUT_REDIRECT_URL = "/accounts/login/"
 
-# --------------------------------------------------------------------------------------
-# I18N / TZ
-# --------------------------------------------------------------------------------------
-LANGUAGE_CODE = "en-us"
-TIME_ZONE = "Africa/Nairobi"
-USE_I18N = True
-USE_TZ = True
+AUTH_PASSWORD_VALIDATORS = [
+    {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
+    {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
+    {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
+    {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
+]
 
-# --------------------------------------------------------------------------------------
+# ---------------------------------------------------------------------
+# I18N / Time
+# ---------------------------------------------------------------------
+LANGUAGE_CODE = "en-us"
+TIME_ZONE = "Africa/Nairobi"   # app-level tz for display
+USE_I18N = True
+USE_TZ = True                  # DB stored in UTC (keep True)
+
+# ---------------------------------------------------------------------
 # Static & Media (WhiteNoise)
-# --------------------------------------------------------------------------------------
+# ---------------------------------------------------------------------
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 STATICFILES_DIRS = [BASE_DIR / "static"]
@@ -258,26 +277,24 @@ STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
     "staticfiles": {
         "BACKEND": (
-            "whitenoise.storage.CompressedManifestStaticFilesStorage"
-            if IS_PROD
+            "whitenoise.storage.CompressedManifestStaticFilesStorage" if IS_PROD
             else "whitenoise.storage.CompressedStaticFilesStorage"
-        ),
+        )
     },
 }
 
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "mediafiles"
 
-# Optional Cloudinary media in prod if CLOUDINARY_URL is present
-CLOUDINARY_URL = os.getenv("CLOUDINARY_URL")
-if CLOUDINARY_URL and IS_PROD:
-    STORAGES["default"] = {"BACKEND": "cloudinary_storage.storage.MediaCloudinaryStorage"}
+if not IS_PROD:
+    WHITENOISE_USE_FINDERS = True
 
-# --------------------------------------------------------------------------------------
-# Security (prod)
-# --------------------------------------------------------------------------------------
-SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
-USE_X_FORWARDED_HOST = True
+# ---------------------------------------------------------------------
+# Security
+# ---------------------------------------------------------------------
+SECURE_SSL_REDIRECT = IS_PROD
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https") if IS_PROD else None
+USE_X_FORWARDED_HOST = IS_PROD
 
 if IS_PROD:
     SESSION_COOKIE_SECURE = True
@@ -285,24 +302,58 @@ if IS_PROD:
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = "Lax"
     CSRF_COOKIE_SAMESITE = "Lax"
-    SECURE_SSL_REDIRECT = True
     SECURE_HSTS_SECONDS = 60 * 60 * 24 * 14
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
     SECURE_REFERRER_POLICY = "same-origin"
     SECURE_CONTENT_TYPE_NOSNIFF = True
-else:
-    # Helpful in dev for static finder behavior
-    WHITENOISE_USE_FINDERS = True
+    X_FRAME_OPTIONS = "DENY"
 
-# --------------------------------------------------------------------------------------
-# Payments / 3rd party keys
-# --------------------------------------------------------------------------------------
+# ---------------------------------------------------------------------
+# Payments & external
+# ---------------------------------------------------------------------
+# Geoapify
 GEOAPIFY_API_KEY = env("GEOAPIFY_API_KEY", default=None)
 GEOCODING_TIMEOUT = 6
 GEOCODING_USER_AGENT = "RahimOnline/1.0 (contact: admin@example.com)"
 
-# M-PESA
+# Stripe
+STRIPE_SECRET_KEY = env("STRIPE_SECRET_KEY", default=None)
+STRIPE_PUBLISHABLE_KEY = env("STRIPE_PUBLISHABLE_KEY", default=None)
+STRIPE_WEBHOOK_SECRET = env("STRIPE_WEBHOOK_SECRET", default=None)
+STRIPE_CURRENCY = env("STRIPE_CURRENCY", default="kes")
+
+# PayPal
+PAYPAL_CLIENT_ID = env("PAYPAL_CLIENT_ID", default=None)
+PAYPAL_CLIENT_SECRET = env("PAYPAL_CLIENT_SECRET", default=None)
+PAYPAL_MODE = env("PAYPAL_MODE", default="sandbox")
+PAYPAL_CURRENCY = env("PAYPAL_CURRENCY", default="USD")
+
+# Paystack
+PAYSTACK_PUBLIC_KEY = env("PAYSTACK_PUBLIC_KEY", default=None)
+PAYSTACK_SECRET_KEY = env("PAYSTACK_SECRET_KEY", default=None)
+PAYSTACK_CURRENCY = env("PAYSTACK_CURRENCY", default="KES")
+
+if IS_PROD:
+    missing = [k for k, v in {
+        "PAYSTACK_PUBLIC_KEY": PAYSTACK_PUBLIC_KEY,
+        "PAYSTACK_SECRET_KEY": PAYSTACK_SECRET_KEY,
+        "STRIPE_SECRET_KEY": STRIPE_SECRET_KEY,
+        "STRIPE_WEBHOOK_SECRET": STRIPE_WEBHOOK_SECRET,
+    }.items() if not v]
+    if missing:
+        raise RuntimeError(f"Missing required payment envs: {', '.join(missing)}")
+
+if DEBUG:
+    for label, val in {
+        "PAYSTACK_PUBLIC_KEY": PAYSTACK_PUBLIC_KEY,
+        "PAYSTACK_SECRET_KEY": PAYSTACK_SECRET_KEY,
+        "STRIPE_SECRET_KEY": STRIPE_SECRET_KEY,
+        "STRIPE_WEBHOOK_SECRET": STRIPE_WEBHOOK_SECRET,
+    }.items():
+        print(label + ":", (val or "")[:6], "…")
+
+# M-Pesa
 MPESA_ENVIRONMENT = env("MPESA_ENVIRONMENT", default="sandbox")
 MPESA_CONSUMER_KEY = env("MPESA_CONSUMER_KEY", default=None)
 MPESA_CONSUMER_SECRET = env("MPESA_CONSUMER_SECRET", default=None)
@@ -311,23 +362,13 @@ MPESA_EXPRESS_SHORTCODE = env("MPESA_EXPRESS_SHORTCODE", default=None)
 MPESA_SHORTCODE_TYPE = env("MPESA_SHORTCODE_TYPE", default="paybill")
 MPESA_PASSKEY = env("MPESA_PASS_KEY", default=None)
 
-# Stripe / PayPal / Paystack
-STRIPE_SECRET_KEY = env("STRIPE_SECRET_KEY", default=None)
-STRIPE_PUBLISHABLE_KEY = env("STRIPE_PUBLISHABLE_KEY", default=None)
-STRIPE_WEBHOOK_SECRET = env("STRIPE_WEBHOOK_SECRET", default=None)
-
-PAYPAL_CLIENT_ID = env("PAYPAL_CLIENT_ID", default=None)
-PAYPAL_CLIENT_SECRET = env("PAYPAL_CLIENT_SECRET", default=None)
-PAYPAL_MODE = env("PAYPAL_MODE", default="sandbox")
-
-PAYSTACK_PUBLIC_KEY = env("PAYSTACK_PUBLIC_KEY", default=None)
-PAYSTACK_SECRET_KEY = env("PAYSTACK_SECRET_KEY", default=None)
-if IS_PROD and (not PAYSTACK_PUBLIC_KEY or not PAYSTACK_SECRET_KEY):
-    raise RuntimeError("Missing required Paystack envs: PAYSTACK_PUBLIC_KEY, PAYSTACK_SECRET_KEY")
-
-# --------------------------------------------------------------------------------------
+# ---------------------------------------------------------------------
 # Email
-# --------------------------------------------------------------------------------------
+# ---------------------------------------------------------------------
+def _env_bool(key: str, default: bool = False) -> bool:
+    v = os.getenv(key)
+    return default if v is None else str(v).lower() in {"1", "true", "yes", "on"}
+
 def _env_str(key: str, default: str = "") -> str:
     v = os.getenv(key, default)
     return (v or "").strip().strip('"').strip("'")
@@ -335,10 +376,8 @@ def _env_str(key: str, default: str = "") -> str:
 EMAIL_BACKEND = _env_str("EMAIL_BACKEND", "django.core.mail.backends.smtp.EmailBackend")
 EMAIL_HOST = _env_str("EMAIL_HOST", "smtp.gmail.com")
 EMAIL_PORT = int(os.getenv("EMAIL_PORT", "587"))
-EMAIL_USE_TLS = env_bool("EMAIL_USE_TLS", True)
-EMAIL_USE_SSL = env_bool("EMAIL_USE_SSL", False)
-if EMAIL_USE_SSL:
-    EMAIL_USE_TLS = False
+EMAIL_USE_SSL = _env_bool("EMAIL_USE_SSL", False)
+EMAIL_USE_TLS = _env_bool("EMAIL_USE_TLS", not EMAIL_USE_SSL)
 
 EMAIL_HOST_USER = _env_str("EMAIL_HOST_USER")
 EMAIL_HOST_PASSWORD = _env_str("EMAIL_HOST_PASSWORD")
@@ -348,55 +387,63 @@ DEFAULT_FROM_EMAIL = _env_str("DEFAULT_FROM_EMAIL") or EMAIL_HOST_USER or "no-re
 SERVER_EMAIL = _env_str("SERVER_EMAIL") or DEFAULT_FROM_EMAIL
 EMAIL_SUBJECT_PREFIX = _env_str("EMAIL_SUBJECT_PREFIX", "[CodeAlpa] ")
 
+if DEBUG and not EMAIL_HOST:
+    EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 if IS_PROD and EMAIL_BACKEND.endswith("smtp.EmailBackend"):
-    missing = []
-    if not EMAIL_HOST_USER:
-        missing.append("EMAIL_HOST_USER")
-    if not EMAIL_HOST_PASSWORD:
-        missing.append("EMAIL_HOST_PASSWORD")
-    if missing:
-        raise RuntimeError(f"Missing required email envs: {', '.join(missing)}")
+    need = [k for k in ("EMAIL_HOST_USER", "EMAIL_HOST_PASSWORD") if not globals().get(k)]
+    if need:
+        raise RuntimeError(f"Missing required email envs: {', '.join(need)}")
 
-# --------------------------------------------------------------------------------------
-# CSP (temporary inline allow to unblock; switch to nonces later)
-# --------------------------------------------------------------------------------------
-CONTENT_SECURITY_POLICY = {
-    "DIRECTIVES": {
-        "default-src": [SELF],
-        "connect-src": [SELF, "ws:", "wss:", "https://api.cloudinary.com"],
-        "script-src": [
-            SELF, "'unsafe-inline'",
-            "https://cdn.tailwindcss.com",
-            "https://cdn.jsdelivr.net",
-            "https://unpkg.com",
-            "https://widget.cloudinary.com",
-            "https://js.stripe.com", "https://*.stripe.com",
-            "https://js.paystack.co", "https://*.paystack.co", "https://*.paystack.com",
-        ],
-        "style-src": [
-            SELF, "'unsafe-inline'",
-            "https://cdnjs.cloudflare.com",
-            "https://unpkg.com",
-            "https://fonts.googleapis.com",
-        ],
-        "font-src": [SELF, "https://fonts.gstatic.com", "https://cdnjs.cloudflare.com", "data:"],
-        "img-src": [
-            SELF, "data:", "blob:",
-            "https://res.cloudinary.com",
-            "https://tile.openstreetmap.org", "https://*.tile.openstreetmap.org",
-        ],
-        "frame-src": [
-            "https://js.stripe.com", "https://*.stripe.com",
-            "https://js.paystack.co", "https://*.paystack.co", "https://*.paystack.com",
-        ],
-        "worker-src": [SELF, "blob:"],
-        "frame-ancestors": [SELF],
-    },
-}
+# ---------------------------------------------------------------------
+# CSP (django-csp)
+# ---------------------------------------------------------------------
+from csp.constants import SELF, NONCE
 
-# --------------------------------------------------------------------------------------
-# UI tweaks / logging
-# --------------------------------------------------------------------------------------
+CSP_DEFAULT_SRC = (SELF,)
+CSP_CONNECT_SRC = (SELF, "ws:", "wss:", "https://api.cloudinary.com")
+CSP_SCRIPT_SRC = (
+    SELF,
+    NONCE,
+    "https://cdn.tailwindcss.com",
+    "https://cdn.jsdelivr.net",
+    "https://unpkg.com",
+    "https://widget.cloudinary.com",
+    "https://js.stripe.com",
+    "https://*.stripe.com",
+    "https://js.paystack.co",
+    "https://*.paystack.co",
+    "https://*.paystack.com",
+)
+CSP_STYLE_SRC = (
+    SELF,
+    NONCE,
+    "https://cdnjs.cloudflare.com",
+    "https://unpkg.com",
+    "https://fonts.googleapis.com",
+)
+CSP_STYLE_SRC_ATTR = ("'unsafe-inline'",)
+CSP_FONT_SRC = (SELF, "https://fonts.gstatic.com", "https://cdnjs.cloudflare.com", "data:")
+CSP_IMG_SRC = (
+    SELF,
+    "data:",
+    "blob:",
+    "https://res.cloudinary.com",
+    "https://tile.openstreetmap.org",
+    "https://*.tile.openstreetmap.org",
+)
+CSP_FRAME_SRC = (
+    "https://js.stripe.com",
+    "https://*.stripe.com",
+    "https://js.paystack.co",
+    "https://*.paystack.co",
+    "https://*.paystack.com",
+)
+CSP_WORKER_SRC = (SELF, "blob:")
+CSP_FRAME_ANCESTORS = (SELF,)
+
+# ---------------------------------------------------------------------
+# UI / Misc
+# ---------------------------------------------------------------------
 CRISPY_ALLOWED_TEMPLATE_PACKS = "bootstrap5"
 CRISPY_TEMPLATE_PACK = "bootstrap5"
 MESSAGE_TAGS = {
@@ -416,8 +463,18 @@ LOGGING = {
         "django": {"handlers": ["console"], "level": "INFO", "propagate": False},
         "channels": {"handlers": ["console"], "level": "INFO", "propagate": False},
         "orders": {"handlers": ["console"], "level": "DEBUG", "propagate": False},
+        "payments": {"handlers": ["console"], "level": "DEBUG", "propagate": False},
     },
 }
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
-CharField.register_lookup(Length)
+models.CharField.register_lookup(Length)
+
+# ---------------------------------------------------------------------
+# OpenAPI
+# ---------------------------------------------------------------------
+SPECTACULAR_SETTINGS = {
+    "TITLE": "Rahim Online Clothing Store API",
+    "DESCRIPTION": "Versioned DRF API for catalog, cart, orders, payments, and users.",
+    "VERSION": "1.0.0",
+}

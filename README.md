@@ -18,6 +18,7 @@ Quick manual WS test from the browser console:
 
 ```javascript
 
+
 const ws = new WebSocket('ws://127.0.0.1:8000/ws/delivery/track/DELIVERY_ID/');
 ws.onmessage = (e) => console.log(JSON.parse(e.data));
 ```
@@ -39,6 +40,20 @@ Redis (set via `REDIS_URL`) powers the channel layer and cache; configure it in 
 {"type": "position_update", "lat": 1.23, "lng": 4.56}
 {"type": "status", "status": "EN_ROUTE"}
 ```
+
+=======
+const wsScheme = location.protocol === "https:" ? "wss" : "ws";
+const ws = new WebSocket(`${wsScheme}://${location.host}/ws/delivery/track/DELIVERY_ID/`);
+ws.onmessage = (e) => console.log(JSON.parse(e.data));
+```
+
+Replace `DELIVERY_ID` with a real identifier. Messages follow a unified schema:
+
+```
+{"type": "position_update", "lat": 1.23, "lng": 4.56}
+{"type": "status", "status": "EN_ROUTE"}
+```
+
 
 Redis (set via `REDIS_URL`) powers the channel layer and cache; configure it in production with password/SSL as needed.
 
@@ -139,6 +154,7 @@ Local testing
 
 - Replay a payload locally:
   `python manage.py replay_paystack --order 123 --status success --verbose-json`
+<<<<<<< HEAD
 
 ## Roles & permissions
 
@@ -175,4 +191,5 @@ POST /api/auth/token/refresh/ {"refresh": "<token>"}
 Dashboards are available for vendors and drivers at `/users/vendor-dashboard/`
 and `/users/driver-dashboard/` respectively. Matching read-only APIs live under
 `/api/vendor/products/` and `/api/driver/deliveries/`.
+
 

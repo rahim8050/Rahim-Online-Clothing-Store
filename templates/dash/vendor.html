@@ -62,10 +62,10 @@
   </section>
 </div>
 
-<!-- Single ESM entry (no inline app code, CSP-friendly). Your build should produce this file. -->
+<!-- ESM entry (no inline JS) -->
 <script type="module" src="{% static 'js/vendor-dashboard.esm.js' %}"></script>
 
-<!-- Vue templates (safe; no scripts executed) -->
+<!-- ===== Vue templates (safe; no scripts executed) ===== -->
 <template id="tpl-vendor-deliveries">
   <div class="rounded-xl border bg-white overflow-hidden">
     <div v-if="error" class="p-3 text-red-600">[[ error ]]</div>

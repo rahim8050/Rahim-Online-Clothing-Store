@@ -1,8 +1,5 @@
 # users/services.py
 from django.db import transaction
-
-from users.models import VendorStaff  # your model lives here
-
 from django.contrib.auth.models import Group
 from users.models import VendorStaff  # your model lives here
 from users.constants import VENDOR_STAFF as GROUP_VENDOR_STAFF
@@ -29,7 +26,6 @@ def add_or_activate_staff(owner, staff, role="staff"):
             update_fields.append("role")
         if update_fields:
             row.save(update_fields=update_fields)
-
     # Ensure Django Group membership is in sync (idempotent)
     try:
         g, _ = Group.objects.get_or_create(name=GROUP_VENDOR_STAFF)
@@ -37,7 +33,7 @@ def add_or_activate_staff(owner, staff, role="staff"):
     except Exception:
         pass
 
-    return row
+#  return row
 
 @transaction.atomic
 def deactivate_staff(owner, staff):
@@ -49,13 +45,6 @@ def deactivate_staff(owner, staff):
     if row.is_active:
         row.is_active = False
         row.save(update_fields=["is_active"])
-
-    return row
-
-# Back-compat wrapper (some places import this name)
-def deactivate_vendor_staff(membership):
-    return deactivate_staff(membership.owner, membership.staff)
-
     # If no other active memberships remain for this staff, drop group
     try:
         still_active = VendorStaff.objects.filter(staff=staff, is_active=True).exists()

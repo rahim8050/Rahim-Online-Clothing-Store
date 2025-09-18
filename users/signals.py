@@ -1,6 +1,5 @@
 from django.contrib.auth.signals import user_logged_in
 from django.dispatch import receiver
-
 from django.db.models.signals import pre_save, post_save
 from django.apps import apps
 from django.db import transaction
@@ -23,9 +22,6 @@ def on_login(sender, user, request, **kwargs):
     ua = request.META.get('HTTP_USER_AGENT', '')
     ip = request.META.get('REMOTE_ADDR', '')
     logger.info("login user=%s backend=%s ip=%s ua=%s", user.pk, backend, ip, ua)
-
-
-user_logged_in.connect(on_login)
 
 user_logged_in.connect(on_login)
 

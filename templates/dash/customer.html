@@ -1,14 +1,5 @@
-
-{% extends 'base.html' %}
-{% block content %}
-<div class="p-4">
-  <h2 class="text-xl">Welcome to your dashboard</h2>
-</div>
-{% endblock %}
-
 {% extends "base.html" %}
 {% load static %}
-
 
 {% block title %}Dashboard{% endblock %}
 
@@ -46,8 +37,8 @@
             </div>
 
             {% if status == "none" or status == "rejected" %}
-              <form id="vendor-apply-form" class="space-y-3 mt-3" enctype="multipart/form-data">
-                 {% csrf_token %}
+              <form id="vendor-apply-form" class="space-y-3 mt-3" enctype="multipart/form-data" method="post">
+                {% csrf_token %}
                 <div>
                   <label class="block text-sm font-medium">Company name</label>
                   <input name="company_name" class="mt-1 w-full rounded border px-3 py-2" required />
@@ -116,4 +107,3 @@
 {% block extra_js %}
   <script src="{% static 'js/customer_vendor_apply.js' %}" defer></script>
 {% endblock %}
-

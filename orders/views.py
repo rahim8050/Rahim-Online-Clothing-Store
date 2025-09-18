@@ -16,7 +16,7 @@ from django.apps import apps
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
-from django.core.mail import send_mail
+from django.db import transaction
 from django.http import (
     HttpResponse,
     HttpResponseForbidden,
@@ -38,7 +38,7 @@ from orders.forms import OrderForm
 from orders.models import (
     Delivery,
     DeliveryPing,
-    EmailDispatchLog,
+    EmailDispatchLog,  # kept import if used elsewhere
     Order,
     OrderItem,
     PaymentEvent,
@@ -47,23 +47,25 @@ from orders.models import (
 from orders.money import to_minor_units
 from orders.services import assign_warehouses_and_update_stock
 from orders.services.totals import safe_order_total
-from orders.utils import reverse_geocode, derive_ui_payment_status
+from orders.utils import derive_ui_payment_status, reverse_geocode
 from payments.gateways import maybe_refund_duplicate_success
 from payments.notify import emit_once, send_payment_email, send_refund_email
 from payments.serializers import PaystackWebhookSerializer
 from users.utils import is_vendor_or_staff
 
-# Third-party config
-stripe.api_key = settings.STRIPE_SECRET_KEY
-paypalrestsdk.configure({
-    "mode": settings.PAYPAL_MODE,
-    "client_id": settings.PAYPAL_CLIENT_ID,
-    "client_secret": settings.PAYPAL_CLIENT_SECRET,
-})
-
 logger = logging.getLogger(__name__)
 
-# ---------- Shared Decimal helpers ----------
+# ---------- Third-party SDK config ----------
+stripe.api_key = getattr(settings, "STRIPE_SECRET_KEY", "")
+paypalrestsdk.configure(
+    {
+        "mode": getattr(settings, "PAYPAL_MODE", "sandbox"),
+        "client_id": getattr(settings, "PAYPAL_CLIENT_ID", ""),
+        "client_secret": getattr(settings, "PAYPAL_CLIENT_SECRET", ""),
+    }
+)
+
+# ---------- Decimal helpers ----------
 Q6 = Decimal("0.000001")
 Q2 = Decimal("0.01")
 
@@ -78,7 +80,6 @@ def q2(x) -> Decimal:
 
 
 def _parse_coord(val):
-    # Robustly parse coords from strings/numbers
     return Decimal(str(val))
 
 
@@ -89,13 +90,12 @@ def is_driver(u):
 
 driver_required = user_passes_test(is_driver)
 
-# In-memory route cache for the short-lived routing API
+# ---------- Simple in-memory route cache (short TTL) ----------
 _ROUTE_CACHE: dict[str, tuple[float, dict]] = {}
 _ROUTE_TTL = 60  # seconds
 
 
 def _route_cache_key(a_lat, a_lng, b_lat, b_lng) -> str:
-    # round to ~11m precision to improve hit rate
     return f"{round(a_lat,5)},{round(a_lng,5)}:{round(b_lat,5)},{round(b_lng,5)}"
 
 
@@ -115,7 +115,7 @@ def _cache_set(k: str, payload: dict):
 
 
 def _to_latlng(coords, ref=None):
-    """Return coords as [lat, lng]. If `ref` given, choose orientation closest to ref."""
+    """Return coords as [lat, lng]. If ref given, choose orientation closest to ref."""
     if not coords:
         return []
     if ref is not None:
@@ -132,9 +132,12 @@ def _haversine_km(a_lat, a_lng, b_lat, b_lng):
     R = 6371
     dLat = math.radians(b_lat - a_lat)
     dLng = math.radians(b_lng - a_lng)
-    s1 = math.sin(dLat / 2) ** 2 + math.cos(math.radians(a_lat)) * math.cos(
-        math.radians(b_lat)
-    ) * math.sin(dLng / 2) ** 2
+    s1 = (
+        math.sin(dLat / 2) ** 2
+        + math.cos(math.radians(a_lat))
+        * math.cos(math.radians(b_lat))
+        * math.sin(dLng / 2) ** 2
+    )
     return 2 * R * math.asin(math.sqrt(s1))
 
 
@@ -153,12 +156,11 @@ def _geoapify_route(a_lat, a_lng, b_lat, b_lng, api_key: str):
     if not feat:
         raise ValueError("geoapify: no route")
     coords = feat["geometry"]["coordinates"]
-    if isinstance(coords[0][0], (int, float)):
+    if isinstance(coords[0][0], (int, float)):  # LineString
         coords_ll = _to_latlng(coords, (a_lat, a_lng))
-    else:
+    else:  # MultiLineString
         flat = [p for part in coords for p in part]
         coords_ll = _to_latlng(flat, (a_lat, a_lng))
-
     props = feat.get("properties", {})
     dist_km = (props.get("distance", 0) or 0) / 1000.0
     dur_min = (props.get("time", 0) or 0) / 60.0
@@ -168,7 +170,9 @@ def _geoapify_route(a_lat, a_lng, b_lat, b_lng, api_key: str):
 def _osrm_route(a_lat, a_lng, b_lat, b_lng):
     base = "https://router.project-osrm.org/route/v1/driving"
     url = f"{base}/{a_lng},{a_lat};{b_lng},{b_lat}"
-    r = requests.get(url, params={"overview": "full", "geometries": "geojson"}, timeout=10)
+    r = requests.get(
+        url, params={"overview": "full", "geometries": "geojson"}, timeout=10
+    )
     r.raise_for_status()
     j = r.json()
     route = (j.get("routes") or [None])[0]
@@ -181,14 +185,14 @@ def _osrm_route(a_lat, a_lng, b_lat, b_lng):
     return {"coords": coords_ll, "distance_km": dist_km, "duration_min": dur_min}
 
 
-# ---------- DRIVER DASHBOARD (HTML shell; Vue renders inside) ----------
+# ---------- DRIVER: HTML shell ----------
 @login_required
 @driver_required
 def driver_deliveries_page(request):
     return render(request, "orders/driver_deliveries.html")
 
 
-# ---------- API: list deliveries for the logged-in driver ----------
+# ---------- DRIVER: list deliveries ----------
 @login_required
 @driver_required
 @require_GET
@@ -203,7 +207,7 @@ def driver_deliveries_api(request):
             "id": d.id,
             "order_id": d.order_id,
             "status": d.status,
-            # destination should be order.dest_* (not order.latitude/longitude)
+            # Use canonical destination fields on Order
             "dest_lat": float(d.order.dest_lat) if d.order.dest_lat is not None else None,
             "dest_lng": float(d.order.dest_lng) if d.order.dest_lng is not None else None,
             "last_lat": float(d.last_lat) if d.last_lat is not None else None,
@@ -215,7 +219,7 @@ def driver_deliveries_api(request):
     return JsonResponse(data, safe=False)
 
 
-# ---------- API: driver posts current location ----------
+# ---------- DRIVER: post location ping ----------
 @login_required
 @driver_required
 @require_POST
@@ -237,12 +241,12 @@ def driver_location_api(request):
     d.last_lng = lng
     d.last_ping_at = timezone.now()
     if d.status == d.Status.ASSIGNED:
-        d.status = d.Status.EN_ROUTE  # auto-progress on first ping
+        d.status = d.Status.EN_ROUTE
     d.save(update_fields=["last_lat", "last_lng", "last_ping_at", "status", "updated_at"])
-
     return JsonResponse({"ok": True, "status": d.status, "ts": d.last_ping_at.isoformat()})
 
 
+# ---------- DRIVER: action ----------
 @login_required
 @driver_required
 @require_POST
@@ -269,7 +273,9 @@ def driver_action_api(request):
         d.delivered_at = now
         if d.dest_lat is not None and d.dest_lng is not None:
             d.last_lat, d.last_lng = d.dest_lat, d.dest_lng
-            d.save(update_fields=["status", "delivered_at", "last_lat", "last_lng", "updated_at"])
+            d.save(
+                update_fields=["status", "delivered_at", "last_lat", "last_lng", "updated_at"]
+            )
         else:
             d.save(update_fields=["status", "delivered_at", "updated_at"])
     elif action == "cancel":
@@ -281,7 +287,7 @@ def driver_action_api(request):
     return JsonResponse({"ok": True, "status": d.status, "ts": now.isoformat()})
 
 
-# --- Route proxy (Geoapify -> fallback OSRM) ---
+# ---------- DRIVER: route proxy (Geoapify -> OSRM -> straight line) ----------
 @login_required
 @driver_required
 @require_GET
@@ -291,7 +297,7 @@ def driver_route_api(request, delivery_id: int):
     except Delivery.DoesNotExist:
         return JsonResponse({"error": "not found"}, status=404)
 
-    # start point: last position or origin
+    # Determine start point
     if d.last_lat is not None and d.last_lng is not None:
         a_lat, a_lng = float(d.last_lat), float(d.last_lng)
     elif d.origin_lat is not None and d.origin_lng is not None:
@@ -323,6 +329,7 @@ def driver_route_api(request, delivery_id: int):
             "distance_km": _haversine_km(a_lat, a_lng, b_lat, b_lng),
             "duration_min": None,
         }
+
     coords = payload.get("coords") or []
     payload["coords"] = _to_latlng(coords, (a_lat, a_lng)) if coords else []
     _cache_set(key, payload)
@@ -353,7 +360,7 @@ def geo_autocomplete(request):
                 "limit": 6,
                 "format": "json",
                 "filter": "countrycode:ke",
-                "apiKey": settings.GEOAPIFY_API_KEY,
+                "apiKey": getattr(settings, "GEOAPIFY_API_KEY", ""),
             },
             timeout=5,
         )
@@ -365,133 +372,95 @@ def geo_autocomplete(request):
 
 # ---------- Order create ----------
 @require_http_methods(["GET", "POST"])
+@login_required
 def order_create(request):
-    if not request.user.is_authenticated:
-        return redirect("users:login")
-
     cart = None
     cart_id = request.session.get("cart_id")
-    logger.info(f"Session cart_id: {cart_id}")
-
     if cart_id:
         try:
             cart = get_object_or_404(Cart, id=cart_id)
-            logger.info(f"Cart found: {cart}")
-        except Exception as e:
-            logger.error(f"Cart retrieval failed: {e}")
+        except Exception:
             cart = None
-    else:
-        logger.info("No cart found in session")
 
     if not cart or not cart.items.exists():
         messages.warning(request, "Your cart is empty")
         return redirect("cart:cart_detail")
 
-    error_msg = None
-    form = None
+    # Allow GET fallback with ?selected=1,2,3
+    if request.method == "GET":
+        sel = (request.GET.get("selected") or "").strip()
+        if sel:
+            ids = [int(p) for p in sel.split(",") if p.strip().isdigit()]
+            if ids:
+                cart.items.update(is_selected=False)
+                cart.items.filter(product_id__in=ids).update(is_selected=True)
 
-    # Allow GET fallback with ?selected=1,2,3 when JS form submission is blocked
-    try:
-        if request.method == "GET" and cart:
-            sel = request.GET.get("selected", "").strip()
-            if sel:
-                ids = []
-                for part in sel.split(","):
-                    part = part.strip()
-                    if part.isdigit():
-                        ids.append(int(part))
-                if ids:
-                    cart.items.update(is_selected=False)
-                    cart.items.filter(product_id__in=ids).update(is_selected=True)
-    except Exception:
-        pass
-
-    if request.method == "POST":
-        selected_items = request.POST.getlist("selected_items")
-        if selected_items:
-            cart.items.update(is_selected=False)
-            cart.items.filter(product_id__in=selected_items).update(is_selected=True)
-
-        has_form_data = any(
-            name in request.POST for name in ("full_name", "email", "address", "payment_method")
-        )
-
-        if not has_form_data:
-            form = OrderForm()
-        else:
-            form = OrderForm(request.POST)
-            if form.is_valid():
-                try:
-                    try:
-                        txt = (request.POST.get("dest_address_text") or "").strip()
-                        lat = _parse_coord(request.POST.get("dest_lat"))
-                        lng = _parse_coord(request.POST.get("dest_lng"))
-                        if not (
-                            Decimal("-90") <= lat <= Decimal("90")
-                            and Decimal("-180") <= lng <= Decimal("180")
-                        ):
-                            raise ValueError
-                    except Exception:
-                        messages.error(
-                            request, "Please select a valid delivery address from suggestions."
-                        )
-                        return redirect("orders:order_create")
-
-                    with timezone.override(None):  # just ensure naive now in DB timezone
-                        with transaction.atomic():
-                            order = form.save(commit=False)
-                            order.user = request.user
-                            order.dest_address_text = txt
-                            order.dest_lat = lat
-                            order.dest_lng = lng
-                            order.dest_source = "autocomplete"
-                            # Backwards compatibility fields
-                            order.address = txt
-                            order.latitude = lat
-                            order.longitude = lng
-                            order.save()
-
-                            for item in cart.items.filter(is_selected=True).select_related("product"):
-                                OrderItem.objects.create(
-                                    order=order,
-                                    product=item.product,
-                                    product_version=getattr(item.product, "product_version", 1),
-                                    price=item.product.price,
-                                    quantity=item.quantity,
-                                )
-
-                            # Remove checked-out items from cart
-                            cart.items.filter(is_selected=True).delete()
-
-                            # If no items remain, delete cart and clear session keys
-                            if not cart.items.exists():
-                                cart.delete()
-                                request.session.pop("cart_id", None)
-
-                            request.session.pop("cart_count", None)
-
-                    messages.success(request, "Order placed successfully!")
-                    return redirect("orders:order_confirmation", order.id)
-
-                except Exception as e:
-                    logger.exception("Order save failed")
-                    messages.error(request, f"Order failed: {e}")
-            else:
-                error_msg = "Please correct the errors in your order form"
-    else:
         form = OrderForm()
+    else:
+        # POST
+        form = OrderForm(request.POST)
+        if form.is_valid():
+            try:
+                txt = (request.POST.get("dest_address_text") or "").strip()
+                lat = _parse_coord(request.POST.get("dest_lat"))
+                lng = _parse_coord(request.POST.get("dest_lng"))
+                if not (
+                    Decimal("-90") <= lat <= Decimal("90")
+                    and Decimal("-180") <= lng <= Decimal("180")
+                ):
+                    raise ValueError
+            except Exception:
+                messages.error(request, "Please select a valid delivery address from suggestions.")
+                return redirect("orders:order_create")
+
+            with transaction.atomic():
+                order = form.save(commit=False)
+                order.user = request.user
+                order.dest_address_text = txt
+                order.dest_lat = lat
+                order.dest_lng = lng
+                order.dest_source = "autocomplete"
+                # Legacy fields kept in sync (if still present)
+                order.address = txt
+                order.latitude = lat
+                order.longitude = lng
+                order.save()
+
+                # Only selected items; if none selected, take all
+                selected = cart.items.filter(is_selected=True)
+                if not selected.exists():
+                    selected = cart.items.all()
+
+                for item in selected:
+                    OrderItem.objects.create(
+                        order=order,
+                        product=item.product,
+                        product_version=getattr(item.product, "product_version", 1),
+                        price=item.product.price,
+                        quantity=item.quantity,
+                    )
+                # Remove checked-out items
+                selected.delete()
+
+                # Clear cart if empty
+                if not cart.items.exists():
+                    cart.delete()
+                    request.session.pop("cart_id", None)
+
+                request.session.pop("cart_count", None)
+
+            messages.success(request, "Order placed successfully!")
+            return redirect("orders:order_confirmation", order.id)
+
+        messages.error(request, "Please correct the errors in your order form")
 
     # Sidebar totals
-    if cart:
-        cart_items = cart.items.filter(is_selected=True)
-        if not cart_items.exists():
-            cart_items = cart.items.all()
-        selected_total = q2(
-            sum((i.product.price * i.quantity for i in cart_items), Decimal("0.00"))
-        )
-    else:
-        cart_items = []
-        selected_total = Decimal("0.00")
+    cart_items = cart.items.filter(is_selected=True)
+    if not cart_items.exists():
+        cart_items = cart.items.all()
+    selected_total = q2(
+        sum((i.product.price * i.quantity for i in cart_items), Decimal("0.00"))
+    )
 
     return render(
         request,
@@ -501,8 +470,8 @@ def order_create(request):
             "cart": cart,
             "cart_items": cart_items,
             "selected_total": selected_total,
-            "error_msg": error_msg,
-            "GEOAPIFY_ENABLED": bool(settings.GEOAPIFY_API_KEY),
+            "error_msg": None,
+            "GEOAPIFY_ENABLED": bool(getattr(settings, "GEOAPIFY_API_KEY", "")),
         },
     )
 
@@ -525,16 +494,11 @@ def order_edit(request, order_id: int):
     order = get_object_or_404(
         Order.objects.prefetch_related("items__product"), id=order_id, user=request.user
     )
-
     if not order.is_editable:
         messages.error(request, "This order can no longer be edited.")
         return redirect("orders:order_confirmation", order.id)
 
-    form = OrderForm(instance=order)
-    error_msg = None
-
     if request.method == "POST":
-        # Validate destination fields (hidden inputs set by autocomplete)
         try:
             txt = (request.POST.get("dest_address_text") or order.dest_address_text or "").strip()
             lat = _parse_coord(request.POST.get("dest_lat") or order.dest_lat)
@@ -552,15 +516,13 @@ def order_edit(request, order_id: int):
         if form.is_valid():
             with transaction.atomic():
                 order = form.save(commit=False)
-                # Update destination fields and keep address in sync
                 order.dest_address_text = txt
                 order.dest_lat = lat
                 order.dest_lng = lng
                 order.dest_source = "autocomplete"
-                order.address = txt  # keep legacy address aligned
+                order.address = txt
                 order.save()
 
-                # Update items (quantities and removals)
                 items = list(order.items.select_for_update().select_related("product"))
                 remaining = 0
                 for it in items:
@@ -581,7 +543,6 @@ def order_edit(request, order_id: int):
                     remaining += 1
 
                 if remaining == 0:
-                    # If all items removed, delete order and send user back to cart
                     order.delete()
                     messages.info(
                         request,
@@ -592,11 +553,11 @@ def order_edit(request, order_id: int):
             messages.success(request, "Order updated.")
             return redirect("orders:order_confirmation", order.id)
         else:
-            error_msg = "Please correct the errors in your form."
+            messages.error(request, "Please correct the errors in your form.")
+    else:
+        form = OrderForm(instance=order)
 
-    # Sidebar-like summary
     selected_total = safe_order_total(order)
-
     return render(
         request,
         "orders/order_edit.html",
@@ -605,8 +566,8 @@ def order_edit(request, order_id: int):
             "order": order,
             "order_items": order.items.select_related("product"),
             "selected_total": selected_total,
-            "error_msg": error_msg,
-            "GEOAPIFY_ENABLED": bool(settings.GEOAPIFY_API_KEY),
+            "error_msg": None,
+            "GEOAPIFY_ENABLED": bool(getattr(settings, "GEOAPIFY_API_KEY", "")),
         },
     )
 
@@ -618,37 +579,37 @@ def get_location_info(request):
     return JsonResponse(data)
 
 
-# ---------- Paystack ----------
-@require_http_methods(["GET", "POST"])
-def paystack_checkout(request, order_id):
-    order = get_object_or_404(Order, id=order_id)
-
-    payment_method = request.GET.get("payment_method") or request.POST.get("payment_method")
-    if payment_method not in {"card", "mpesa"}:
-        messages.error(request, "Invalid payment method")
-        return redirect("orders:order_confirmation", order.id)
-
-    channel = "card" if payment_method == "card" else "mobile_money"
-    payer_email = order.email or getattr(order.user, "email", None)
-    if not payer_email:
-        messages.error(request, "No valid email found for Paystack checkout.")
-        return redirect("orders:order_confirmation", order.id)
-
-    total_dec = safe_order_total(order)  # pure Decimal
-
-    headers = {"Authorization": f"Bearer {settings.PAYSTACK_SECRET_KEY}"}
-    data = {
-        "email": payer_email,
-        "amount": to_minor_units(total_dec),  # integer minor units
-        "currency": getattr(settings, "PAYSTACK_CURRENCY", "KES"),
-        "callback_url": request.build_absolute_uri(reverse("orders:paystack_payment_confirm")),
-        "metadata": {"order_id": order.id, "payment_method": payment_method},
-        "channels": [channel],
-    }
+# =========================================================
+#                         PAYSTACK
+# =========================================================
+@login_required
+def paystack_checkout(request, order_id: int):
+    order = get_object_or_404(Order, id=order_id, user=request.user)
+    payer_email = getattr(request.user, "email", None) or "customer@example.com"
+    payment_method = "paystack"
+    channel = request.GET.get("channel", "card")  # or "mobile_money"
 
     try:
+        total_dec = q2(order.get_total_cost())
+        headers = {
+            "Authorization": f"Bearer {getattr(settings, 'PAYSTACK_SECRET_KEY', '')}",
+            "Content-Type": "application/json",
+        }
+        data = {
+            "email": payer_email,
+            "amount": to_minor_units(total_dec),  # int minor units
+            "currency": getattr(settings, "PAYSTACK_CURRENCY", "KES"),
+            "callback_url": request.build_absolute_uri(
+                reverse("orders:paystack_payment_confirm")
+            ),
+            "metadata": {"order_id": order.id, "payment_method": payment_method},
+            "channels": [channel],
+        }
         response = requests.post(
-            "https://api.paystack.co/transaction/initialize", json=data, headers=headers, timeout=30
+            "https://api.paystack.co/transaction/initialize",
+            json=data,
+            headers=headers,
+            timeout=30,
         )
         res_data = response.json()
         if not response.ok or "data" not in res_data:
@@ -664,108 +625,17 @@ def paystack_checkout(request, order_id):
             amount=total_dec,  # keep Decimal in DB
             method=payment_method,
             gateway="paystack",
-            status="unknown",
+            status="pending",
             reference=reference,
             email=payer_email,
         )
         return redirect(auth_url)
-
-    except Exception as e:
+    except Exception:
         logger.exception("🔥 Paystack Init Error")
         messages.error(request, "Unable to initialize Paystack payment.")
         return redirect("orders:order_confirmation", order.id)
 
 
-# ---------- Stripe ----------
-def stripe_checkout(request, order_id):
-    order = get_object_or_404(Order, id=order_id)
-    amount_kes = order.get_total_cost()
-    unit_amount = int((amount_kes * Decimal("100")).to_integral_value(rounding=ROUND_HALF_UP))
-
-    session = stripe.checkout.Session.create(
-        payment_method_types=["card"],
-        line_items=[
-            {
-                "price_data": {
-                    "currency": "kes",
-                    "product_data": {"name": f"Order {order.id}"},
-                    "unit_amount": unit_amount,
-                },
-                "quantity": 1,
-            }
-        ],
-        mode="payment",
-        metadata={"order_id": str(order.id)},
-        success_url=request.build_absolute_uri(
-            reverse("orders:payment_success", args=[order.id])
-        )
-        + "?session_id={CHECKOUT_SESSION_ID}",
-        cancel_url=request.build_absolute_uri(reverse("orders:payment_cancel", args=[order.id])),
-    )
-
-    return redirect(session.url)
-
-
-@login_required
-def Stripe_payment_success(request, order_id):
-    session_id = request.GET.get("session_id")
-
-    if not session_id:
-        return render(request, "orders/payment_failed.html", {"message": "No session ID provided."})
-
-    try:
-        session = stripe.checkout.Session.retrieve(session_id)
-        payment_intent = stripe.PaymentIntent.retrieve(session.payment_intent)
-    except Exception as e:
-        return render(request, "orders/payment_failed.html", {"message": f"Stripe error: {str(e)}"})
-
-    order = get_object_or_404(Order, id=order_id)
-
-    order.payment_status = "paid"
-    order.payment_intent_id = payment_intent.id
-    order.stripe_receipt_url = payment_intent.charges.data[0].receipt_url
-    order.save()
-
-    return render(
-        request,
-        "orders/payment_success.html",
-        {"order": order, "receipt_url": order.stripe_receipt_url},
-    )
-
-
-@csrf_exempt
-def stripe_webhook(request):
-    payload = request.body
-    sig_header = request.META.get("HTTP_STRIPE_SIGNATURE")
-    endpoint_secret = settings.STRIPE_WEBHOOK_SECRET
-
-    try:
-        event = stripe.Webhook.construct_event(payload=payload, sig_header=sig_header, secret=endpoint_secret)
-    except (ValueError, stripe.error.SignatureVerificationError):
-        return HttpResponse(status=400)
-
-    if event["type"] == "checkout.session.completed":
-        session = event["data"]["object"]
-        order_id = session.get("metadata", {}).get("order_id")
-
-        if order_id:
-            try:
-                order = Order.objects.get(id=order_id)
-                order.payment_status = "paid"
-                order.payment_intent_id = session.get("payment_intent")
-                order.save(update_fields=["payment_status", "payment_intent_id"])
-            except Order.DoesNotExist:
-                pass
-
-    elif event["type"] == "payment_intent.payment_failed":
-        logger.warning("Stripe payment failed.")
-    elif event["type"] == "charge.refunded":
-        logger.info("Stripe refund processed.")
-
-    return HttpResponse(status=200)
-
-
-# ---------- Paystack webhook ----------
 @csrf_exempt
 def paystack_webhook(request):
     """
@@ -777,7 +647,9 @@ def paystack_webhook(request):
     raw = request.body  # bytes
     signature = (request.META.get("HTTP_X_PAYSTACK_SIGNATURE", "") or "").strip().lower()
     expected = hmac.new(
-        (settings.PAYSTACK_SECRET_KEY or "").encode("utf-8"), raw, hashlib.sha512
+        (getattr(settings, "PAYSTACK_SECRET_KEY", "")).encode("utf-8"),
+        raw,
+        hashlib.sha512,
     ).hexdigest().lower()
     if not signature or not hmac.compare_digest(expected, signature):
         logger_ps.warning("Invalid Paystack signature")
@@ -802,7 +674,8 @@ def paystack_webhook(request):
     # 4) Idempotency via body SHA256
     sha = hashlib.sha256(raw).hexdigest().lower()
     pe, created = PaymentEvent.objects.get_or_create(
-        body_sha256=sha, defaults={"provider": "paystack", "reference": reference, "body": event}
+        body_sha256=sha,
+        defaults={"provider": "paystack", "reference": reference, "body": event},
     )
     if not created:
         return HttpResponse(status=200)
@@ -812,8 +685,6 @@ def paystack_webhook(request):
     customer_email = (data.get("customer") or {}).get("email")
 
     # 5) Single-source-of-truth update
-    from django.db import transaction
-
     with transaction.atomic():
         try:
             tx = Transaction.objects.select_for_update().get(reference=reference)
@@ -840,10 +711,7 @@ def paystack_webhook(request):
         if event_type == "charge.success":
             tx.status = "success"
             tx.verified = True
-            try:
-                tx.body_sha256 = sha
-            except Exception:
-                pass
+            tx.body_sha256 = sha
             tx.save(
                 update_fields=[
                     "callback_received",
@@ -855,7 +723,6 @@ def paystack_webhook(request):
                     "body_sha256",
                 ]
             )
-
             if order:
                 order.paid = True
                 order.payment_status = "success"
@@ -889,10 +756,7 @@ def paystack_webhook(request):
 
         elif event_type == "charge.failed":
             tx.status = "failed"
-            try:
-                tx.body_sha256 = sha
-            except Exception:
-                pass
+            tx.body_sha256 = sha
             tx.save(
                 update_fields=[
                     "callback_received",
@@ -920,10 +784,7 @@ def paystack_webhook(request):
 
         elif event_type == "charge.cancelled":
             tx.status = "cancelled"
-            try:
-                tx.body_sha256 = sha
-            except Exception:
-                pass
+            tx.body_sha256 = sha
             tx.save(
                 update_fields=[
                     "callback_received",
@@ -948,13 +809,9 @@ def paystack_webhook(request):
                         tx.email, order_id, tx.amount, tx.reference, "cancelled"
                     ),
                 )
-
         else:
             tx.status = "pending"
-            try:
-                tx.body_sha256 = sha
-            except Exception:
-                pass
+            tx.body_sha256 = sha
             tx.save(
                 update_fields=[
                     "callback_received",
@@ -974,38 +831,132 @@ def paystack_payment_confirm(request):
     reference = request.GET.get("reference")
     if not reference:
         return render(request, "payment_result.html", {"error": "Missing reference"})
-
     transaction = get_object_or_404(Transaction, reference=reference, gateway="paystack")
     return redirect("orders:payment_success", transaction.order.id)
 
 
-def send_payment_receipt_email(transaction, order):
+def send_payment_receipt_email(transaction: Transaction, order: Order):
     subject = f"🧾 Payment Receipt for Order #{order.id}"
     recipient = [transaction.email]
-
     message = render_to_string(
-        "emails/payment_receipt.html",
-        {"user": transaction.user, "order": order, "transaction": transaction},
+        "emails/payment_receipt.html", {"user": transaction.user, "order": order, "transaction": transaction}
     )
+    from django.core.mail import send_mail
 
     send_mail(
         subject=subject,
         message="This is an HTML email. Please use an HTML-capable client.",
-        from_email=settings.DEFAULT_FROM_EMAIL,
+        from_email=getattr(settings, "DEFAULT_FROM_EMAIL", None),
         recipient_list=recipient,
         html_message=message,
     )
 
 
-# ---------- PayPal ----------
+# =========================================================
+#                          STRIPE
+# =========================================================
+@login_required
+def stripe_checkout(request, order_id):
+    order = get_object_or_404(Order, id=order_id, user=request.user)
+    amount_kes = q2(order.get_total_cost())
+    unit_amount = int((amount_kes * Decimal("100")).to_integral_value(rounding=ROUND_HALF_UP))
+
+    session = stripe.checkout.Session.create(
+        payment_method_types=["card"],
+        line_items=[
+            {
+                "price_data": {
+                    "currency": getattr(settings, "STRIPE_CURRENCY", "kes"),
+                    "product_data": {"name": f"Order {order.id}"},
+                    "unit_amount": unit_amount,
+                },
+                "quantity": 1,
+            }
+        ],
+        mode="payment",
+        metadata={"order_id": str(order.id)},
+        success_url=request.build_absolute_uri(
+            reverse("orders:stripe_payment_success", args=[order.id])
+        )
+        + "?session_id={CHECKOUT_SESSION_ID}",
+        cancel_url=request.build_absolute_uri(reverse("orders:payment_cancel", args=[order.id])),
+    )
+    return redirect(session.url)
+
+
+@login_required
+def Stripe_payment_success(request, order_id):
+    session_id = request.GET.get("session_id")
+    if not session_id:
+        return render(
+            request, "orders/payment_failed.html", {"message": "No session ID provided."}
+        )
+    try:
+        session = stripe.checkout.Session.retrieve(session_id)
+        payment_intent = stripe.PaymentIntent.retrieve(session.payment_intent)
+    except Exception as e:
+        return render(
+            request, "orders/payment_failed.html", {"message": f"Stripe error: {str(e)}"}
+        )
+
+    order = get_object_or_404(Order, id=order_id, user=request.user)
+    order.payment_status = "paid"
+    order.paid = True
+    order.payment_intent_id = payment_intent.id
+    try:
+        order.stripe_receipt_url = payment_intent.charges.data[0].receipt_url
+    except Exception:
+        pass
+    order.save()
+
+    return render(
+        request,
+        "orders/payment_success.html",
+        {"order": order, "receipt_url": getattr(order, "stripe_receipt_url", None)},
+    )
+
+
+@csrf_exempt
+def stripe_webhook(request):
+    payload = request.body
+    sig_header = request.META.get("HTTP_STRIPE_SIGNATURE")
+    endpoint_secret = getattr(settings, "STRIPE_WEBHOOK_SECRET", "")
+    try:
+        event = stripe.Webhook.construct_event(payload=payload, sig_header=sig_header, secret=endpoint_secret)
+    except Exception:
+        return HttpResponse(status=400)
+
+    if event.get("type") == "checkout.session.completed":
+        session = event["data"]["object"]
+        order_id = (session.get("metadata") or {}).get("order_id")
+        if order_id:
+            try:
+                order = Order.objects.get(id=order_id)
+                order.payment_status = "paid"
+                order.paid = True
+                order.payment_intent_id = session.get("payment_intent")
+                order.save(update_fields=["payment_status", "paid", "payment_intent_id"])
+            except Order.DoesNotExist:
+                pass
+    elif event.get("type") == "payment_intent.payment_failed":
+        logger.warning("Stripe payment failed")
+    elif event.get("type") == "charge.refunded":
+        logger.info("Stripe refund processed")
+    return HttpResponse(status=200)
+
+
+# =========================================================
+#                           PAYPAL
+# =========================================================
 @csrf_exempt
 def paypal_webhook(request):
     try:
         event = json.loads(request.body)
     except json.JSONDecodeError:
         return HttpResponse(status=400)
+
     if event.get("event_type") == "PAYMENT.CAPTURE.COMPLETED":
-        resource = event.get("resource", {})
+        resource = event.get("resource", {}) or {}
         reference = resource.get("id")
         invoice = resource.get("invoice_id")
         Transaction.objects.filter(reference=reference).update(status="success")
@@ -1013,14 +964,19 @@ def paypal_webhook(request):
             try:
                 order = Order.objects.get(id=invoice)
                 order.paid = True
-                order.save()
+                order.payment_status = "paid"
+                order.save(update_fields=["paid", "payment_status"])
             except Order.DoesNotExist:
                 pass
     return HttpResponse(status=200)
 
 
+@login_required
 def paypal_checkout(request, order_id):
-    order = get_object_or_404(Order, id=order_id)
+    order = get_object_or_404(Order, id=order_id, user=request.user)
+    currency = getattr(settings, "PAYPAL_CURRENCY", "USD")
+    total_amount = str(q2(order.get_total_cost()))
+
     payment = paypalrestsdk.Payment(
         {
             "intent": "sale",
@@ -1040,13 +996,13 @@ def paypal_checkout(request, order_id):
                             {
                                 "name": f"Order {order.id}",
                                 "sku": f"{order.id}",
-                                "price": str(order.get_total_cost()),
-                                "currency": "KES",
+                                "price": total_amount,
+                                "currency": currency,
                                 "quantity": 1,
                             }
                         ]
                     },
-                    "amount": {"total": str(order.get_total_cost()), "currency": "KES"},
+                    "amount": {"total": total_amount, "currency": currency},
                     "description": f"Payment for Order {order.id}",
                 }
             ],
@@ -1055,7 +1011,8 @@ def paypal_checkout(request, order_id):
     if payment.create():
         Transaction.objects.create(
             user=order.user,
-            amount=order.get_total_cost(),
+            order=order,
+            amount=Decimal(total_amount),
             method="paypal",
             gateway="paypal",
             status="pending",
@@ -1065,16 +1022,21 @@ def paypal_checkout(request, order_id):
             if link.rel == "approval_url":
                 request.session["paypal_payment_id"] = payment.id
                 return redirect(link.href)
+
     messages.error(request, "Unable to create PayPal payment")
     return redirect("orders:order_confirmation", order.id)
 
 
+@login_required
 def paypal_execute(request, order_id):
-    paypalrestsdk.configure({
-        "mode": settings.PAYPAL_MODE,
-        "client_id": settings.PAYPAL_CLIENT_ID,
-        "client_secret": settings.PAYPAL_SECRET,
-    })
+    # ensure config is in place (idempotent)
+    paypalrestsdk.configure(
+        {
+            "mode": getattr(settings, "PAYPAL_MODE", "sandbox"),
+            "client_id": getattr(settings, "PAYPAL_CLIENT_ID", ""),
+            "client_secret": getattr(settings, "PAYPAL_CLIENT_SECRET", ""),
+        }
+    )
 
     payment_id = request.session.get("paypal_payment_id")
     payer_id = request.GET.get("PayerID")
@@ -1084,62 +1046,70 @@ def paypal_execute(request, order_id):
 
     payment = paypalrestsdk.Payment.find(payment_id)
     if payment.execute({"payer_id": payer_id}):
-        order = get_object_or_404(Order, id=order_id)
+        order = get_object_or_404(Order, id=order_id, user=request.user)
         order.paid = True
-        order.save()
+        order.payment_status = "paid"
+        order.save(update_fields=["paid", "payment_status"])
         Transaction.objects.filter(reference=payment_id).update(status="success")
         return redirect("orders:payment_success", order.id)
-    else:
-        messages.error(request, "PayPal payment execution failed")
-        return redirect("orders:order_confirmation", order_id)
+
+    messages.error(request, "PayPal payment execution failed")
+    return redirect("orders:order_confirmation", order_id)
 
 
+@login_required
 def paypal_payment(request, order_id):
-    paypalrestsdk.configure({
-        "mode": settings.PAYPAL_MODE,
-        "client_id": settings.PAYPAL_CLIENT_ID,
-        "client_secret": settings.PAYPAL_CLIENT_SECRET,
-    })
-
-    order = get_object_or_404(Order, id=order_id)
-    total_amount = str(order.get_total_cost())  # must be a string
+    # Optional secondary flow; normalized to settings currency
+    currency = getattr(settings, "PAYPAL_CURRENCY", "USD")
+    order = get_object_or_404(Order, id=order_id, user=request.user)
+    total_amount = str(q2(order.get_total_cost()))
 
     payment = paypalrestsdk.Payment(
         {
             "intent": "sale",
             "payer": {"payment_method": "paypal"},
             "redirect_urls": {
-                "return_url": request.build_absolute_uri(f"/orders/paypal/execute/{order.id}/"),
-                "cancel_url": request.build_absolute_uri(f"/orders/paypal/cancel/{order.id}/"),
+                "return_url": request.build_absolute_uri(
+                    reverse("orders:paypal_execute", args=[order.id])
+                ),
+                "cancel_url": request.build_absolute_uri(
+                    reverse("orders:payment_cancel", args=[order.id])
+                ),
             },
             "transactions": [
                 {
-                    "amount": {"total": total_amount, "currency": "USD"},
+                    "amount": {"total": total_amount, "currency": currency},
                     "description": f"Payment for Order #{order.id} - Rahim Clothing",
                 }
             ],
         }
     )
-
     if payment.create():
         request.session["paypal_payment_id"] = payment.id
         for link in payment.links:
             if link.method == "REDIRECT":
                 return redirect(link.href)
     else:
-        logger.error("🚨 PayPal Payment Error: %s", json.dumps(payment.error, indent=2))
-        messages.error(request, "Unable to create PayPal payment")
-        return redirect("orders:order_confirmation", order_id)
+        try:
+            logger.error("🚨 PayPal Payment Error: %s", json.dumps(payment.error, indent=2))
+        except Exception:
+            logger.error("🚨 PayPal Payment Error (no details)")
+
+    messages.error(request, "Unable to create PayPal payment")
+    return redirect("orders:order_confirmation", order_id)
 
 
-# ---------- Payment result ----------
+# =========================================================
+#                     Generic payment result
+# =========================================================
+@login_required
 def payment_success(request, order_id):
-    order = get_object_or_404(Order, id=order_id)
+    order = get_object_or_404(Order, id=order_id, user=request.user)
     last_tx = Transaction.objects.filter(order=order).order_by("-created_at").first()
 
     message = "Payment successful"
-
     if last_tx and last_tx.gateway == "paystack":
+        # UI hint until webhook lands
         order.payment_status = "pending_confirmation"
         order.paid = False
         order.save(update_fields=["payment_status", "paid"])
@@ -1148,17 +1118,20 @@ def payment_success(request, order_id):
         order.paid = True
         order.payment_status = "paid"
         order.save(update_fields=["paid", "payment_status"])
-        if order.payment_method in ["card", "mpesa"]:
+        if getattr(order, "payment_method", None) in ["card", "mpesa"]:
             assign_warehouses_and_update_stock(order)
 
     return render(request, "payment_result.html", {"message": message, "order": order})
 
 
+@login_required
 def payment_cancel(request, order_id):
     return render(request, "payment_result.html", {"error": "Payment cancelled"})
 
 
-# ---------- Save location ----------
+# =========================================================
+#                     Save location + tracking
+# =========================================================
 @login_required
 @require_POST
 def save_location(request):
@@ -1177,7 +1150,7 @@ def save_location(request):
     except Order.DoesNotExist:
         return JsonResponse({"error": "Order not found"}, status=404)
 
-    if order.coords_locked:
+    if getattr(order, "coords_locked", False):
         return JsonResponse({"status": "locked"})
 
     try:
@@ -1205,19 +1178,19 @@ def save_location(request):
     )
 
     assign_warehouses_and_update_stock(order)
-
     return JsonResponse({"status": "success"})
 
 
-# ---------- Track order ----------
 @login_required
 def track_order(request, order_id: int):
     OrderModel = apps.get_model("orders", "Order")
     DeliveryModel = apps.get_model("orders", "Delivery")
     order = get_object_or_404(OrderModel.objects.select_related("user"), pk=order_id)
+
     is_owner = order.user_id == request.user.id
     if not (is_owner or is_vendor_or_staff(request.user)):
         return HttpResponseForbidden("Not allowed")
+
     delivery = DeliveryModel.objects.filter(order=order).order_by("-id").first()
     warehouse = None
     if delivery and delivery.origin_lat is not None and delivery.origin_lng is not None:
@@ -1226,17 +1199,27 @@ def track_order(request, order_id: int):
         item = order.items.select_related("warehouse").first()
         wh = getattr(item, "warehouse", None)
         if wh and wh.latitude is not None and wh.longitude is not None:
-            warehouse = {"lat": wh.latitude, "lng": wh.longitude}
+            warehouse = {"lat": float(wh.latitude), "lng": float(wh.longitude)}
+
+    dest = None
+    if order.dest_lat is not None and order.dest_lng is not None:
+        dest = {"lat": float(order.dest_lat), "lng": float(order.dest_lng)}
+
     route_ctx = {
-        "apiKey": settings.GEOAPIFY_API_KEY,
+        "apiKey": getattr(settings, "GEOAPIFY_API_KEY", ""),
         "warehouse": warehouse,
-        "destination": {"lat": float(order.dest_lat), "lng": float(order.dest_lng)},
+        "destination": dest,
         "wsUrl": f"/ws/delivery/track/{delivery.id}/" if delivery else "",
     }
     return render(
         request,
         "orders/track.html",
-        {"order": order, "delivery": delivery, "ws_path": route_ctx["wsUrl"], "route_ctx": route_ctx},
+        {
+            "order": order,
+            "delivery": delivery,
+            "ws_path": route_ctx["wsUrl"],
+            "route_ctx": route_ctx,
+        },
     )
 
 
@@ -1246,16 +1229,17 @@ def delivery_pings_api(request, delivery_id: int):
     DeliveryModel = apps.get_model("orders", "Delivery")
     PingModel = apps.get_model("orders", "DeliveryPing")
     d = get_object_or_404(DeliveryModel.objects.select_related("order"), pk=delivery_id)
+
     is_owner = d.order.user_id == request.user.id
     if not (is_owner or is_vendor_or_staff(request.user)):
         return HttpResponseForbidden("Not allowed")
 
     qs = PingModel.objects.filter(delivery=d).order_by("-created_at")
-    # limit for payload size
     limit = int(request.GET.get("limit", 200))
     limit = max(10, min(limit, 1000))
     rows = list(qs.values_list("lat", "lng", "created_at")[:limit])
     rows.reverse()  # chronological
+
     data = {
         "delivery": d.pk,
         "count": len(rows),
