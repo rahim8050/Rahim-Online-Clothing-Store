@@ -4,9 +4,9 @@ from django.contrib import admin, messages
 from django.contrib.admin.helpers import ActionForm  # required for custom action form
 from django.contrib.auth.admin import UserAdmin
 from django.core.mail import send_mail
-
 from django.utils import timezone
 from django.contrib.admin.helpers import ActionForm  # ✅ import this
+
 
 
 from .models import CustomUser, VendorApplication, VendorStaff
@@ -16,8 +16,14 @@ from users.services import deactivate_staff as deactivate_vendor_staff
 admin.site.register(CustomUser, UserAdmin)
 
 
+
+class VendorApplicationActionForm(ActionForm):
+    """Expose a note field alongside the admin action selector."""
+
+
 class VendorApplicationActionForm(ActionForm):  # ✅ subclass ActionForm (has `action`)
     """Extra field for reject action."""
+
     note = forms.CharField(
         required=False,
         label="Rejection note",
@@ -42,7 +48,9 @@ class VendorApplicationAdmin(admin.ModelAdmin):
     autocomplete_fields = ("user",)
     date_hierarchy = "created_at"
 
+
     action_form = VendorApplicationActionForm  # ✅ keep using our subclass
+
     actions = ("approve_selected", "reject_selected")
 
     @admin.action(description="Approve selected applications")
@@ -91,13 +99,19 @@ class VendorApplicationAdmin(admin.ModelAdmin):
 class VendorStaffAdmin(admin.ModelAdmin):
     list_display = ("id", "owner", "staff", "role", "is_active", "created_at")
     list_filter = ("role", "is_active")
-    search_fields = ("owner__username", "owner__email", "staff__username", "staff__email")
+    search_fields = (
+        "owner__username",
+        "owner__email",
+        "staff__username",
+        "staff__email",
+    )
     autocomplete_fields = ("owner", "staff")
 
     def save_model(self, request, obj, form, change):
         super().save_model(request, obj, form, change)
         if not obj.is_active:
             deactivate_vendor_staff(obj)
+
 
 
 from .models import CustomUser, VendorApplication, VendorStaff
@@ -195,4 +209,5 @@ class VendorStaffAdmin(admin.ModelAdmin):
         super().save_model(request, obj, form, change)
         if not obj.is_active:
             deactivate_vendor_staff(obj)
+
 
