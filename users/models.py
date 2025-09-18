@@ -145,7 +145,11 @@ class VendorStaff(models.Model):
     scopes = models.JSONField(default=list, blank=True)
     is_active = models.BooleanField(default=True)
 
-    scopes = models.JSONField(default=list, blank=True)    is_active = models.BooleanField(default=True)
+
+
+
+    scopes = models.JSONField(default=list, blank=True)
+    is_active = models.BooleanField(default=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
 

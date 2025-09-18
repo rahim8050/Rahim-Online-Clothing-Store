@@ -6,8 +6,8 @@ from typing import Optional, Set
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.contrib.sites.shortcuts import get_current_site
 from django.core.mail import EmailMultiAlternatives
+from django.urls import reverse
 from django.template.loader import render_to_string
 from django.utils.encoding import force_bytes
 from django.utils.html import strip_tags
@@ -15,6 +15,7 @@ from django.utils.http import urlsafe_base64_encode
 from rest_framework.exceptions import PermissionDenied
 
 from .constants import VENDOR, VENDOR_STAFF
+from core.siteutils import absolute_url
 from .tokens import account_activation_token
 
 logger = logging.getLogger(__name__)
@@ -118,19 +119,24 @@ def send_activation_email(request, user) -> None:
     Uses DEFAULT_FROM_EMAIL as sender (explicit).
     """
     try:
-        protocol = "https" if request.is_secure() else "http"
-        domain = get_current_site(request).domain
+        uid = urlsafe_base64_encode(force_bytes(user.pk))
+        token = account_activation_token.make_token(user)
+        activation_path = reverse("users:activate", kwargs={"uidb64": uid, "token": token})
+        activation_url = absolute_url(activation_path, request=request)
+        support_email = getattr(settings, "SUPPORT_EMAIL", settings.DEFAULT_FROM_EMAIL)
+        site_name = getattr(settings, "SITE_NAME", "Rahim Online Shop")
 
         ctx = {
             "user": user,
-            "domain": domain,
-            "uid": urlsafe_base64_encode(force_bytes(user.pk)),
-            "token": account_activation_token.make_token(user),
-            "protocol": protocol,
+            "uid": uid,
+            "token": token,
+            "activation_url": activation_url,
+            "support_email": support_email,
+            "site_name": site_name,
         }
 
         subject = "Activate your account"
-        html_body = render_to_string("users/accounts/acc_activate_email.html", ctx)
+        html_body = render_to_string("users/accounts/acc_activate_email.html", ctx, request=request)
         text_body = strip_tags(html_body)
 
         msg = EmailMultiAlternatives(
