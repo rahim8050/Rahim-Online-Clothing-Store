@@ -11,7 +11,6 @@ from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from django.apps import apps
 from django.conf import settings
-from django.contrib.sites.shortcuts import get_current_site
 from django.contrib.auth import get_user_model
 from django.core.mail import EmailMultiAlternatives
 from django.core.signing import (
@@ -53,6 +52,7 @@ from users.permissions import (
 )
 from users.services import activate_vendor_staff  # group sync helper
 from users.utils import resolve_vendor_owner_for, vendor_owner_ids_for
+from core.siteutils import current_domain
 
 # If your serializers live elsewhere, adjust this import accordingly.
 from .serializers import (
@@ -64,7 +64,6 @@ from .serializers import (
     ProductListSerializer,
     VendorProductCreateSerializer,
     ProductOutSerializer,
-    VendorApplySerializer,                 # if not used, you may remove
     VendorApplicationCreateSerializer,
     VendorStaffCreateSerializer,
     VendorStaffOutSerializer,
@@ -541,14 +540,17 @@ class VendorStaffInviteAPI(APIView):
 
             # Only send email on first creation; for re-sends you can adjust policy
             if created:
-                subject = f"You're invited to join {get_current_site(request).domain}"
+                domain = current_domain(request)
+                site_name = getattr(settings, "SITE_NAME", domain)
+                subject = f"You're invited to join {site_name}"
                 html_content = render_to_string(
                     "emails/vendor_staff_invite.html",
                     {
                         "staff": staff,
                         "owner": request.user,
                         "invite_link": invite_link,
-                        "site_name": get_current_site(request).domain,
+                        "site_name": site_name,
+                        "support_email": getattr(settings, "SUPPORT_EMAIL", settings.DEFAULT_FROM_EMAIL),
                     },
                 )
                 text_content = f"You've been invited as vendor staff.\n\nAccept your invite: {invite_link}"
@@ -784,3 +786,4 @@ class VendorOwnersAPI(APIView):
             for u in rows
         ]
         return Response(sorted(data, key=lambda x: x["name"].lower()))
+

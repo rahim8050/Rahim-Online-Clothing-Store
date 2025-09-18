@@ -44,12 +44,22 @@ RENDER_HOST = os.getenv("RENDER_EXTERNAL_HOSTNAME")
 if RENDER_HOST and RENDER_HOST not in ALLOWED_HOSTS:
     ALLOWED_HOSTS.append(RENDER_HOST)
 
+REQUIRED_HOSTS = ["127.0.0.1", "localhost", "[::1]", "codealpa-online-clothesstore.onrender.com"]
+for _host in REQUIRED_HOSTS:
+    if _host not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(_host)
+
 def _with_scheme(host: str) -> str:
     return host if host.startswith(("http://", "https://")) else f"https://{host}"
 
 CSRF_TRUSTED_ORIGINS = env.list("CSRF_TRUSTED_ORIGINS", default=[_with_scheme(h) for h in ALLOWED_HOSTS])
 if DEBUG:
     CSRF_TRUSTED_ORIGINS += ["https://127.0.0.1:8000", "https://localhost:8000"]
+
+REQUIRED_CSRF_ORIGINS = ["http://127.0.0.1:8000", "http://localhost:8000", "https://codealpa-online-clothesstore.onrender.com"]
+for _origin in REQUIRED_CSRF_ORIGINS:
+    if _origin not in CSRF_TRUSTED_ORIGINS:
+        CSRF_TRUSTED_ORIGINS.append(_origin)
 
 # CORS (optional, only if you install `django-cors-headers`)
 CORS_ALLOWED_ORIGINS = env.list("CORS_ALLOWED_ORIGINS", default=[])
@@ -74,6 +84,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "django.contrib.humanize",
+    "django.contrib.sites",
 
     # Third-party
     "channels",
@@ -82,15 +93,19 @@ INSTALLED_APPS = [
     "django_filters",
     "drf_spectacular",
     "django_extensions",
+    "widget_tweaks",
     "django_daraja",  # M-Pesa SDK
     # "corsheaders",  # <- auto-added below if importable
 
     # First-party apps
+    "users.apps.UsersConfig",
     "core",
     "assistant",
     "utilities",
     "product_app",
     "cart.apps.CartConfig",
+    "Mpesa",
+    
     "orders.apps.OrdersConfig",
     "payments.apps.PaymentsConfig",
     "apis.apps.ApisConfig",
@@ -260,7 +275,13 @@ SIMPLE_JWT = {
 }
 
 AUTH_USER_MODEL = "users.CustomUser"
+LOGIN_URL = "/login/"
 LOGIN_REDIRECT_URL = "/dashboard/"
+SITE_ID = int(os.getenv('SITE_ID', 1))
+SITE_DOMAIN = os.getenv('SITE_DOMAIN', '127.0.0.1:8000')
+SITE_SCHEME = os.getenv('SITE_SCHEME', 'https' if IS_PROD else 'http')
+SITE_NAME = os.getenv('SITE_NAME', 'Rahim Online Shop')
+
 LOGOUT_REDIRECT_URL = "/accounts/login/"
 
 AUTH_PASSWORD_VALIDATORS = [
@@ -395,9 +416,10 @@ EMAIL_HOST_USER = _env_str("EMAIL_HOST_USER")
 EMAIL_HOST_PASSWORD = _env_str("EMAIL_HOST_PASSWORD")
 EMAIL_TIMEOUT = int(os.getenv("EMAIL_TIMEOUT", "10"))
 
-DEFAULT_FROM_EMAIL = _env_str("DEFAULT_FROM_EMAIL") or EMAIL_HOST_USER or "no-reply@codealpa.shop"
+DEFAULT_FROM_EMAIL = _env_str("DEFAULT_FROM_EMAIL", f"no-reply@{SITE_DOMAIN.split(':')[0]}")
+SUPPORT_EMAIL = _env_str("SUPPORT_EMAIL", f"support@{SITE_DOMAIN.split(':')[0]}")
 SERVER_EMAIL = _env_str("SERVER_EMAIL") or DEFAULT_FROM_EMAIL
-EMAIL_SUBJECT_PREFIX = _env_str("EMAIL_SUBJECT_PREFIX", "[CodeAlpa] ")
+EMAIL_SUBJECT_PREFIX = _env_str("EMAIL_SUBJECT_PREFIX", "[Rahim Online] ")
 
 if DEBUG and not EMAIL_HOST:
     EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
@@ -409,42 +431,66 @@ if IS_PROD and EMAIL_BACKEND.endswith("smtp.EmailBackend"):
 # ---------------------------------------------------------------------
 # CSP (django-csp)
 # ---------------------------------------------------------------------
-from csp.constants import SELF, NONCE
+from csp import constants as csp_constants
 
-CSP_DEFAULT_SRC = (SELF,)
-CSP_CONNECT_SRC = (SELF, "ws:", "wss:", "https://api.cloudinary.com")
-CSP_SCRIPT_SRC = (
-    SELF, NONCE,
-    "https://cdn.tailwindcss.com",
-    "https://cdn.jsdelivr.net",
-    "https://unpkg.com",
-    "https://widget.cloudinary.com",
-    "https://js.stripe.com",
-    "https://*.stripe.com",
-    "https://js.paystack.co",
-    "https://*.paystack.co",
-    "https://*.paystack.com",
-)
-CSP_STYLE_SRC = (
-    SELF, NONCE,
-    "https://cdnjs.cloudflare.com",
-    "https://unpkg.com",
-    "https://fonts.googleapis.com",
-)
-CSP_STYLE_SRC_ATTR = ("'unsafe-inline'",)
-CSP_FONT_SRC = (SELF, "https://fonts.gstatic.com", "https://cdnjs.cloudflare.com", "data:")
-CSP_IMG_SRC = (
-    SELF, "data:", "blob:",
-    "https://res.cloudinary.com",
-    "https://tile.openstreetmap.org",
-    "https://*.tile.openstreetmap.org",
-)
-CSP_FRAME_SRC = (
-    "https://js.stripe.com", "https://*.stripe.com",
-    "https://js.paystack.co", "https://*.paystack.co", "https://*.paystack.com",
-)
-CSP_WORKER_SRC = (SELF, "blob:")
-CSP_FRAME_ANCESTORS = (SELF,)
+CONTENT_SECURITY_POLICY = {
+    "DIRECTIVES": {
+        "default-src": (csp_constants.SELF,),
+        "connect-src": (
+            csp_constants.SELF,
+            "ws:",
+            "wss:",
+            "https://api.cloudinary.com",
+        ),
+        "script-src": (
+            csp_constants.SELF,
+            csp_constants.NONCE,
+            "https://cdn.tailwindcss.com",
+            "https://cdn.jsdelivr.net",
+            "https://unpkg.com",
+            "https://widget.cloudinary.com",
+            "https://js.stripe.com",
+            "https://*.stripe.com",
+            "https://js.paystack.co",
+            "https://*.paystack.co",
+            "https://*.paystack.com",
+        ),
+        "style-src": (
+            csp_constants.SELF,
+            csp_constants.NONCE,
+            "https://cdnjs.cloudflare.com",
+            "https://unpkg.com",
+            "https://fonts.googleapis.com",
+        ),
+        "style-src-attr": ("'unsafe-inline'",),
+        "font-src": (
+            csp_constants.SELF,
+            "https://fonts.gstatic.com",
+            "https://cdnjs.cloudflare.com",
+            "data:",
+        ),
+        "img-src": (
+            csp_constants.SELF,
+            "data:",
+            "blob:",
+            "https://res.cloudinary.com",
+            "https://tile.openstreetmap.org",
+            "https://*.tile.openstreetmap.org",
+        ),
+        "frame-src": (
+            "https://js.stripe.com",
+            "https://*.stripe.com",
+            "https://js.paystack.co",
+            "https://*.paystack.co",
+            "https://*.paystack.com",
+        ),
+        "worker-src": (
+            csp_constants.SELF,
+            "blob:",
+        ),
+        "frame-ancestors": (csp_constants.SELF,),
+    },
+}
 
 # ---------------------------------------------------------------------
 # UI / Misc
@@ -483,3 +529,4 @@ SPECTACULAR_SETTINGS = {
     "DESCRIPTION": "Versioned DRF API for catalog, cart, orders, payments, and users.",
     "VERSION": "1.0.0",
 }
+
