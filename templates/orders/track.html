@@ -2,6 +2,7 @@
 {% load static %}
 
 {% block content %}
+<<<<<<< HEAD
 
   <h2 class="text-xl font-semibold mb-2">Order {{ order.id }} Tracking</h2>
   <div class="text-sm text-gray-600 mb-3">Status: {% if delivery %}{{ delivery.status }}{% else %}—{% endif %}</div>
@@ -20,6 +21,8 @@
 
   <!-- Your map/WS bootstrap -->
 
+=======
+>>>>>>> development
   <div class="max-w-5xl mx-auto p-4">
     <h2 class="text-xl font-semibold mb-2">Order {{ order.id }} Tracking</h2>
 
@@ -96,6 +99,9 @@
   </script>
 
   {# Your map/WS bootstrap — make sure this file exists #}
+<<<<<<< HEAD
 
+=======
+>>>>>>> development
   <script defer src="{% static 'js/tracking-route.js' %}"></script>
 {% endblock %}

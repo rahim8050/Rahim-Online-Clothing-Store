@@ -5,6 +5,7 @@
 | Pattern | Name | View | Auth/roles |
 | --- | --- | --- | --- |
 
+
 | `vendor/products/` | vendor-products | `VendorProductsAPI` | `IsAuthenticated` + `InGroups` Vendor/Vendor Staff |
 | `vendor/shopable-products/` | shopable-products | `ShopableProductsAPI` | `IsAuthenticatedOrReadOnly` |
 | `driver/deliveries/` | driver-deliveries | `DriverDeliveriesAPI` | `IsAuthenticated` + Driver group |
@@ -15,6 +16,7 @@
 | `deliveries/<int:pk>/status/` | delivery-status | `DeliveryStatusAPI` | `IsAuthenticated` + Driver |
 | `vendor/products/create/` | vendor-product-create | `VendorProductCreateAPI` | `IsAuthenticated` + Vendor/Vendor Staff |
 | `vendor/apply/` | vendor-apply | `VendorApplyAPI` | `IsAuthenticated` |
+
 
 | `vendor/products/` | vendor-products | `VendorProductsAPI` | `IsAuthenticated` + `IsVendorOrVendorStaff` |
 | `vendor/shopable-products/` | shopable-products | `ShopableProductsAPI` | `IsAuthenticatedOrReadOnly` |
@@ -31,6 +33,7 @@
 | `vendor/products/export-csv/` | vendor-products-export-csv | `VendorProductsExportCSV` | `IsAuthenticated` + `HasVendorScope('catalog')` |
 
 
+
 ## Role checks
 
 * `users/views.py` – router `after_login` dispatches to vendor, driver and customer dashboards based on group membership.
@@ -44,6 +47,11 @@
 * Added driver location stub with authentication and group check.
 * Secured dashboard routing and added `/dashboard/` URL before category catch‑all.
 * Reworked navbar to expose a unified dashboard link for authenticated users.
+
+
+## Role checks
+
+* `users/views.py` – router `after_login` dispatches to vendor, driver and customer dashboards based on group membership.
 
 * `apis/views.py` – vendor endpoints now use `IsVendorOrVendorStaff`. Staff mutations are `IsVendorOwner`.
 * New `HasVendorScope` lets owners pass automatically and staff require explicit JSON `scopes` on membership.

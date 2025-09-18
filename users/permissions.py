@@ -10,7 +10,6 @@ class IsVendorOrVendorStaff(BasePermission):
         if not u or not u.is_authenticated:
             return False
 
-
         # Admin/superuser always allowed
         if getattr(u, "is_superuser", False) or u.groups.filter(name="Admin").exists():
             return True
@@ -24,14 +23,6 @@ class IsVendorOrVendorStaff(BasePermission):
             is_active_staff = False
 
         return in_vendor_group or is_active_staff
-
-
-
-try:
-    # If DRF is installed, this lets you also reuse it on DRF views
-    from rest_framework.permissions import BasePermission
-except Exception:
-    BasePermission = object  # fallback so it also works in plain Django views
 
 
 class IsVendorOwner(BasePermission):
@@ -145,5 +136,6 @@ class IsDriver(BasePermission):
     def has_permission(self, request, view):
         u = getattr(request, "user", None)
         return bool(u and u.is_authenticated and u.groups.filter(name="Driver").exists())
+
 
 
