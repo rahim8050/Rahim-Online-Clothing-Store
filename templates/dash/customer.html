@@ -1,7 +1,6 @@
 {% extends "base.html" %}
 {% load static %}
 
-
 {% block title %}Dashboard{% endblock %}
 
 {% block content %}
@@ -38,12 +37,16 @@
             </div>
 
             {% if status == "none" or status == "rejected" %}
-              <form id="vendor-apply-form" class="space-y-3 mt-3" enctype="multipart/form-data">
-                 {% csrf_token %}
+              <form id="vendor-apply-form"
+                    class="space-y-3 mt-3"
+                    enctype="multipart/form-data"
+                    method="post">
+                {% csrf_token %}
                 <div>
                   <label class="block text-sm font-medium">Company name</label>
                   <input name="company_name" class="mt-1 w-full rounded border px-3 py-2" required />
                 </div>
+
                 <div class="grid md:grid-cols-2 gap-3">
                   <div>
                     <label class="block text-sm font-medium">Phone</label>
@@ -54,6 +57,7 @@
                     <input name="kra_pin" class="mt-1 w-full rounded border px-3 py-2" placeholder="A123456789B" required />
                   </div>
                 </div>
+
                 <div class="grid md:grid-cols-2 gap-3">
                   <div>
                     <label class="block text-sm font-medium">National ID</label>
@@ -64,10 +68,12 @@
                     <input type="file" name="document" accept=".pdf,.jpg,.jpeg,.png" class="mt-1 w-full" required />
                   </div>
                 </div>
+
                 <div>
                   <label class="block text-sm font-medium">Note (optional)</label>
                   <textarea name="note" rows="2" class="mt-1 w-full rounded border px-3 py-2"></textarea>
                 </div>
+
                 <div class="pt-2">
                   <button id="btn-apply-vendor" class="px-4 py-2 rounded-xl text-white bg-gray-900 disabled:opacity-50">
                     {% if status == "rejected" %}Re-apply{% else %}Submit application{% endif %}

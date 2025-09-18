@@ -1,115 +1,136 @@
 # users/views.py
 from __future__ import annotations
-from .utils import send_activation_email, is_vendor_or_staff, in_groups
+
 import logging
 import re
-from django.core.cache import cache
-from django.db import transaction
-from django.core.exceptions import ImproperlyConfigured
-from django.views.generic import FormView
+from typing import Any, Dict
+
 from django.apps import apps
 from django.conf import settings
 from django.contrib import messages
+from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib.auth import get_user_model, login, update_session_auth_hash
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.views import LoginView, LogoutView
 from django.contrib.sites.shortcuts import get_current_site
-from django.core.exceptions import FieldError
-from django.core.mail import EmailMessage
-from django.db.models import Q, Count
-from django.http import HttpResponse, HttpResponseForbidden, HttpResponseRedirect
-from django.shortcuts import render, redirect
-from django.template.loader import render_to_string
+from django.core.cache import cache
+from django.core.exceptions import FieldError, ImproperlyConfigured
+from django.db import transaction
+from django.db.models import Count, OuterRef, Prefetch, Q, Subquery
+from django.http import (
+    HttpResponse,
+    HttpResponseForbidden,
+    HttpResponseRedirect,
+    JsonResponse,
+)
+from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
-from django.utils.encoding import force_bytes, force_str
-from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
-from django.views.generic import FormView, View
-from rest_framework import generics, permissions
+from django.utils.encoding import force_str
+from django.utils.http import urlsafe_base64_decode
 from django.utils.timezone import now
-from django.contrib.auth.models import Group
-from rest_framework.exceptions import ValidationError
-from django.db.models import Prefetch
-from orders.models import Order, OrderItem, Delivery, Transaction 
+from django.views import View
+from django.views.generic import FormView
 
-from orders.models import Order
-from product_app.utils import get_vendor_field
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
+from rest_framework import generics, permissions
+from rest_framework.exceptions import ValidationError
+
+from .constants import DRIVER, VENDOR
 from .forms import (
     CustomLoginForm,
-    RegisterUserForm,
-    UserUpdateForm,
     CustomPasswordChangeForm,
+    RegisterUserForm,
     ResendActivationEmailForm,
+    UserUpdateForm,
 )
-from .constants import VENDOR, VENDOR_STAFF, DRIVER
-from .tokens import account_activation_token
 from .models import VendorApplication, VendorStaff
-from .serializers import VendorApplicationCreateSerializer, VendorApplicationSerializer
+from .tokens import account_activation_token
+from .utils import in_groups, is_vendor_or_staff, send_activation_email
 
-User = get_user_model()
+from orders.models import Order, OrderItem, Delivery, Transaction
+from product_app.utils import get_vendor_field
+
 logger = logging.getLogger(__name__)
-from orders.models import Order
+User = get_user_model()
+
+
+# -------------------- Simple dev check --------------------
 @login_required
 def geoapify_test(request):
-    # Show the key if set; don't crash if missing
     api_key = getattr(settings, "GEOAPIFY_API_KEY", "")
-    return render(request, "users/accounts/dev.html", {
-        "GEOAPIFY_API_KEY": api_key,
-    })
+    return render(request, "users/accounts/dev.html", {"GEOAPIFY_API_KEY": api_key})
 
-    
-    
 
+# -------------------- Role helpers --------------------
+def _is_vendor(u) -> bool:
+    return is_vendor_or_staff(u)
+
+
+def _is_driver(u) -> bool:
+    return in_groups(u, DRIVER)
+
+
+# -------------------- After login --------------------
 @login_required
 def after_login(request):
-    # central place to branch by role later if you want
-    return redirect("dashboard")  # or whatever you have
-    
+    u = request.user
+    if _is_vendor(u):
+        return redirect("vendor_dashboard")
+    if _is_driver(u):
+        return redirect("driver_dashboard")
 
-# users/views.py
+    # Customer dashboard context (vendor application status + flags)
+    def _current_vendor_app_status(user):
+        if not getattr(user, "is_authenticated", False):
+            return "none"
+        if VendorApplication.objects.filter(user=user, status=VendorApplication.PENDING).exists():
+            return "pending"
+        last = VendorApplication.objects.filter(user=user).order_by("-created_at").first()
+        return (last and last.status) or "none"
+
+    user_is_vendor = u.groups.filter(name="Vendor").exists()
+    user_is_vendor_staff = VendorStaff.objects.filter(staff=u, is_active=True).exists()
+    ctx = {
+        "user_is_vendor": user_is_vendor,
+        "user_is_vendor_staff": user_is_vendor_staff,
+        "vendor_app_status": _current_vendor_app_status(u),
+    }
+    return render(request, "dash/customer.html", ctx)
 
 
-# users/views.py
-from django.contrib.auth.decorators import login_required
-from django.db.models import Count, OuterRef, Subquery
-from django.shortcuts import render
-from django.conf import settings
-
-from orders.models import Order, OrderItem, Delivery, Transaction  # adjust paths
-
-
+# -------------------- Orders list (optimized) --------------------
 @login_required
 def my_orders(request):
-    # Subquery: id of the latest transaction per order (works even if related_name is "", "+", or missing)
+    # Latest transaction per order (id via subquery)
     latest_tx_id = Subquery(
-        Transaction.objects
-        .filter(order_id=OuterRef("pk"))
-        .order_by("-id")
-        .values("id")[:1]
+        Transaction.objects.filter(order_id=OuterRef("pk")).order_by("-id").values("id")[:1]
     )
 
     orders_qs = (
-        Order.objects
-        .filter(user=request.user)
+        Order.objects.filter(user=request.user)
         .order_by("-created_at")
-        .annotate(delivery_count=Count("deliveries", distinct=True),
-                  last_tx_id=latest_tx_id)
+        .annotate(
+            delivery_count=Count("deliveries", distinct=True),
+            last_tx_id=latest_tx_id,
+        )
         .prefetch_related(
-            # keep your other prefetches
-            # Using select_related on the item query avoids extra hits for product/warehouse
-            # If your related_name differs, adjust accordingly.
+            Prefetch("items", queryset=OrderItem.objects.select_related("product", "warehouse")),
+            "deliveries",
         )
     )
 
-    # Evaluate and attach last_tx objects in a single extra query
+    # Evaluate and attach last_tx objects with a single extra query
     orders = list(orders_qs)
     tx_ids = [o.last_tx_id for o in orders if o.last_tx_id]
     tx_map = {
         tx.id: tx
-        for tx in Transaction.objects.filter(id__in=tx_ids)
-        .only("id", "order_id", "callback_received", "created_at")
+        for tx in Transaction.objects.filter(id__in=tx_ids).only(
+            "id", "order_id", "callback_received", "created_at", "status"
+        )
     }
     for o in orders:
-        o.last_tx = tx_map.get(o.last_tx_id)  # <- preserves template usage: order.last_tx.callback_received
+        o.last_tx = tx_map.get(o.last_tx_id)
 
     return render(
         request,
@@ -117,28 +138,54 @@ def my_orders(request):
         {"orders": orders, "WS_ORIGIN": getattr(settings, "WS_ORIGIN", "")},
     )
 
-#debug
-# users/debug_ws.py  (new)
-from django.http import JsonResponse, HttpResponseForbidden
-from django.contrib.admin.views.decorators import staff_member_required
-from asgiref.sync import async_to_sync
-from channels.layers import get_channel_layer
 
-
+# -------------------- WebSocket debug push (staff only) --------------------
 @staff_member_required
 def debug_ws_push(request, delivery_id: int):
-    lat = float(request.GET.get("lat", "-1.303"))
-    lng = float(request.GET.get("lng", "36.807"))
+    """
+    Push a test WS event to delivery groups.
+    Query params:
+      - type: "position_update" (default "status")
+      - lat, lng when type=position_update
+      - status when type=status (default "en_route")
+    Sends to: delivery.track.<id> (legacy) and delivery.<id> (current).
+    """
+    msg_type = (request.GET.get("type") or "status").strip()
+    status_val = (request.GET.get("status") or "en_route").strip()
+    try:
+        lat = float(request.GET.get("lat")) if request.GET.get("lat") is not None else None
+        lng = float(request.GET.get("lng")) if request.GET.get("lng") is not None else None
+    except Exception:
+        lat = lng = None
+
     layer = get_channel_layer()
-    async_to_sync(layer.group_send)(
-        f"delivery.track.{delivery_id}",
-        {"type": "broadcast", "payload": {"type": "position_update", "lat": lat, "lng": lng}},
+    if not layer:
+        return HttpResponse("no channel layer", status=503)
+
+    payload_legacy = (
+        {"type": "position_update", "lat": lat, "lng": lng}
+        if msg_type == "position_update"
+        else {"type": "status", "status": status_val}
     )
-    return JsonResponse({"ok": True, "delivery": delivery_id, "lat": lat, "lng": lng})
+    try:
+        async_to_sync(layer.group_send)(f"delivery.track.{int(delivery_id)}", {"type": "broadcast", "payload": payload_legacy})
+    except Exception:
+        pass
+
+    payload_new = (
+        {"type": "delivery.event", "kind": "position_update", "lat": lat, "lng": lng}
+        if msg_type == "position_update"
+        else {"type": "delivery.event", "kind": "status", "status": status_val}
+    )
+    try:
+        async_to_sync(layer.group_send)(f"delivery.{int(delivery_id)}", payload_new)
+    except Exception:
+        pass
+
+    return JsonResponse({"ok": True, "delivery": int(delivery_id), "type": msg_type})
 
 
 # -------------------- Auth Views --------------------
-
 class CustomLoginView(LoginView):
     form_class = CustomLoginForm
     template_name = "users/accounts/login.html"
@@ -149,7 +196,7 @@ class CustomLoginView(LoginView):
         ident = (form.cleaned_data.get("username") or "").strip()
         if "@" in ident and "." in ident:
             ident_type = "email"
-        elif re.fullmatch(r"[A-Za-z0-9_.-]+", ident or ""):
+        elif re.fullmatch(r"[A-Za-z0-9_.-]+", ident):
             ident_type = "username"
         else:
             ident_type = "unknown"
@@ -157,7 +204,7 @@ class CustomLoginView(LoginView):
         self.request.session["auth_identifier"] = ident
         self.request.session["auth_identifier_type"] = ident_type
 
-        # Preserve guest cart id
+        # Preserve guest cart id if present
         cart_id = self.request.session.get("cart_id")
         if cart_id:
             self.request.session["cart_id_backup"] = cart_id
@@ -172,14 +219,12 @@ class Logout(LogoutView):
     next_page = "/"
 
 
-# -------------------- Registration / Profile --------------------
-
-
+# -------------------- Registration / Activation --------------------
 class RegisterUser(FormView):
     template_name = "users/accounts/register.html"
     success_url = reverse_lazy("index")
 
-    # ✅ avoids circular import / NoneType in FormView.get_form()
+    # avoid circular import issues
     def get_form_class(self):
         try:
             return RegisterUserForm
@@ -190,14 +235,15 @@ class RegisterUser(FormView):
         user = form.save(commit=False)
         user.is_active = False
         user.save()
-        send_activation_email(self.request, user)  # HTML + text, raises on failure
-        messages.success(self.request, "Account created successfully. Check your email to activate your account.")
+        send_activation_email(self.request, user)  # raises on failure
+        messages.success(
+            self.request,
+            "Account created successfully. Check your email to activate your account.",
+        )
         return redirect(self.get_success_url())
 
 
-
-
-def activate(request, uidb64, token):
+def activate(request, uidb64: str, token: str):
     # Resolve user or fail cleanly
     try:
         uid = force_str(urlsafe_base64_decode(uidb64))
@@ -211,10 +257,18 @@ def activate(request, uidb64, token):
         return redirect("users:login")
 
     if not account_activation_token.check_token(user, token):
-        messages.error(request, "This activation link is invalid or has expired. You can request a new one.")
-        return render(request, "users/accounts/activation_failed.html", {"email": user.email}, status=400)
+        messages.error(
+            request,
+            "This activation link is invalid or has expired. You can request a new one.",
+        )
+        return render(
+            request,
+            "users/accounts/activation_failed.html",
+            {"email": user.email},
+            status=400,
+        )
 
-    with transaction.atomic():                               # ✅ atomic activate
+    with transaction.atomic():
         user.is_active = True
         user.save(update_fields=["is_active"])
 
@@ -223,9 +277,6 @@ def activate(request, uidb64, token):
     login(request, user, backend=backend)
     messages.success(request, "Your account has been activated. Welcome!")
     return redirect("dashboard")
-
-
-
 
 
 class ResendActivationEmailView(View):
@@ -244,7 +295,10 @@ class ResendActivationEmailView(View):
         cache_key = f"resend_activation:{email.lower()}"
 
         if cache.get(cache_key):
-            messages.info(request, "We recently sent a link. Check your inbox (and spam) or try again in a few minutes.")
+            messages.info(
+                request,
+                "We recently sent a link. Check your inbox (and spam) or try again in a few minutes.",
+            )
             return redirect("users:resend_activation")
 
         try:
@@ -268,7 +322,7 @@ class ResendActivationEmailView(View):
         return redirect("users:resend_activation")
 
 
-
+# -------------------- Profile --------------------
 @login_required
 def profile_view(request):
     if request.method == "POST":
@@ -285,7 +339,7 @@ def profile_view(request):
             profile_form = UserUpdateForm(instance=request.user)
             if password_form.is_valid():
                 user = password_form.save()
-                update_session_auth_hash(request, user)
+                update_session_auth_hash(request, user)  # keep session
                 messages.success(request, "Your password was updated successfully.")
                 return redirect("users:profile")
             messages.error(request, "Please correct the errors in your password form.")
@@ -300,7 +354,6 @@ def profile_view(request):
     )
 
 
-# -------------------- Split Profile Pages --------------------
 @login_required
 def profile_settings_view(request):
     if request.method == "POST":
@@ -313,11 +366,7 @@ def profile_settings_view(request):
     else:
         form = UserUpdateForm(instance=request.user)
 
-    return render(
-        request,
-        "users/accounts/profile_settings.html",
-        {"profile_form": form},
-    )
+    return render(request, "users/accounts/profile_settings.html", {"profile_form": form})
 
 
 @login_required
@@ -333,79 +382,10 @@ def change_password_view(request):
     else:
         form = CustomPasswordChangeForm(user=request.user)
 
-    return render(
-        request,
-        "users/accounts/change_password.html",
-        {"password_form": form},
-    )
+    return render(request, "users/accounts/change_password.html", {"password_form": form})
 
 
 # -------------------- Dashboards --------------------
-
-def _is_vendor(u):  # small helpers for readability
-    return is_vendor_or_staff(u)
-
-def _is_driver(u):
-    return in_groups(u, DRIVER)
-
-@login_required
-def after_login(request):
-    u = request.user
-    if _is_vendor(u):
-        return redirect("vendor_dashboard")
-    if _is_driver(u):
-        return redirect("driver_dashboard")
-    # Vendor application status for customer dashboard
-    from users.models import VendorApplication
-
-    def _current_vendor_app_status(user):
-        if not getattr(user, "is_authenticated", False):
-            return "none"
-        if VendorApplication.objects.filter(user=user, status=VendorApplication.PENDING).exists():
-            return "pending"
-        last = VendorApplication.objects.filter(user=user).order_by("-created_at").first()
-        return (last and last.status) or "none"
-
-    user_is_vendor = u.groups.filter(name="Vendor").exists()
-    from users.models import VendorStaff
-    user_is_vendor_staff = VendorStaff.objects.filter(staff=u, is_active=True).exists()
-    ctx = {
-        "user_is_vendor": user_is_vendor,
-        "user_is_vendor_staff": user_is_vendor_staff,
-        "vendor_app_status": _current_vendor_app_status(u),
-    }
-    return render(request, "dash/customer.html", ctx)
-
-
-class VendorApplyAPI(generics.CreateAPIView):
-    serializer_class = VendorApplicationCreateSerializer
-    permission_classes = [permissions.IsAuthenticated]
-
-    def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
-
-
-class VendorApplicationApproveAPI(generics.UpdateAPIView):
-    """
-    PATCH /users/vendor-applications/{id}/approve/
-    body: {"status": "approved" | "rejected"}
-    """
-
-    serializer_class = VendorApplicationSerializer
-    permission_classes = [permissions.IsAdminUser]
-    queryset = VendorApplication.objects.all()
-
-    def perform_update(self, serializer):
-        status_new = self.request.data.get("status")
-        if status_new not in (VendorApplication.APPROVED, VendorApplication.REJECTED):
-            raise ValidationError({"status": "Must be approved or rejected"})
-        app = serializer.save(status=status_new, decided_by=self.request.user, decided_at=now())
-        if status_new == VendorApplication.APPROVED:
-            g_vendor, _ = Group.objects.get_or_create(name=VENDOR)
-            app.user.groups.add(g_vendor)
-            VendorStaff.objects.get_or_create(owner=app.user, staff=app.user, defaults={"is_active": True})
-
-
 @login_required
 def vendor_dashboard(request):
     u = request.user
@@ -413,7 +393,7 @@ def vendor_dashboard(request):
         return HttpResponseForbidden()
 
     Product = apps.get_model("product_app", "Product")
-    Delivery = apps.get_model("orders", "Delivery")  # may be None
+    DeliveryModel = apps.get_model("orders", "Delivery")
 
     # Resolve vendor/owner field on Product
     try:
@@ -422,29 +402,31 @@ def vendor_dashboard(request):
         logger.warning("Could not resolve vendor field on Product: %s", e)
         field = None
 
-    # Vendor's own products (safe even if field is None)
+    # Vendor's products
     if field:
         try:
-            products = (Product.objects
-                        .filter(**{field: u})
-                        .only("id", "name", "price", "available")
-                        .order_by("-id")[:100])
+            products = (
+                Product.objects.filter(**{field: u})
+                .only("id", "name", "price", "available")
+                .order_by("-id")[:100]
+            )
         except FieldError:
             logger.warning("Product model missing vendor field '%s'", field)
             products = Product.objects.none()
     else:
         products = Product.objects.none()
 
-    # Vendor deliveries (guard if Delivery model missing)
+    # Vendor deliveries
     deliveries = []
     totals = {"all": 0, "pending": 0, "assigned": 0, "en_route": 0, "delivered": 0}
-    if Delivery:
+    if DeliveryModel:
         vendor_filter = {f"order__items__product__{field}": u} if field else {}
-        base_qs = (Delivery.objects
-                   .filter(**vendor_filter)
-                   .select_related("order", "driver")
-                   .distinct()
-                   .order_by("-id"))
+        base_qs = (
+            DeliveryModel.objects.filter(**vendor_filter)
+            .select_related("order", "driver")
+            .distinct()
+            .order_by("-id")
+        )
         status = (request.GET.get("status") or "all").strip().lower()
         allowed = {"all", "pending", "assigned", "picked_up", "en_route", "delivered", "cancelled"}
         if status not in allowed:
@@ -460,31 +442,35 @@ def vendor_dashboard(request):
 
     return render(
         request,
-        "dash/vendor.html",   # ✅ use your templates/dash/vendor.html
+        "dash/vendor.html",
         {"products": products, "deliveries": deliveries, "status": request.GET.get("status", "all"), "totals": totals},
     )
 
 
 @login_required
 def driver_dashboard(request):
-    u = request.user
-    if not _is_driver(u):
-        return HttpResponseForbidden()
+    if not _is_driver(request.user):
+        return HttpResponseForbidden("Driver access only")
 
-    Delivery = apps.get_model("orders", "Delivery")
-    deliveries = Delivery.objects.filter(driver=u).select_related("order") if Delivery else []
-
+    DeliveryModel = apps.get_model("orders", "Delivery")
+    deliveries = (
+        DeliveryModel.objects.filter(driver=request.user)
+        .select_related("order")
+        .order_by("-id")
+    )
     return render(request, "dash/driver.html", {"deliveries": deliveries})
 
-from django.shortcuts import render, get_object_or_404
-from orders.models import Delivery
+
+@login_required
 def driver_sim(request):
-    ctx = {}
-    # If you pass ?delivery=16 in the URL, prefill from DB
+    """
+    Simple page to simulate driver movement.
+    If ?delivery=<id> is provided, prefill from DB.
+    """
+    ctx: Dict[str, Any] = {}
     delivery_id = request.GET.get("delivery")
     if delivery_id:
         d = get_object_or_404(Delivery, pk=delivery_id)
-        # Example fields—adapt to your model
         if getattr(d, "warehouse", None):
             ctx["start_lat"] = d.warehouse.latitude
             ctx["start_lng"] = d.warehouse.longitude
@@ -495,33 +481,70 @@ def driver_sim(request):
     return render(request, "users/accounts/driver_sim.html", ctx)
 
 
-
-
-
-from django.contrib.auth.decorators import login_required
-from django.shortcuts import render
-from django.apps import apps
-
-Delivery = apps.get_model('orders', 'Delivery')  # adjust app label if different
-
 @login_required
 def driver_live(request, delivery_id: int):
-    # TODO: enforce driver role/ownership if you have roles
+    # TODO: enforce driver ownership if you have roles
     d = Delivery.objects.select_related("order").get(pk=delivery_id)
     ctx = {
         "delivery_id": d.id,
-        "start_lat": getattr(d, "last_lat", None) or getattr(getattr(d, "warehouse", None), "latitude", None),
-        "start_lng": getattr(d, "last_lng", None) or getattr(getattr(d, "warehouse", None), "longitude", None),
+        "start_lat": getattr(d, "last_lat", None)
+        or getattr(getattr(d, "warehouse", None), "latitude", None),
+        "start_lng": getattr(d, "last_lng", None)
+        or getattr(getattr(d, "warehouse", None), "longitude", None),
     }
     return render(request, "users/accounts/driver_live.html", ctx)
 
 
 # --- Deprecated: /users/vendor-applications/ -> /apis/vendor/apply/
 def vendor_apply_deprecated(request):
-    resp = HttpResponseRedirect("/apis/vendor/apply/")
-    resp["Deprecation"] = "true"
-    resp["Link"] = "</apis/vendor/apply/>; rel=\"successor-version\""
-    # Preserve method for non-GET
-    if request.method != "GET":
+    """
+    Redirect to the new endpoint. Preserve method for non-GET via 307.
+    """
+    url = "/apis/vendor/apply/"
+    if request.method == "GET":
+        resp = HttpResponseRedirect(url)
+    else:
+        resp = HttpResponseRedirect(url)
         resp.status_code = 307
+    resp["Deprecation"] = "true"
+    resp["Link"] = f"<{url}>; rel=\"successor-version\""
     return resp
+
+
+# -------------------- Vendor Application APIs (DRF) --------------------
+class VendorApplyAPI(generics.CreateAPIView):
+    serializer_class = apps.get_model("users", "VendorApplicationCreateSerializer")
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_serializer_class(self):
+        # Import lazily to avoid circulars if you prefer real imports:
+        from .serializers import VendorApplicationCreateSerializer
+        return VendorApplicationCreateSerializer
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+
+class VendorApplicationApproveAPI(generics.UpdateAPIView):
+    """
+    PATCH /users/vendor-applications/{id}/approve/
+    body: {"status": "approved" | "rejected"}
+    """
+    permission_classes = [permissions.IsAdminUser]
+    queryset = VendorApplication.objects.all()
+
+    def get_serializer_class(self):
+        from .serializers import VendorApplicationSerializer
+        return VendorApplicationSerializer
+
+    def perform_update(self, serializer):
+        status_new = self.request.data.get("status")
+        if status_new not in (VendorApplication.APPROVED, VendorApplication.REJECTED):
+            raise ValidationError({"status": "Must be approved or rejected"})
+        app = serializer.save(status=status_new, decided_by=self.request.user, decided_at=now())
+        if status_new == VendorApplication.APPROVED:
+            # add vendor group & self-staff link
+            from django.contrib.auth.models import Group
+            g_vendor, _ = Group.objects.get_or_create(name=VENDOR)
+            app.user.groups.add(g_vendor)
+            VendorStaff.objects.get_or_create(owner=app.user, staff=app.user, defaults={"is_active": True})

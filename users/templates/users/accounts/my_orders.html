@@ -13,7 +13,8 @@
           <p><span class="font-semibold">Order ID:</span> {{ order.id }}</p>
           <p><span class="font-semibold">Placed on:</span> {{ order.created_at|date:"Y-m-d H:i" }}</p>
 
-          <p><span class="font-semibold">Status:</span>
+          <p>
+            <span class="font-semibold">Status:</span>
             {% if order.paid %}
               {% if order.last_tx and order.last_tx.callback_received %}
                 <span class="text-green-600 font-medium">Paid (verified)</span>
@@ -25,7 +26,7 @@
             {% endif %}
           </p>
 
-          {% comment %} Show Edit button when order is safely editable: unpaid, stock not reserved, and no deliveries {% endcomment %}
+          {# Show Edit when order is safely editable: unpaid, stock not reserved, and no deliveries #}
           {% if not order.paid and not order.stock_updated and order.delivery_count == 0 %}
             <div class="mt-2">
               <a href="{% url 'orders:order_edit' order.id %}"
@@ -104,6 +105,7 @@
     return Number.isFinite(n) ? n : null;
   };
 
+  // start/dest as [lat, lng]
   async function fetchRoute(start, dest) {
     const url = `https://router.project-osrm.org/route/v1/driving/${start[1]},${start[0]};${dest[1]},${dest[0]}?overview=full&geometries=geojson`;
     const r = await fetch(url);
@@ -112,14 +114,16 @@
     return j.routes[0].geometry; // GeoJSON LineString
   }
 
+  // pos as [lat, lng]
   async function nearestRoad(pos) {
     const url = `https://router.project-osrm.org/nearest/v1/driving/${pos[1]},${pos[0]}?number=1`;
     const r = await fetch(url);
     const j = await r.json();
     const loc = j.waypoints && j.waypoints[0] && j.waypoints[0].location;
-    return Array.isArray(loc) ? [loc[1], loc[0]] : pos;
+    return Array.isArray(loc) ? [loc[1], loc[0]] : pos; // -> [lat, lng]
   }
 
+  // pos as [lat, lng]
   function snapToRoute(geoLine, pos) {
     const pt = turf.point([pos[1], pos[0]]);
     const snapped = turf.nearestPointOnLine(geoLine, pt);
@@ -145,9 +149,9 @@
     const btn = e.target.closest('.track-item-btn');
     if (!btn) return;
 
-    const orderId   = btn.dataset.orderId;
-    const itemId    = btn.dataset.itemId;
-    const deliveryId= btn.dataset.deliveryId;
+    const orderId    = btn.dataset.orderId;
+    const itemId     = btn.dataset.itemId;
+    const deliveryId = btn.dataset.deliveryId;
     if (!deliveryId) return;
 
     const dest  = [toNum(btn.dataset.clat),  toNum(btn.dataset.clng)];
@@ -158,7 +162,7 @@
     if (!mapDiv) return;
 
     mapDiv.classList.remove('hidden');
-    const map = ensureMap(mapDiv);
+    const _map = ensureMap(mapDiv);
 
     // Parse/validate coords
     let startLL = (start[0] !== null && start[1] !== null) ? start : null;
@@ -172,19 +176,19 @@
 
     // Static markers
     if (startLL) {
-      if (!mapDiv._startMarker) mapDiv._startMarker = L.marker(startLL).addTo(map).bindTooltip('Start');
+      if (!mapDiv._startMarker) mapDiv._startMarker = L.marker(startLL).addTo(_map).bindTooltip('Start');
       else mapDiv._startMarker.setLatLng(startLL);
     }
     if (destLL) {
-      if (!mapDiv._destMarker) mapDiv._destMarker = L.marker(destLL).addTo(map).bindTooltip('Destination');
+      if (!mapDiv._destMarker) mapDiv._destMarker = L.marker(destLL).addTo(_map).bindTooltip('Destination');
       else mapDiv._destMarker.setLatLng(destLL);
     }
 
-    // Fit view
+    // Fit view safely
     if (startLL && destLL) {
-      map.fitBounds(L.latLngBounds([startLL, destLL]), { padding: [24, 24] });
+      _map.fitBounds(L.latLngBounds([startLL, destLL]), { padding: [24, 24] });
     } else if (startLL) {
-      map.setView(startLL, 14);
+      _map.setView(startLL, 14);
     }
 
     // Draw route (best effort)
@@ -193,9 +197,9 @@
       try {
         const geo = await fetchRoute(startLL, destLL);
         mapDiv._route = geo;
-        if (mapDiv._routeLayer) map.removeLayer(mapDiv._routeLayer);
-        mapDiv._routeLayer = L.geoJSON(geo, { weight: 3, dashArray: '4,6' }).addTo(map);
-        map.fitBounds(mapDiv._routeLayer.getBounds(), { padding: [24, 24] });
+        if (mapDiv._routeLayer) _map.removeLayer(mapDiv._routeLayer);
+        mapDiv._routeLayer = L.geoJSON(geo, { weight: 3, dashArray: '4,6' }).addTo(_map);
+        _map.fitBounds(mapDiv._routeLayer.getBounds(), { padding: [24, 24] });
         if (noteDiv) noteDiv.textContent = '';
       } catch (err) {
         if (noteDiv) noteDiv.textContent = 'Could not fetch route; showing live trail only.';
@@ -233,9 +237,6 @@
         }
         if (d.type !== 'position_update') return;
 
-        // Ensure map exists
-        ensureMap(mapDiv);
-
         // Parse/snap position
         let pos = [toNum(d.lat), toNum(d.lng)];
         if (pos[0] === null || pos[1] === null) return;
@@ -248,17 +249,17 @@
 
         // Create/update marker + trail
         if (!mapDiv._liveMarker) {
-          mapDiv._liveMarker = L.marker(pos).addTo(mapDiv._map).bindTooltip('Live');
-          mapDiv._trail = L.polyline([pos], { weight: 3 }).addTo(mapDiv._map);
-          mapDiv._map.setView(pos, 14);
+          mapDiv._liveMarker = L.marker(pos).addTo(_map).bindTooltip('Live');
+          mapDiv._trail = L.polyline([pos], { weight: 3 }).addTo(_map);
+          _map.setView(pos, 14);
         } else {
           mapDiv._liveMarker.setLatLng(pos);
           if (mapDiv._trail) mapDiv._trail.addLatLng(pos);
         }
 
         // Follow smoothly
-        const c = mapDiv._map.getCenter();
-        if (c.distanceTo(L.latLng(pos)) > 30) mapDiv._map.panTo(pos, { animate: true });
+        const c = _map.getCenter();
+        if (c.distanceTo(L.latLng(pos)) > 30) _map.panTo(pos, { animate: true });
 
         // Quick visual proof
         noteDiv && (noteDiv.textContent = `lat=${pos[0].toFixed(6)}, lng=${pos[1].toFixed(6)}`);
