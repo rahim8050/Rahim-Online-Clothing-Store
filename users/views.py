@@ -518,10 +518,6 @@ def vendor_apply_deprecated(request):
 # -------------------- Vendor Application APIs (DRF) --------------------
 class VendorApplyAPI(generics.CreateAPIView):
 
-
-    serializer_class = apps.get_model("users", "VendorApplicationCreateSerializer")
-
-
     permission_classes = [permissions.IsAuthenticated]
 
     def get_serializer_class(self):
