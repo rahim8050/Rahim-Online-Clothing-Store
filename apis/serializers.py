@@ -14,7 +14,6 @@ from users import services  # <-- correct: we now defined the functions here
 User = get_user_model()
 
 
-
 # ----------------------------------------
 # Auth / Me
 # ----------------------------------------
@@ -328,7 +327,6 @@ class VendorApplySerializer(serializers.ModelSerializer):
         return VendorApplication.objects.create(user=user, status="pending", **validated)
 
 
-
 # ------------------------
 # KYC apply (required)
 # ------------------------
@@ -378,7 +376,6 @@ class VendorApplicationCreateSerializer(serializers.ModelSerializer):
         if getattr(f, "size", 0) > 5 * 1024 * 1024:
             raise serializers.ValidationError("File too large (max 5MB).")
         return f
-
 
 
 # ----------------------------------------
@@ -464,3 +461,4 @@ class VendorStaffRemoveSerializer(serializers.Serializer):
         # wrapper we added in users/services.py
         services.deactivate_vendor_staff(membership)
         return {"ok": True}
+

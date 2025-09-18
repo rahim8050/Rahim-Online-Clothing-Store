@@ -1,201 +1,6 @@
 {% extends "base.html" %}
-{% block title %}Driver Live{% endblock %}
-
-{% block content %}
-<div class="max-w-3xl mx-auto p-4 space-y-3">
-  <h1 class="text-2xl font-bold">Driver Live — Delivery #{{ delivery_id }}</h1>
-
-  <div class="flex items-center gap-2">
-    <button id="btn-start" class="px-3 py-1.5 rounded bg-blue-600 text-white">Go Live</button>
-    <button id="btn-stop"  class="px-3 py-1.5 rounded bg-gray-600 text-white">Stop</button>
-    <span id="status" class="text-sm text-gray-600"></span>
-  </div>
-
-  <div id="map" class="w-full h-80 rounded border"></div>
-</div>
-{% endblock %}
-
-{% block extra_js %}
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script>
-(function(){
-  // ---- config knobs ----
-  const DELIVERY_ID = {{ delivery_id|default:"0" }};
-  const START_LAT = Number({{ start_lat|default:-1.286389 }});
-  const START_LNG = Number({{ start_lng|default:36.817223 }});
-  const MIN_PING_MS = 8000;      // throttle WebSocket pings
-  const MIN_MOVE_M  = 25;        // only send if moved > X meters
-  const KE = { latMin:-5.5, latMax:5.5, lngMin:33.5, lngMax:42.5 };
-
-  // ---- DOM refs ----
-  const statusEl = document.getElementById('status');
-  const btnStart = document.getElementById('btn-start');
-  const btnStop  = document.getElementById('btn-stop');
-
-  // ---- state ----
-  let ws = null, wsReady = false, wsBackoff = 500, outbox = [];
-  let watchId = null;
-  let map = null, liveMarker = null, accCircle = null;
-  let lastSentAt = 0, lastSent = null;
-
-  // ---- helpers ----
-  const setStatus = (msg) => statusEl.textContent = msg;
-
-  const hasGeo = () => typeof navigator !== 'undefined' &&
-                       navigator.geolocation &&
-                       typeof navigator.geolocation.watchPosition === 'function';
-
-  function toLatLng(lat, lng){
-    // normalize -> floats, repair obvious swaps (|lat|>90)
-    lat = (lat === null || lat === undefined || lat === "") ? null : Number(lat);
-    lng = (lng === null || lng === undefined || lng === "") ? null : Number(lng);
-    if (lat === null || lng === null || Number.isNaN(lat) || Number.isNaN(lng)) return null;
-    if (Math.abs(lat) > 90 && Math.abs(lng) <= 180) { const t = lat; lat = lng; lng = t; }
-    return [lat, lng];
-  }
-
-  function inKe(pt){
-    if (!pt) return false;
-    const [lat,lng] = pt;
-    return lat >= KE.latMin && lat <= KE.latMax && lng >= KE.lngMin && lng <= KE.lngMax;
-  }
-
-  function haversineM(a, b){
-    if (!a || !b) return Infinity;
-    const [lat1,lng1] = a, [lat2,lng2] = b;
-    const R = 6371000;
-    const dLat = (lat2 - lat1) * Math.PI/180;
-    const dLng = (lng2 - lng1) * Math.PI/180;
-    const s1 = Math.sin(dLat/2)**2 +
-               Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
-    return 2 * R * Math.asin(Math.sqrt(s1));
-  }
-
-  function ensureMap() {
-    if (map) return map;
-    const start = toLatLng(START_LAT, START_LNG) || [0,0];
-    map = L.map('map').setView(start, (inKe(start) ? 13 : 2));
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19, attribution: '&copy; OpenStreetMap contributors'
-    }).addTo(map);
-    return map;
-  }
-
-  function ensureWS() {
-    if (ws && wsReady) return;
-    const wsScheme = location.protocol === 'https:' ? 'wss' : 'ws';
-    ws = new WebSocket(`${wsScheme}://${location.host}/ws/delivery/track/${DELIVERY_ID}/`);
-
-    ws.onopen = () => {
-      wsReady = true; wsBackoff = 500;
-      setStatus('WS connected');
-      while(outbox.length) ws.send(JSON.stringify(outbox.shift()));
-    };
-
-    ws.onmessage = (e) => {
-      // if your server echoes position_update, we could visualize/verify here if needed
-      // const msg = JSON.parse(e.data||"{}");
-    };
-
-    ws.onclose = () => {
-      wsReady = false;
-      setStatus('WS closed, reconnecting…');
-      // reconnect (simple backoff)
-      setTimeout(() => { if (ws) ensureWS(); }, wsBackoff);
-      wsBackoff = Math.min(wsBackoff * 2, 8000);
-    };
-
-    ws.onerror = () => setStatus('WS error');
-  }
-
-  function wsSend(lat, lng){
-    if (!ws) return;
-    const payload = { type: 'position_update', lat, lng };
-    if (wsReady) ws.send(JSON.stringify(payload));
-    else outbox.push(payload);
-  }
-
-  function start() {
-    // Geolocation needs HTTPS on mobile; allow localhost for dev
-    const isLocal = ['localhost','127.0.0.1'].includes(location.hostname);
-    if (location.protocol !== 'https:' && !isLocal) {
-      setStatus('Tip: use HTTPS (ngrok/tunnel) for geolocation on mobile.');
-    }
-
-    ensureWS();
-    const m = ensureMap();
-
-    if (!hasGeo()) { setStatus('Geolocation not supported'); return; }
-
-    // kill any previous watch
-    stopWatch();
-
-    watchId = navigator.geolocation.watchPosition(
-      (pos) => {
-        let pt = toLatLng(pos.coords.latitude, pos.coords.longitude);
-        if (!pt) return;
-        const [lat,lng] = pt;
-
-        if (!liveMarker) {
-          liveMarker = L.circleMarker(pt, { radius: 7 }).addTo(m).bindTooltip('You', {permanent:false});
-          m.setView(pt, inKe(pt) ? 15 : 13);
-        } else {
-          liveMarker.setLatLng(pt);
-          // pan only on significant move to avoid jitter
-          const moved = !lastSent ? Infinity : haversineM(lastSent, pt);
-          if (moved > 60) m.panTo(pt, { animate: true });
-        }
-
-        // (optional) show accuracy circle
-        const acc = Number(pos.coords.accuracy || 0);
-        if (!Number.isNaN(acc) && acc > 0 && acc < 200) {
-          if (!accCircle) accCircle = L.circle(pt, { radius: acc }).addTo(m);
-          else accCircle.setLatLng(pt).setRadius(acc);
-        }
-
-        // throttle + distance filter
-        const now = Date.now();
-        const movedEnough = !lastSent || haversineM(lastSent, pt) > MIN_MOVE_M;
-        if (now - lastSentAt >= MIN_PING_MS && movedEnough) {
-          wsSend(lat, lng);
-          lastSentAt = now;
-          lastSent = pt;
-        }
-      },
-      (err) => {
-        setStatus('Location error: ' + err.message);
-      },
-      { enableHighAccuracy: true, maximumAge: 2000, timeout: 20000 }
-    );
-
-    setStatus('Live… move the phone to update.');
-    btnStart.disabled = true;
-    btnStop.disabled = false;
-  }
-
-  function stopWatch(){
-    if (watchId != null && navigator.geolocation && typeof navigator.geolocation.clearWatch === 'function') {
-      try { navigator.geolocation.clearWatch(watchId); } catch {}
-    }
-    watchId = null;
-  }
-
-  function closeWS(){
-    if (ws) {
-      try { ws.close(1000, 'stop'); } catch {}
-    }
-    ws = null; wsReady = false; outbox = [];
-  }
-
-  function stop() {
-    stopWatch();
-    closeWS();
-    setStatus('Stopped.');
-    btnStart.disabled = false;
-    btnStop.disabled = true
-=======
 {% load static %}
+
 {% block title %}Driver Live — #{{ delivery_id }}{% endblock %}
 
 {% block content %}
@@ -207,14 +12,14 @@
       <h1 class="text-2xl md:text-3xl font-bold tracking-tight">
         Driver Live — <span class="text-blue-600">#{{ delivery_id }}</span>
       </h1>
-      <p class="text-sm text-gray-500 dark:text-gray-400">Stream your location to the order in real time.</p>
+      <p class="text-sm text-gray-500">Stream your location to the order in real time.</p>
     </div>
 
     <!-- WS chip -->
     <div id="chip-conn"
-         class="inline-flex items-center gap-2 rounded-full px-3 py-1 border text-xs font-medium bg-white/70 dark:bg-white/5 backdrop-blur">
+         class="inline-flex items-center gap-2 rounded-full px-3 py-1 border text-xs font-medium bg-white/70 backdrop-blur">
       <span id="chip-dot" class="h-2.5 w-2.5 rounded-full bg-gray-300"></span>
-      <span id="chip-label" class="text-gray-700 dark:text-gray-200">WS: idle</span>
+      <span id="chip-label" class="text-gray-700">WS: idle</span>
     </div>
   </div>
 
@@ -222,7 +27,6 @@
   <div class="flex flex-wrap items-center gap-2">
     <button id="btn-start"
             class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 active:scale-[.99]">
-      <!-- play icon -->
       <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
       Go Live
     </button>
@@ -230,7 +34,6 @@
     <button id="btn-stop"
             class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-600 text-white hover:bg-gray-700 disabled:opacity-50"
             disabled>
-      <!-- stop icon -->
       <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h12v12H6z"/></svg>
       Stop
     </button>
@@ -238,7 +41,6 @@
     <button id="btn-sim"
             class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700"
             title="Send demo moves without GPS">
-      <!-- path icon -->
       <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M4 4h2v2H4zM18 18h2v2h-2zM6 6h6v2H6zM12 6l6 6-1.4 1.4L10.6 7.4z"/></svg>
       Simulate
     </button>
@@ -251,222 +53,55 @@
 
   <!-- Stats -->
   <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-    <div class="rounded-2xl border p-3 bg-white/60 dark:bg-white/5">
+    <div class="rounded-2xl border p-3 bg-white/60">
       <div class="text-xs text-gray-500">Sent</div>
       <div id="stat-sent" class="text-lg font-semibold">0</div>
     </div>
-    <div class="rounded-2xl border p-3 bg-white/60 dark:bg-white/5">
+    <div class="rounded-2xl border p-3 bg-white/60">
       <div class="text-xs text-gray-500">Last move</div>
       <div id="stat-last-m" class="text-lg font-semibold">–</div>
     </div>
-    <div class="rounded-2xl border p-3 bg-white/60 dark:bg-white/5">
+    <div class="rounded-2xl border p-3 bg-white/60">
       <div class="text-xs text-gray-500">Accuracy</div>
       <div id="stat-acc" class="text-lg font-semibold">–</div>
     </div>
-    <div class="rounded-2xl border p-3 bg-white/60 dark:bg-white/5">
+    <div class="rounded-2xl border p-3 bg-white/60">
       <div class="text-xs text-gray-500">Speed</div>
       <div id="stat-speed" class="text-lg font-semibold">–</div>
     </div>
   </div>
 
-  <!-- Map card -->
-  <div class="rounded-2xl border overflow-hidden bg-white/60 dark:bg-white/5">
+  <!-- Map -->
+  <div class="rounded-2xl border overflow-hidden bg-white/60">
     <div id="map" class="w-full h-[70vh] min-h-[360px]"></div>
   </div>
 
   <!-- Debug -->
-  <details id="debug-wrap" class="rounded-2xl border bg-white/60 dark:bg-white/5 p-2" open>
+  <details id="debug-wrap" class="rounded-2xl border bg-white/60 p-2" open>
     <summary class="cursor-pointer select-none text-sm font-semibold">Debug</summary>
     <pre id="debug" class="text-xs overflow-auto max-h-56 p-2"></pre>
   </details>
-  </div>
+
+</div>
 {% endblock %}
 
 {% block extra_js %}
-<!-- Leaflet -->
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-<script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<!-- Font Awesome for truck icon (used elsewhere) -->
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
+  {# Leaflet #}
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-<script>
-(function(){
-  // ---------- server params ----------
-  const DELIVERY_ID = parseInt("{{ delivery_id|default:'0' }}", 10);
-  const START_LAT   = parseFloat("{{ start_lat|default:'-1.286389' }}");
-  const START_LNG   = parseFloat("{{ start_lng|default:'36.817223' }}");
-
-  // ---------- knobs ----------
-  const MIN_PING_MS = 8000;
-  const MIN_MOVE_M  = 25;
-
-  // ---------- dom ----------
-  const $ = (s)=>document.querySelector(s);
-  const elStatus = $("#chip-label");
-  const elDot    = $("#chip-dot");
-  const elSent   = $("#stat-sent");
-  const elLastM  = $("#stat-last-m");
-  const elAcc    = $("#stat-acc");
-  const elSpeed  = $("#stat-speed");
-  const btnStart = $("#btn-start");
-  const btnStop  = $("#btn-stop");
-  const btnSim   = $("#btn-sim");
-  const persistT = $("#persist-toggle");
-  const debugEl  = $("#debug");
-
-  // ---------- state ----------
-  let map, marker, circle, poly, path=[];
-  function iconDriverFavicon(){
-    return L.divIcon({
-      className: 'driver-live-icon',
-      html: '<div style="display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:#2563eb;color:white;box-shadow:0 1px 4px rgba(0,0,0,.25)"><img src="/favicon.ico" alt="driver" style="width:16px;height:16px;border-radius:3px"/></div>',
-      iconSize: [26,26], iconAnchor:[13,13]
-    });
-  }
-  let ws=null, wsReady=false, outbox=[];
-  let watchId=null, lastSentAt=0, lastPt=null, lastTime=0, sentCount=0;
-
-  // ---------- ui helpers ----------
-  const log = (...a)=>{ debugEl.textContent += a.join(' ') + '\\n'; debugEl.scrollTop = debugEl.scrollHeight; };
-  const setChip = (txt, cls) => { elStatus.textContent = 'WS: ' + txt; elDot.className = 'h-2.5 w-2.5 rounded-full ' + cls; };
-  const pulse = (on)=>{ elDot.classList.toggle('animate-ping', !!on); };
-
-  // ---------- geo/math ----------
-  const H = (a,b)=>{ if(!(a&&b)) return 0;
-    const [lat1,lng1]=a,[lat2,lng2]=b, R=6371000;
-    const dLa=(lat2-lat1)*Math.PI/180, dLg=(lng2-lng1)*Math.PI/180;
-    const s=Math.sin(dLa/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLg/2)**2;
-    return 2*R*Math.asin(Math.sqrt(s));
-  };
-
-  // ---------- map ----------
-  function ensureMap(){
-    if (map) return map;
-    const start=[isFinite(START_LAT)?START_LAT:-1.286389, isFinite(START_LNG)?START_LNG:36.817223];
-    map = L.map('map', { zoomControl:true }).setView(start, 14);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom: 19}).addTo(map);
-    marker = L.marker(start, {icon: iconDriverFavicon(), zIndexOffset: 500}).addTo(map).bindTooltip('You');
-    path = [start]; poly = L.polyline(path, {weight:3, color:'#2563eb'}).addTo(map);
-    return map;
-  }
-
-  // ---------- WS ----------
-  function wsUrlFor(id){
-    const scheme = location.protocol === 'https:' ? 'wss' : 'ws';
-    return `${scheme}://${location.host}/ws/delivery/track/${id}/`;
-  }
-
-  function ensureWS(){
-    if (ws && wsReady) return;
-    const url = wsUrlFor(DELIVERY_ID);
-    ws = new WebSocket(url);
-    ws.onopen = ()=>{
-      wsReady = true; setChip('connected', 'bg-emerald-500'); pulse(true); log('WS OPEN', url);
-      while(outbox.length) ws.send(JSON.stringify(outbox.shift()));
+  {# Tiny CSP-safe boot payload only (logic lives in static/js/driver-live.js) #}
+  <script nonce="{{ request.csp_nonce }}">
+    window.DRIVER_LIVE_BOOT = {
+      deliveryId: {{ delivery_id|default:"0" }},
+      start: {
+        lat: parseFloat("{{ start_lat|default:'-1.286389' }}"),
+        lng: parseFloat("{{ start_lng|default:'36.817223' }}")
+      },
+      wsBase: (location.protocol === "https:" ? "wss://" : "ws://") + location.host,
+      persistUrl: "/api/deliveries/{{ delivery_id|default:'0' }}/loc"  // adjust if your endpoint differs
     };
-    ws.onmessage = (e)=>{ try{ log('MSG', e.data); }catch{} };
-    ws.onclose   = (e)=>{ wsReady=false; setChip('closed', 'bg-gray-300'); pulse(false); log('WS CLOSE', e.code); };
-    ws.onerror   = ()=>{ setChip('error', 'bg-red-500'); pulse(false); log('WS ERROR'); };
-  }
+  </script>
 
-  async function persistHTTP(lat,lng,status){
-    try{
-      await fetch(`/api/deliveries/${DELIVERY_ID}/loc`, {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({lat, lng, status})
-      });
-    }catch(e){ log('HTTP persist failed'); }
-  }
-
-  function sendPosition(lat,lng,status='in_transit'){
-    const payload={ op:'update', lat, lng, status, ts: Date.now() };
-    if (wsReady) ws.send(JSON.stringify(payload)); else outbox.push(payload);
-    if (persistT?.checked) persistHTTP(lat,lng,status);
-    sentCount += 1; elSent.textContent = String(sentCount);
-  }
-
-  // ---------- flows ----------
-  function start(){
-    ensureMap(); ensureWS();
-    if (!('geolocation' in navigator)) { log('No geolocation'); return; }
-
-    // clear old
-    stop();
-
-    watchId = navigator.geolocation.watchPosition((pos)=>{
-      const now = Date.now();
-      const lat = Number(pos.coords.latitude), lng = Number(pos.coords.longitude);
-      const acc = Number(pos.coords.accuracy || 0);
-      const pt  = [lat,lng];
-
-      // UI move
-      marker.setLatLng(pt);
-      if (!circle) circle = L.circle(pt, {radius: acc || 20}).addTo(map);
-      circle.setLatLng(pt).setRadius(acc || 20);
-
-      const dist = lastPt ? Math.round(H(lastPt, pt)) : 0;
-      elLastM.textContent = dist ? (dist + ' m') : '0 m';
-      elAcc.textContent   = acc ? (Math.round(acc)+' m') : '–';
-      if (lastPt && lastTime){
-        const dt=(now-lastTime)/1000, spd=dt>0? (H(lastPt, pt)/dt):0;
-        elSpeed.textContent=(spd*3.6).toFixed(1)+' km/h';
-      }
-      lastTime = now;
-
-      if (!lastPt || dist > 10) { path.push(pt); poly.setLatLngs(path); }
-      if (dist > 60) map.panTo(pt);
-
-      // throttle send
-      const due = (now - lastSentAt) >= MIN_PING_MS;
-      const movedEnough = (!lastPt || dist >= MIN_MOVE_M);
-      if (due && movedEnough){
-        sendPosition(lat,lng);
-        lastSentAt = now; lastPt = pt;
-      }
-    }, (err)=>{ log('GEO ERROR', err.message); }, { enableHighAccuracy:true, maximumAge:2000, timeout:20000 });
-
-    btnStart.disabled = true; btnStop.disabled = false;
-  }
-
-  function stop(){
-    if (watchId != null && navigator.geolocation?.clearWatch){
-      try{ navigator.geolocation.clearWatch(watchId); }catch{}
-    }
-    watchId = null; btnStart.disabled = false; btnStop.disabled = true;
-  }
-
-  function simulate(){
-    ensureMap(); ensureWS();
-    const s = marker.getLatLng();
-    const hops = [
-      [s.lat+0.002, s.lng+0.006],
-      [s.lat+0.004, s.lng+0.012],
-      [s.lat+0.006, s.lng+0.017],
-    ];
-    let i=0; const t=setInterval(()=>{
-      const p=hops[i++]; if(!p){ clearInterval(t); return; }
-      marker.setLatLng(p); path.push([p[0],p[1]]); poly.setLatLngs(path); map.panTo(p);
-      sendPosition(p[0], p[1], 'demo');
-      lastPt=[p[0],p[1]]; lastSentAt=Date.now();
-    }, 900);
-  }
-
-  // bindings
-  btnStart.addEventListener('click', start);
-  btnStop .addEventListener('click', stop);
-  btnSim  .addEventListener('click', simulate);
-
-  // initial chip
-  setChip('idle', 'bg-gray-300');
-
-  // tip: HTTPS for mobile GPS
-  if (location.protocol !== 'https:' && !['localhost','127.0.0.1'].includes(location.hostname)) {
-    log('Tip: use HTTPS (ngrok/tunnel) for mobile geolocation.');
-  }
-})();
-</script>
+  <script defer src="{% static 'js/driver-live.js' %}"></script>
 {% endblock %}
->>>>>>> development
-
-
-

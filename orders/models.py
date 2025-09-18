@@ -14,6 +14,11 @@ from product_app.models import Product, Warehouse
 Q6 = Decimal("0.000001")
 
 
+def channel_key_default() -> str:
+    """Random channel key for WS auth/subscriptions."""
+    return uuid4().hex
+
+
 # =========================
 # Orders
 # =========================
@@ -42,29 +47,31 @@ class Order(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     paid = models.BooleanField(default=False)
 
-    # MPESA specific fields
+    # M-PESA specific fields
     mpesa_checkout_request_id = models.CharField(max_length=100, blank=True, null=True)
     mpesa_phone_number = models.CharField(max_length=15, blank=True, null=True)
     mpesa_transaction_code = models.CharField(max_length=50, blank=True, null=True)
     payment_method = models.CharField(max_length=20, default="MPESA")
     stock_updated = models.BooleanField(default=False)
 
-    # Stripe specific fields
+    # Stripe specific fields (keep for reference/back-compat)
     payment_status = models.CharField(max_length=20, default="pending")
     payment_intent_id = models.CharField(max_length=100, blank=True, null=True)
     stripe_receipt_url = models.URLField(blank=True, null=True)
 
     class Meta:
         constraints = [
-            # latitude/longitude either both NULL or valid range
+            # latitude in range or NULL
             CheckConstraint(
                 check=(Q(latitude__gte=-90) & Q(latitude__lte=90)) | Q(latitude__isnull=True),
                 name="order_lat_range",
             ),
+            # longitude in range or NULL
             CheckConstraint(
                 check=(Q(longitude__gte=-180) & Q(longitude__lte=180)) | Q(longitude__isnull=True),
                 name="order_lng_range",
             ),
+            # both set & valid OR both NULL
             CheckConstraint(
                 check=(
                     (Q(latitude__gte=-90) & Q(latitude__lte=90) &
@@ -95,7 +102,7 @@ class Order(models.Model):
                 setattr(self, f, Decimal(v).quantize(Q6, rounding=ROUND_HALF_UP))
         super().save(*args, **kwargs)
 
-    def get_total_cost(self):
+    def get_total_cost(self) -> Decimal:
         return sum((item.get_cost() for item in self.items.all()), Decimal("0"))
 
     def __str__(self):
@@ -117,9 +124,7 @@ class OrderItem(models.Model):
 
     order = models.ForeignKey(Order, related_name="items", on_delete=models.CASCADE)
     product = models.ForeignKey(Product, related_name="order_items", on_delete=models.CASCADE)
-    # keep versioning hook for catalogs that mutate Product fields
     product_version = models.PositiveIntegerField(default=1)
-
     price = models.DecimalField(
         max_digits=10,
         decimal_places=2,
@@ -146,7 +151,7 @@ class OrderItem(models.Model):
             Index(fields=["order", "product"]),
         ]
 
-    def get_cost(self):
+    def get_cost(self) -> Decimal:
         return self.price * self.quantity
 
     def __str__(self):
@@ -156,10 +161,6 @@ class OrderItem(models.Model):
 # =========================
 # Delivery
 # =========================
-def channel_key_default() -> str:
-    return uuid4().hex  # 32 chars
-
-
 class Delivery(models.Model):
     class Status(models.TextChoices):
         PENDING = "pending", "Pending"
@@ -171,8 +172,11 @@ class Delivery(models.Model):
 
     order = models.ForeignKey("orders.Order", related_name="deliveries", on_delete=models.CASCADE)
     driver = models.ForeignKey(
-        settings.AUTH_USER_MODEL, null=True, blank=True,
-        related_name="deliveries", on_delete=models.SET_NULL,
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        related_name="deliveries",
+        on_delete=models.SET_NULL,
     )
 
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING, db_index=True)
@@ -182,29 +186,28 @@ class Delivery(models.Model):
 
     origin_lat = models.DecimalField(
         max_digits=9, decimal_places=6, null=True, blank=True,
-        validators=[MinValueValidator(-90), MaxValueValidator(90)],
+        validators=[MinValueValidator(Decimal("-90")), MaxValueValidator(Decimal("90"))],
     )
     origin_lng = models.DecimalField(
         max_digits=9, decimal_places=6, null=True, blank=True,
-        validators=[MinValueValidator(-180), MaxValueValidator(180)],
+        validators=[MinValueValidator(Decimal("-180")), MaxValueValidator(Decimal("180"))],
     )
     dest_lat = models.DecimalField(
         max_digits=9, decimal_places=6, null=True, blank=True,
-        validators=[MinValueValidator(-90), MaxValueValidator(90)],
+        validators=[MinValueValidator(Decimal("-90")), MaxValueValidator(Decimal("90"))],
     )
     dest_lng = models.DecimalField(
         max_digits=9, decimal_places=6, null=True, blank=True,
-        validators=[MinValueValidator(-180), MaxValueValidator(180)],
+        validators=[MinValueValidator(Decimal("-180")), MaxValueValidator(Decimal("180"))],
     )
     last_lat = models.DecimalField(
         max_digits=9, decimal_places=6, null=True, blank=True,
-        validators=[MinValueValidator(-90), MaxValueValidator(90)],
+        validators=[MinValueValidator(Decimal("-90")), MaxValueValidator(Decimal("90"))],
     )
     last_lng = models.DecimalField(
         max_digits=9, decimal_places=6, null=True, blank=True,
-        validators=[MinValueValidator(-180), MaxValueValidator(180)],
+        validators=[MinValueValidator(Decimal("-180")), MaxValueValidator(Decimal("180"))],
     )
-
     last_ping_at = models.DateTimeField(null=True, blank=True)
 
     channel_key = models.CharField(max_length=32, unique=True, default=channel_key_default, editable=False)
@@ -214,7 +217,6 @@ class Delivery(models.Model):
 
     class Meta:
         constraints = [
-            # if moving (not pending/delivered/cancelled) -> driver required
             CheckConstraint(
                 name="delivery_driver_required_when_moving",
                 check=Q(status__in=["pending", "delivered", "cancelled"]) | Q(driver__isnull=False),
@@ -243,6 +245,9 @@ class Delivery(models.Model):
             Index(fields=["created_at"]),
             Index(fields=["updated_at"]),
         ]
+
+    def __str__(self):
+        return f"Delivery #{self.pk} ({self.get_status_display()})"
 
     @property
     def ws_group(self) -> str:
@@ -315,7 +320,8 @@ class Delivery(models.Model):
             lng = float(lng)
         except Exception:
             return lat, lng
-        if abs(lat) > 90 and abs(lng) <= 180:  # obvious swap
+        # obvious swap
+        if abs(lat) > 90 and abs(lng) <= 180:
             lat, lng = lng, lat
         lat = max(-90.0, min(90.0, lat))
         lng = max(-180.0, min(180.0, lng))
@@ -324,10 +330,9 @@ class Delivery(models.Model):
         return lat, lng
 
     def save(self, *args, **kwargs):
-        # normalize coordinate fields
         self.origin_lat, self.origin_lng = self._norm_pair(self.origin_lat, self.origin_lng)
-        self.dest_lat, self.dest_lng = self._norm_pair(self.dest_lat, self.dest_lng)
-        self.last_lat, self.last_lng = self._norm_pair(self.last_lat, self.last_lng)
+        self.dest_lat,   self.dest_lng   = self._norm_pair(self.dest_lat, self.dest_lng)
+        self.last_lat,   self.last_lng   = self._norm_pair(self.last_lat, self.last_lng)
         super().save(*args, **kwargs)
 
 
@@ -364,7 +369,7 @@ class DeliveryEvent(models.Model):
         ("delivered", "Delivered"),
         ("position", "Position"),
     )
-    delivery = models.ForeignKey('orders.Delivery', on_delete=models.CASCADE, related_name='events')
+    delivery = models.ForeignKey("orders.Delivery", on_delete=models.CASCADE, related_name="events")
     actor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
     type = models.CharField(max_length=20, choices=TYPE_CHOICES)
     at = models.DateTimeField(auto_now_add=True)
@@ -397,17 +402,15 @@ class Transaction(models.Model):
     )
 
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
-
-    # idempotency for webhooks (raw body hash)
+    # Idempotency for webhooks; allow NULL for legacy rows
     body_sha256 = models.CharField(
         max_length=64,
         unique=True,
         db_index=True,
         null=True,
         blank=True,
-        help_text="SHA256 of the raw webhook body for idempotency"
+        help_text="SHA256 of the raw webhook body for idempotency",
     )
-
     order = models.ForeignKey(Order, on_delete=models.CASCADE)
     email = models.EmailField(blank=True, null=True)
     amount = models.DecimalField(max_digits=10, decimal_places=2)

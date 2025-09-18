@@ -1,16 +1,10 @@
 from django.contrib import admin
 from django.urls import include, path
-
-from django.conf import settings
-from django.conf.urls.static import static
-
-
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from django.conf import settings
 from django.conf.urls.static import static
 from users.views import debug_ws_push
-
 from product_app import views as product_views
 from users import views as user_views
 from payments.views import (
@@ -23,18 +17,13 @@ from core.views import healthz
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    # Home
-    path('', product_views.product_list, name='index'),
-
-    # Primary app mounts
+    path("debug/ws-push/<int:delivery_id>/", debug_ws_push, name="debug-ws-push"),
     path('utilities/', include('utilities.urls')),
     path('cart/', include('cart.urls')),
     path('orders/', include(('orders.urls', 'orders'), namespace='orders')),
 
-    # WS debug helper
-    path("debug/ws-push/<int:delivery_id>/", debug_ws_push, name="debug-ws-push"),
-
-
+    # Home
+    path('', product_views.product_list, name='index'),
     # --- Dashboards (single source: users.views) ---
     path('dashboard/', user_views.after_login, name='dashboard'),
     path('vendor-dashboard/', user_views.vendor_dashboard, name='vendor_dashboard'),
@@ -44,8 +33,7 @@ urlpatterns = [
     path('accounts/', include('django.contrib.auth.urls')),
     path('', include('users.urls')),
 
-
-    # API prefix (align with your frontend: use /apis/... in fetch)
+    # Legacy API endpoints (existing, non-versioned)
     path('apis/', include('apis.urls')),
     path('api/assistant/', include('assistant.urls')),
     # New versioned API (DRF-only), per-app mounts
@@ -65,7 +53,6 @@ urlpatterns = [
     path('apis/v2/cart/guest/', include('cart.urls_guest_v2')),
 
 
-
     path('payments/checkout/', CheckoutView.as_view(), name='payments_checkout'),
     path('webhook/stripe/', StripeWebhookView.as_view(), name='stripe_webhook'),
     path('webhook/paystack/', PaystackWebhookView.as_view(), name='paystack_webhook'),
@@ -76,7 +63,7 @@ urlpatterns = [
     path('products/search/', product_views.SearchProduct, name='product_search'),
     path('products/', include(('product_app.urls', 'product_app'), namespace='product_app')),
     path('category/<slug:category_slug>/', product_views.product_list, name='product_list_by_category'),
-
     path('accounts/profile/', product_views.profile, name='profile'),
 ] + static(settings.STATIC_URL, document_root=settings.STATIC_ROOT) \
   + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+

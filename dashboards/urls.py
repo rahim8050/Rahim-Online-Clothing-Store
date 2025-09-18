@@ -1,10 +1,7 @@
-# dashboards/urls.py
 from django.urls import path
-from . import views
-
-app_name = "dashboards"
+from .views import vendor_dashboard, vendor_live
 
 urlpatterns = [
-    path("vendor-dashboard/", views.vendor_dashboard, name="vendor-dashboard"),
-    path("vendor/live/", views.vendor_live, name="vendor-live"),
-]
+    path("vendor-dashboard/", vendor_dashboard, name="vendor-dashboard"),
+    path("vendor/live/", vendor_live, name="vendor-live"),]
+

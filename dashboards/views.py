@@ -4,18 +4,36 @@ from django.apps import apps
 from django.http import HttpResponseForbidden
 
 from users.constants import VENDOR
-from users.utils import is_vendor_or_staff  # keep resolve_vendor_owner_for only if you actually use it
+from users.utils import is_vendor_or_staff, resolve_vendor_owner_for
 
 
 def _vendor_id_for(user):
-    """Return vendor_id for a Vendor owner or an active VendorStaff; else None."""
+    """
+    Return vendor owner_id for a Vendor or VendorStaff user; else None.
+
+    Priority:
+    1) user.vendor_id attribute (if your User model exposes it)
+    2) resolve_vendor_owner_for(user) helper
+    3) group 'VENDOR' ⇒ treat the user as the owner (user.id)
+    4) VendorStaff(owner_id) lookup fallback
+    """
     vid = getattr(user, "vendor_id", None)
     if vid:
         return vid
-    # Owner: in VENDOR group → treat user's own id as owner id
+
+    # Try the project helper first (if it raises, ignore gracefully)
+    try:
+        owner_id = resolve_vendor_owner_for(user)
+        if owner_id:
+            return owner_id
+    except Exception:
+        pass
+
+    # Group-based owner
     if user.groups.filter(name=VENDOR).exists():
         return user.id
-    # Active staff: map to owner_id via VendorStaff
+
+    # Fallback: active VendorStaff → owner_id
     try:
         VendorStaff = apps.get_model("users", "VendorStaff")
         return (
@@ -40,23 +58,32 @@ def vendor_dashboard(request):
     vendor_id = _vendor_id_for(u)
     if not vendor_id:
         # No vendor link yet; render empty with a hint
-        return render(request, "dashboards/vendor.html", {
-            "stats": {"products_total": 0, "active_products": 0, "order_items_total": 0},
-            "products": [], "order_items": [],
-            "note": "Your account is not linked to a vendor profile yet.",
-        })
+        return render(
+            request,
+            "dashboards/vendor.html",
+            {
+                "stats": {
+                    "products_total": 0,
+                    "active_products": 0,
+                    "order_items_total": 0,
+                },
+                "products": [],
+                "order_items": [],
+                "note": "Your account is not linked to a vendor profile yet.",
+            },
+        )
 
-    # Stats
+    # Stats (cheap counts)
     products_qs = Product.objects.filter(owner_id=vendor_id)
     stats = {
         "products_total": products_qs.count(),
         "active_products": products_qs.filter(available=True).count(),
-        "order_items_total": apps.get_model("orders", "OrderItem").objects.filter(
+        "order_items_total": OrderItem.objects.filter(
             product__owner_id=vendor_id
         ).count(),
     }
 
-    # Lists (lightweight)
+    # Lists (limited + narrow field selection)
     products = (
         products_qs
         .only("id", "name", "price", "available")
@@ -71,18 +98,32 @@ def vendor_dashboard(request):
         .order_by("-id")[:25]
     )
 
-    return render(request, "dashboards/vendor.html", {
-        "stats": stats,
-        "products": products,
-        "order_items": order_items,
-        "note": "",
-    })
+    return render(
+        request,
+        "dashboards/vendor.html",
+        {
+            "stats": stats,
+            "products": products,
+            "order_items": order_items,
+            "note": "",
+            # Handy in templates or XHR calls:
+            "owner_id": vendor_id,
+        },
+    )
 
 
 @login_required
 def vendor_live(request):
-    """Live board that the front-end populates (polls APIs / websockets)."""
+    """
+    Simple live board that polls vendor deliveries API and renders a table.
+    Requires vendor or staff role. Owner context can be passed to the client.
+    """
     u = request.user
     if not is_vendor_or_staff(u):
         return HttpResponseForbidden("Insufficient role")
-    return render(request, "dashboards/vendor_live.html", {})
+
+    return render(
+        request,
+        "dashboards/vendor_live.html",
+        {"owner_id": _vendor_id_for(u)},
+    )

@@ -4,9 +4,9 @@
 {% block content %}
 <div class="p-4">
   <h2 class="text-xl font-semibold mb-3">
-    My Deliveries <small class="text-gray-500 ml-2">({{ request.user.username }})</small>
+    My Deliveries
+    <small class="text-gray-500 ml-2">({{ request.user.username }})</small>
   </h2>
-
   <div id="driver-app"></div>
 </div>
 
@@ -14,13 +14,13 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
 <script src="https://cdn.jsdelivr.net/npm/vue@2/dist/vue.min.js" defer></script>
 
-{# Minimal inline boot data — WITH NONCE #}
+{# Boot config (CSP-safe via nonce) #}
 <script nonce="{{ request.csp_nonce }}">
   window.DELIVERY_API = {
     list: "{% url 'orders:driver-deliveries-api' %}",
-    routePattern: "{% url 'orders:driver-route-api' 0 %}",   // will replace /0/ with /<id>/
-    pickupPattern: "/apis/deliveries/0/pickup/",              // will replace /0/ with /<id>/
-    deliverPattern: "/apis/deliveries/0/deliver/"             // will replace /0/ with /<id>/ 
+    routePattern: "{% url 'orders:driver-route-api' 0 %}",   // replace /0/ with /<id>/ at runtime
+    pickupPattern: "/apis/deliveries/0/pickup/",              // replace /0/ with /<id>/
+    deliverPattern: "/apis/deliveries/0/deliver/"             // replace /0/ with /<id>/
   };
 </script>
 
