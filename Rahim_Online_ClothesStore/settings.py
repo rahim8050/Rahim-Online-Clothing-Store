@@ -458,104 +458,35 @@ if IS_PROD and EMAIL_BACKEND.endswith("smtp.EmailBackend"):
 # ---------------------------------------------------------------------
 # CSP (django-csp)
 # ---------------------------------------------------------------------
-from csp import constants as csp_constants
-
-
-
-
-CSP_DEFAULT_SRC = (csp_constants.SELF,)
-CSP_CONNECT_SRC = (csp_constants.SELF, "ws:", "wss:", "https://api.cloudinary.com")
-CSP_SCRIPT_SRC = (
-    csp_constants.SELF, csp_constants.NONCE,
-    "https://cdn.tailwindcss.com",
-    "https://cdn.jsdelivr.net",
-    "https://unpkg.com",
-    "https://widget.cloudinary.com",
-    "https://js.stripe.com",
-    "https://*.stripe.com",
-    "https://js.paystack.co",
-    "https://*.paystack.co",
-    "https://*.paystack.com",
-)
-CSP_STYLE_SRC = (
-    csp_constants.SELF, csp_constants.NONCE,
-    "https://cdnjs.cloudflare.com",
-    "https://unpkg.com",
-    "https://fonts.googleapis.com",
-)
-CSP_STYLE_SRC_ATTR = ("'unsafe-inline'",)
-CSP_FONT_SRC = (csp_constants.SELF, "https://fonts.gstatic.com", "https://cdnjs.cloudflare.com", "data:")
-CSP_IMG_SRC = (
-    csp_constants.SELF, "data:", "blob:",
-    "https://res.cloudinary.com",
-    "https://tile.openstreetmap.org",
-    "https://*.tile.openstreetmap.org",
-)
-CSP_FRAME_SRC = (
-    "https://js.stripe.com", "https://*.stripe.com",
-    "https://js.paystack.co", "https://*.paystack.co", "https://*.paystack.com",
-)
-CSP_WORKER_SRC = (csp_constants.SELF, "blob:")
-CSP_FRAME_ANCESTORS = (csp_constants.SELF,)
-
-
+# settings.py
+from csp.constants import SELF, NONCE  # plus NONE/STRICT_DYNAMIC if you need them
 
 CONTENT_SECURITY_POLICY = {
     "DIRECTIVES": {
-        "default-src": (csp_constants.SELF,),
-        "connect-src": (
-            csp_constants.SELF,
-            "ws:",
-            "wss:",
-            "https://api.cloudinary.com",
-        ),
-        "script-src": (
-            csp_constants.SELF,
-            csp_constants.NONCE,
-            "https://cdn.tailwindcss.com",
-            "https://cdn.jsdelivr.net",
-            "https://unpkg.com",
-            "https://widget.cloudinary.com",
-            "https://js.stripe.com",
-            "https://*.stripe.com",
-            "https://js.paystack.co",
-            "https://*.paystack.co",
-            "https://*.paystack.com",
-        ),
-        "style-src": (
-            csp_constants.SELF,
-            csp_constants.NONCE,
-            "https://cdnjs.cloudflare.com",
-            "https://unpkg.com",
-            "https://fonts.googleapis.com",
-        ),
-        "style-src-attr": ("'unsafe-inline'",),
-        "font-src": (
-            csp_constants.SELF,
-            "https://fonts.gstatic.com",
-            "https://cdnjs.cloudflare.com",
-            "data:",
-        ),
-        "img-src": (
-            csp_constants.SELF,
-            "data:",
-            "blob:",
+        "default-src": [SELF],
+        "connect-src": [SELF, "ws:", "wss:", "https://api.cloudinary.com"],
+        "font-src": [SELF, "https://fonts.gstatic.com", "https://cdnjs.cloudflare.com", "data:"],
+        "frame-ancestors": [SELF],
+        "frame-src": [
+            "https://js.stripe.com", "https://*.stripe.com",
+            "https://js.paystack.co", "https://*.paystack.co", "https://*.paystack.com",
+        ],
+        "img-src": [
+            SELF, "data:", "blob:",
             "https://res.cloudinary.com",
-            "https://tile.openstreetmap.org",
-            "https://*.tile.openstreetmap.org",
-        ),
-        "frame-src": (
-            "https://js.stripe.com",
-            "https://*.stripe.com",
-            "https://js.paystack.co",
-            "https://*.paystack.co",
-            "https://*.paystack.com",
-        ),
-        "worker-src": (
-            csp_constants.SELF,
-            "blob:",
-        ),
-        "frame-ancestors": (csp_constants.SELF,),
+            "https://tile.openstreetmap.org", "https://*.tile.openstreetmap.org",
+        ],
+        "script-src": [
+            SELF, NONCE,
+            "https://cdn.tailwindcss.com", "https://cdn.jsdelivr.net", "https://unpkg.com",
+            "https://widget.cloudinary.com",
+            "https://js.stripe.com", "https://*.stripe.com",
+            "https://js.paystack.co", "https://*.paystack.co", "https://*.paystack.com",
+        ],
+        "style-src": [SELF, NONCE, "https://cdnjs.cloudflare.com", "https://unpkg.com", "https://fonts.googleapis.com"],
+        # keep this only if you truly need inline style attributes:
+        "style-src-attr": ["'unsafe-inline'"],
+        "worker-src": [SELF, "blob:"],
     },
 }
 
