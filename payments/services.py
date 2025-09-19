@@ -1,10 +1,11 @@
-# payments/service.py
+# payments/services.py
 from __future__ import annotations
 
-import hashlib
 import hmac
 import json
-from typing import Any
+import hashlib
+from decimal import Decimal, ROUND_HALF_UP
+from typing import Any, Optional
 
 import requests
 from django.conf import settings
@@ -16,20 +17,14 @@ from .enums import Gateway, TxnStatus
 from .models import Transaction, AuditLog, PaymentEvent, Payout
 from .selectors import safe_decrement_stock, set_order_paid
 from .idempotency import idempotent
-from .models import IdempotencyKey
 from vendor_app.models import VendorOrg
-from decimal import Decimal, ROUND_HALF_UP
-import hashlib
 
 
 # =========================================================
 #                           Helpers
 # =========================================================
 def compute_hmac_sha512(secret: str, body_bytes: bytes) -> str:
-    """Return lowercase hex HMAC-SHA512 of raw body.
-
-    Always sign the raw request body (bytes) the provider sent you.
-    """
+    """Lowercase hex HMAC-SHA512 of the raw request body."""
     return hmac.new(secret.encode("utf-8"), body_bytes, hashlib.sha512).hexdigest().lower()
 
 
@@ -43,7 +38,7 @@ def init_checkout(
     user,
     method: str,
     gateway: Gateway,
-    amount,
+    amount: Decimal,
     currency: str,
     idempotency_key: str,
     reference: str,
@@ -73,9 +68,7 @@ def init_checkout(
         txn = Transaction.objects.select_for_update().get(idempotency_key=idempotency_key)
         created = False
 
-    if not created and (
-        txn.order_id != order.id or txn.amount != amount or txn.gateway != gateway
-    ):
+    if not created and (txn.order_id != order.id or txn.amount != amount or txn.gateway != gateway):
         raise ValidationError("Idempotency key reuse with mismatched parameters.")
 
     AuditLog.log(event="PAYMENT_INIT", transaction=txn, order=order)
@@ -83,13 +76,10 @@ def init_checkout(
 
 
 # =========================================================
-#                    Webhook verification stubs
+#                    Webhook verification
 # =========================================================
 def verify_stripe(request) -> Any:
-    """
-    Verify Stripe webhook using SDK signature helper and return the event object.
-    Raises ValidationError on failure.
-    """
+    """Verify Stripe webhook using SDK; return event object; raise ValidationError on failure."""
     import stripe
 
     payload = request.body
@@ -102,10 +92,7 @@ def verify_stripe(request) -> Any:
 
 
 def verify_paystack(request) -> dict:
-    """Validate Paystack webhook via raw-body HMAC SHA512.
-
-    Returns parsed JSON dict on success; raises ValidationError on failure.
-    """
+    """Validate Paystack webhook via raw-body HMAC SHA512; return parsed JSON dict or raise ValidationError."""
     body = request.body  # bytes
     signature = (request.META.get("HTTP_X_PAYSTACK_SIGNATURE", "") or "").strip().lower()
     expected = compute_hmac_sha512(getattr(settings, "PAYSTACK_SECRET_KEY", "") or "", body)
@@ -118,14 +105,11 @@ def verify_paystack(request) -> dict:
 
 
 def verify_mpesa(request) -> dict:
-    """
-    Minimal M-Pesa webhook stub (Daraja). Implement cert-based verification if needed.
-    """
+    """Minimal M-Pesa (Daraja) webhook stub; raise ValidationError on invalid."""
     try:
         data = json.loads(request.body.decode("utf-8"))
     except Exception:
         raise ValidationError("Invalid JSON payload")
-
     if "Body" not in data:
         raise ValidationError("Invalid payload: missing Body")
     return data
@@ -139,24 +123,13 @@ def _eligible_for_auto_refund(txn: Transaction) -> bool:
 
 
 @dbtx.atomic
-def process_success(*, txn: Transaction, gateway_reference: str | None, request_id: str) -> Transaction:
+def process_success(*, txn: Transaction, gateway_reference: Optional[str], request_id: str) -> Transaction:
     """
     Mark a transaction as successful, handle duplicates & auto-refund, update stock,
     and flip the order to paid (single source of truth).
     """
-    if txn.status in {
-        TxnStatus.SUCCESS,
-        TxnStatus.DUPLICATE_SUCCESS,
-        TxnStatus.FAILED,
-        TxnStatus.CANCELLED,
-        TxnStatus.REFUNDED,
-    }:
-        AuditLog.log(
-            event="WEBHOOK_REPLAY_BLOCKED",
-            transaction=txn,
-            order=txn.order,
-            request_id=request_id,
-        )
+    if txn.status in {TxnStatus.SUCCESS, TxnStatus.DUPLICATE_SUCCESS, TxnStatus.FAILED, TxnStatus.CANCELLED, TxnStatus.REFUNDED}:
+        AuditLog.log(event="WEBHOOK_REPLAY_BLOCKED", transaction=txn, order=txn.order, request_id=request_id)
         return txn
 
     # Has another success already been recorded for the same order?
@@ -169,48 +142,23 @@ def process_success(*, txn: Transaction, gateway_reference: str | None, request_
 
     if already_paid:
         txn.mark_duplicate_success()
-        AuditLog.log(
-            event="DUPLICATE_SUCCESS",
-            transaction=txn,
-            order=txn.order,
-            request_id=request_id,
-        )
+        AuditLog.log(event="DUPLICATE_SUCCESS", transaction=txn, order=txn.order, request_id=request_id)
 
-        # Auto-refund only if gateway supports it and amounts match the order total
+        # Auto-refund only if supported and amounts match
         if _eligible_for_auto_refund(txn) and txn.amount == txn.order.get_total_cost():
             try:
                 issue_refund(txn, request_id=request_id)
                 txn.status = TxnStatus.REFUNDED
-                # Prefer supplied gateway ref, fallback to existing fields
                 txn.refund_reference = (
-                    txn.refund_reference
-                    or gateway_reference
-                    or getattr(txn, "gateway_reference", None)
-                    or txn.reference
+                    txn.refund_reference or gateway_reference or getattr(txn, "gateway_reference", None) or txn.reference
                 )
                 txn.refunded_at = timezone.now()
                 txn.save(update_fields=["status", "refund_reference", "refunded_at", "updated_at"])
-                AuditLog.log(
-                    event="DUPLICATE_REFUND_ISSUED",
-                    transaction=txn,
-                    order=txn.order,
-                    request_id=request_id,
-                )
-            except Exception as e:  # pragma: no cover
-                AuditLog.log(
-                    event="REFUND_FAILED",
-                    transaction=txn,
-                    order=txn.order,
-                    request_id=request_id,
-                    message=str(e),
-                )
+                AuditLog.log(event="DUPLICATE_REFUND_ISSUED", transaction=txn, order=txn.order, request_id=request_id)
+            except Exception as e:  # best effort
+                AuditLog.log(event="REFUND_FAILED", transaction=txn, order=txn.order, request_id=request_id, message=str(e))
         else:
-            AuditLog.log(
-                event="DUPLICATE_MANUAL_REVERSAL_REQUIRED",
-                transaction=txn,
-                order=txn.order,
-                request_id=request_id,
-            )
+            AuditLog.log(event="DUPLICATE_MANUAL_REVERSAL_REQUIRED", transaction=txn, order=txn.order, request_id=request_id)
         return txn
 
     # First success for this order
@@ -223,24 +171,10 @@ def process_success(*, txn: Transaction, gateway_reference: str | None, request_
 
 @dbtx.atomic
 def process_failure(*, txn: Transaction, request_id: str) -> Transaction:
-    """
-    Mark a transaction as failed, if not already terminal.
-    """
-    if txn.status in {
-        TxnStatus.SUCCESS,
-        TxnStatus.DUPLICATE_SUCCESS,
-        TxnStatus.FAILED,
-        TxnStatus.CANCELLED,
-        TxnStatus.REFUNDED,
-    }:
-        AuditLog.log(
-            event="WEBHOOK_REPLAY_BLOCKED",
-            transaction=txn,
-            order=txn.order,
-            request_id=request_id,
-        )
+    """Mark a transaction as failed, if not already terminal."""
+    if txn.status in {TxnStatus.SUCCESS, TxnStatus.DUPLICATE_SUCCESS, TxnStatus.FAILED, TxnStatus.CANCELLED, TxnStatus.REFUNDED}:
+        AuditLog.log(event="WEBHOOK_REPLAY_BLOCKED", transaction=txn, order=txn.order, request_id=request_id)
         return txn
-
     txn.mark_failed()
     AuditLog.log(event="PAYMENT_FAILED", transaction=txn, order=txn.order, request_id=request_id)
     return txn
@@ -255,24 +189,21 @@ def issue_refund(txn: Transaction, request_id: str = "") -> None:
     """
     if txn.gateway == Gateway.STRIPE:
         import stripe
-
         r = stripe.Refund.create(payment_intent=txn.gateway_reference, reason="requested_by_customer")
         txn.refund_reference = getattr(r, "id", None)
-<<<<<<< HEAD
         txn.save(update_fields=["refund_reference", "updated_at"])
         AuditLog.log(event="REFUND_ISSUED", transaction=txn, order=txn.order, request_id=request_id)
         return
 
     if txn.gateway == Gateway.PAYSTACK:
         # https://paystack.com/docs/api/refund/#create
-        # JSON: { "transaction": "<transaction_id_or_reference>" }
         secret = getattr(settings, "PAYSTACK_SECRET_KEY", "") or ""
         if not secret:
             raise ValidationError("PAYSTACK_SECRET_KEY not configured")
 
         payload = {
-            # Prefer gateway_reference, fallback to init reference
-            "transaction": txn.gateway_reference_or_reference if hasattr(txn, "gateway_reference_or_reference") else (txn.gateway_reference or txn.reference),
+            # prefer gateway_reference; fallback to init reference
+            "transaction": txn.gateway_reference or txn.reference,
         }
         headers = {
             "Authorization": f"Bearer {secret}",
@@ -296,25 +227,22 @@ def issue_refund(txn: Transaction, request_id: str = "") -> None:
         AuditLog.log(event="REFUND_ISSUED", transaction=txn, order=txn.order, request_id=request_id)
         return
 
-    # M-Pesa or other gateways: usually manual reversal — record for ops
+    # M-Pesa or others: usually manual reversal — record for ops
     AuditLog.log(event="REFUND_ISSUE_MANUAL", transaction=txn, order=txn.order, request_id=request_id)
-=======
-    elif txn.gateway == Gateway.PAYSTACK:
-        # POST https://api.paystack.co/refund with { "transaction": txn.gateway_reference }
-        # Store response id into txn.refund_reference
-        pass
-    else:
-        # M-Pesa: manual reversal (Daraja Reversal API if enabled) — log via AuditLog
-        pass
-    AuditLog.log(event="REFUND_ISSUED", transaction=txn, order=txn.order, request_id=request_id)
 
 
 # -------------------- Payouts (idempotent) --------------------
-
 @idempotent(scope="vendor:payout")
-def process_payout(*, org_id: int | None = None, user_id: int | None = None, amount, currency="KES", idempotency_key: str | None = None):
-    """Simulate a payout and ensure duplicate calls with same key do not double-payout.
-
+def process_payout(
+    *,
+    org_id: int | None = None,
+    user_id: int | None = None,
+    amount,
+    currency: str = "KES",
+    idempotency_key: str | None = None,
+):
+    """
+    Simulate a payout and ensure duplicate calls with same key do not double-payout.
     For demo/testing, we just log and return a deterministic reference based on the key.
     """
     ref = f"PAYOUT-{(idempotency_key or '')[-12:]}" if idempotency_key else "PAYOUT"
@@ -323,7 +251,6 @@ def process_payout(*, org_id: int | None = None, user_id: int | None = None, amo
 
 
 # -------------------- Org settlement helpers --------------------
-
 def _resolve_org_for_order(order) -> VendorOrg | None:
     try:
         item = order.items.select_related("product__owner__vendor_profile").first()
@@ -335,7 +262,8 @@ def _resolve_org_for_order(order) -> VendorOrg | None:
 
 
 def apply_org_settlement(txn: Transaction, provider: str, raw_body: bytes, payload: dict | None = None) -> PaymentEvent:
-    """Bind transaction to VendorOrg, compute commission + net, persist PaymentEvent & Payout.
+    """
+    Bind transaction to VendorOrg, compute commission + net, persist PaymentEvent & Payout.
 
     - Commission = org.org_commission_rate * gross
     - Net to vendor = gross - fees - commission
@@ -388,4 +316,3 @@ def apply_org_settlement(txn: Transaction, provider: str, raw_body: bytes, paylo
         pass
 
     return evt
->>>>>>> hardening

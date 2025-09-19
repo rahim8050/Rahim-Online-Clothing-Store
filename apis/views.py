@@ -11,11 +11,8 @@ from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from django.apps import apps
 from django.conf import settings
-
-
-from django.contrib.sites.shortcuts import get_current_site
-
 from django.contrib.auth import get_user_model
+from django.contrib.sites.shortcuts import get_current_site
 from django.core.mail import EmailMultiAlternatives
 from django.core.signing import (
     TimestampSigner,
@@ -25,26 +22,14 @@ from django.core.signing import (
     loads as unsign,
 )
 from django.db import transaction
-
 from django.db.models import Prefetch, Q
 from django.shortcuts import get_object_or_404
 from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
-from rest_framework import permissions, status
+
+from rest_framework import permissions, status, serializers
 from rest_framework.authentication import SessionAuthentication
-
-
-
-# from .serializers import VendorStaffInviteSerializer
-from users.models import VendorStaff
-from django.core.signing import loads as unsign
-
-signer = TimestampSigner()
-
-from rest_framework import status
-from rest_framework import serializers  # for Minimal/Inline serializers used in docs
-
 from rest_framework.generics import ListAPIView, CreateAPIView
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly
@@ -52,71 +37,44 @@ from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from drf_spectacular.utils import extend_schema  # docs: request/response hints
+from drf_spectacular.utils import extend_schema
 from drf_spectacular.types import OpenApiTypes
-from django.template.loader import render_to_string
-from django.core.mail import EmailMultiAlternatives
-from django.contrib.sites.shortcuts import get_current_site
-from core.permissions import InGroups
-from product_app.queries import shopable_products_q
-from product_app.models import Product
-from product_app.utils import get_vendor_field
-from orders.models import Delivery, OrderItem
-from orders.models import DeliveryEvent
-from users.constants import VENDOR, VENDOR_STAFF, DRIVER
-from users.models import VendorStaff  # <-- FIX: was missing
-from rest_framework import permissions
-from users.permissions import IsVendorOrVendorStaff, IsDriver, IsVendorOwner, HasVendorScope
-
 
 from core.models import log_action
 from core.permissions import InGroups
+from core.siteutils import current_domain
 from inventory.services import check_low_stock_and_notify
 from orders.models import Delivery, OrderItem, DeliveryEvent
 from product_app.models import Product
 from product_app.queries import shopable_products_q
 from product_app.utils import get_vendor_field
-from users.constants import DRIVER
+from users.constants import DRIVER, VENDOR, VENDOR_STAFF
 from users.models import VendorStaff, VendorApplication
 from users.permissions import (
-    IsVendorOrVendorStaff,
-    IsDriver,
-    IsVendorOwner,
     HasVendorScope,
+    IsDriver,
+    IsVendorOrVendorStaff,
+    IsVendorOwner,
 )
 from users.services import activate_vendor_staff  # group sync helper
 from users.utils import resolve_vendor_owner_for, vendor_owner_ids_for
 
-
-
-
-from core.siteutils import current_domain
-
-
-
-# If your serializers live elsewhere, adjust this import accordingly.
 from .serializers import (
     ProductSerializer,
+    ProductListSerializer,
+    ProductOutSerializer,
     DeliverySerializer,
     DeliveryAssignSerializer,
     DeliveryUnassignSerializer,
     DeliveryStatusSerializer,
-    ProductListSerializer,
     VendorProductCreateSerializer,
-    ProductOutSerializer,
-
-
-
-    VendorApplySerializer,                 # if not used, you may remove
-
-
     VendorApplicationCreateSerializer,
     VendorStaffCreateSerializer,
     VendorStaffOutSerializer,
     VendorStaffInviteSerializer,
     VendorStaffRemoveSerializer,
     WhoAmISerializer,
-    _EmptySerializer,                # used as request serializer where body is empty
+    _EmptySerializer,
 )
 
 logger = logging.getLogger(__name__)
@@ -124,38 +82,23 @@ User = get_user_model()
 signer = TimestampSigner()
 Q6 = Decimal("0.000001")
 
-
-
-# -----------------------
-# Helpers
-# -----------------------
-def _publish_delivery(delivery: Delivery, kind: str, payload: Optional[dict] = None) -> None:
-
 # --------- Doc helper serializers (module-level to avoid nested scope issues) ---------
-
-class VendorProductsImportRequestSerializer(serializers.Serializer):  # docs helper; guessed
+class VendorProductsImportRequestSerializer(serializers.Serializer):
     owner_id = serializers.IntegerField(required=False)
     file = serializers.FileField()
-    
 
-
-class VendorProductsImportResultErrorSerializer(serializers.Serializer):  # docs helper
+class VendorProductsImportResultErrorSerializer(serializers.Serializer):
     row = serializers.IntegerField()
     error = serializers.CharField()
 
-
-class VendorProductsImportResultSerializer(serializers.Serializer):  # docs helper
+class VendorProductsImportResultSerializer(serializers.Serializer):
     created = serializers.IntegerField()
     updated = serializers.IntegerField()
     errors = VendorProductsImportResultErrorSerializer(many=True)
 
-
-def _publish_delivery(delivery, kind: str, payload: dict | None = None):
-
-    """
-    Publish a generic delivery event to the delivery's WS group.
-    kind: 'assign' | 'unassign' | 'accept' | 'status' | 'position_update'
-    """
+# ----------------------- Helpers -----------------------
+def _publish_delivery(delivery: Delivery, kind: str, payload: Optional[dict] = None) -> None:
+    """Publish a generic delivery event to the delivery's WS group."""
     layer = get_channel_layer()
     if not layer:
         return
@@ -164,11 +107,8 @@ def _publish_delivery(delivery, kind: str, payload: dict | None = None):
         data.update(payload)
     async_to_sync(layer.group_send)(delivery.ws_group, data)
 
-
 def _publish_vendor(owner_id: int, kind: str, payload: Optional[dict] = None) -> None:
-    """
-    Send an event to a vendor owner group.
-    """
+    """Send an event to a vendor owner group."""
     layer = get_channel_layer()
     if not layer:
         return
@@ -177,7 +117,17 @@ def _publish_vendor(owner_id: int, kind: str, payload: Optional[dict] = None) ->
         data.update(payload)
     async_to_sync(layer.group_send)(f"vendor.{owner_id}", data)
 
+def orderitem_reverse_name() -> str:
+    rel_name = OrderItem._meta.get_field("product").remote_field.related_name
+    if rel_name == "+":
+        return ""
+    return rel_name or "orderitem_set"
 
+def _q6(x) -> Decimal:
+    # robust quantize for coords
+    return Decimal(str(x)).quantize(Q6, rounding=ROUND_HALF_UP)
+
+# ----------------------- Who am I -----------------------
 class WhoAmI(APIView):
     permission_classes = [IsAuthenticated]
     serializer_class = WhoAmISerializer  # for schema generation
@@ -187,38 +137,11 @@ class WhoAmI(APIView):
         ser = WhoAmISerializer(request.user)
         return Response(ser.data)
 
-
-def orderitem_reverse_name() -> str:
-    rel_name = OrderItem._meta.get_field("product").remote_field.related_name
-    if rel_name == "+":
-        return ""
-    return rel_name or "orderitem_set"
-
-
-def _q6(x) -> Decimal:
-    # robust quantize for coords
-    return Decimal(str(x)).quantize(Q6, rounding=ROUND_HALF_UP)
-
-
-# -----------------------
-# Who am I
-# -----------------------
-class WhoAmI(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request):
-        ser = WhoAmISerializer(request.user)
-        return Response(ser.data)
-
-
-# -----------------------
-# Products (shop & vendor)
-# -----------------------
+# ----------------------- Products (shop & vendor) -----------------------
 class ShopablePagination(PageNumberPagination):
     page_size = 12
     page_size_query_param = "page_size"
     max_page_size = 50
-
 
 class ShopableProductsAPI(ListAPIView):
     serializer_class = ProductListSerializer
@@ -235,7 +158,6 @@ class ShopableProductsAPI(ListAPIView):
             qs = qs.filter(Q(name__icontains=q) | Q(description__icontains=q))
         return qs
 
-
 class VendorProductsAPI(APIView):
     """
     Returns products for the vendor owner context of the caller.
@@ -243,17 +165,14 @@ class VendorProductsAPI(APIView):
     - Vendor staff: sees selected owner's products (owner_id) or raises if multiple allowed
     """
     permission_classes = [IsAuthenticated, IsVendorOrVendorStaff]
-    # Note: response is ProductSerializer(many=True)
-    serializer_class = ProductSerializer
+    serializer_class = ProductSerializer  # response
 
     @extend_schema(request=None, responses=ProductSerializer(many=True))
     def get(self, request):
         raw_owner = request.query_params.get("owner_id")
         try:
             owner_id = resolve_vendor_owner_for(
-                request.user,
-                raw_owner,
-                require_explicit_if_multiple=True,
+                request.user, raw_owner, require_explicit_if_multiple=True
             )
         except ValueError as e:
             return Response({"owner_id": str(e)}, status=status.HTTP_400_BAD_REQUEST)
@@ -285,10 +204,7 @@ class VendorProductsAPI(APIView):
         serializer = ProductSerializer(products, many=True, context={"request": request})
         return Response(serializer.data)
 
-
-# -----------------------
-# Deliveries
-# -----------------------
+# ----------------------- Deliveries -----------------------
 class DriverDeliveriesAPI(APIView):
     permission_classes = [IsAuthenticated, IsDriver]
     serializer_class = DeliverySerializer
@@ -299,11 +215,10 @@ class DriverDeliveriesAPI(APIView):
         serializer = DeliverySerializer(qs, many=True, context={"request": request})
         return Response(serializer.data)
 
-
 class VendorDeliveriesAPI(APIView):
     permission_classes = [IsAuthenticated, IsVendorOrVendorStaff]
-    # Minimal output serializer inferred from Response keys
-    class VendorDeliveryOutSerializer(serializers.Serializer):  # guessed; refine as needed
+
+    class VendorDeliveryOutSerializer(serializers.Serializer):
         id = serializers.IntegerField()
         order_id = serializers.IntegerField()
         driver_id = serializers.IntegerField(allow_null=True)
@@ -351,16 +266,13 @@ class VendorDeliveriesAPI(APIView):
         } for d in qs[:300]]
         return Response(data)
 
-
 class DeliveryAssignAPI(APIView):
     permission_classes = [IsAuthenticated, IsVendorOrVendorStaff, HasVendorScope]
     required_vendor_scope = "delivery"
     serializer_class = DeliveryAssignSerializer
 
-
     @extend_schema(request=DeliveryAssignSerializer, responses=DeliverySerializer)
     def post(self, request, pk):
-
         delivery = get_object_or_404(Delivery, pk=pk)
         ser = DeliveryAssignSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
@@ -394,17 +306,13 @@ class DeliveryAssignAPI(APIView):
         _publish_delivery(delivery, "assign", {"driver_id": driver.id})
         return Response(DeliverySerializer(delivery, context={"request": request}).data)
 
-
 class DeliveryUnassignAPI(APIView):
     permission_classes = [IsAuthenticated, IsVendorOrVendorStaff, HasVendorScope]
     required_vendor_scope = "delivery"
-    # No body expected; keep for schema clarity
-    serializer_class = DeliveryUnassignSerializer  # empty serializer
-
+    serializer_class = DeliveryUnassignSerializer  # empty serializer for docs
 
     @extend_schema(request=DeliveryUnassignSerializer, responses=DeliverySerializer)
     def post(self, request, pk):
-
         delivery = get_object_or_404(Delivery, pk=pk)
         delivery.driver = None
         delivery.status = Delivery.Status.PENDING
@@ -431,40 +339,30 @@ class DeliveryUnassignAPI(APIView):
         _publish_delivery(delivery, "unassign", {"driver_id": None})
         return Response(DeliverySerializer(delivery, context={"request": request}).data)
 
-
 class DeliveryAcceptAPI(APIView):
     permission_classes = [IsAuthenticated, InGroups]
-
     required_groups = [DRIVER]
-
-    def post(self, request, pk: int):
-        pass  # TODO: implement or remove this method
-
     serializer_class = _EmptySerializer  # no request body
 
     @extend_schema(request=None, responses=DeliverySerializer)
     def post(self, request, pk):
-
         delivery = get_object_or_404(Delivery, pk=pk, driver__isnull=True)
         delivery.mark_assigned(request.user)
         delivery.save(update_fields=["driver", "status", "assigned_at"])
         _publish_delivery(delivery, "accept", {"driver_id": request.user.id})
         return Response(DeliverySerializer(delivery, context={"request": request}).data)
 
-
 class DeliveryStatusAPI(APIView):
     permission_classes = [IsAuthenticated, InGroups]
     required_groups = [DRIVER]
     serializer_class = DeliveryStatusSerializer
 
-
     @extend_schema(request=DeliveryStatusSerializer, responses=DeliverySerializer)
     def post(self, request, pk):
-
         delivery = get_object_or_404(Delivery, pk=pk, driver=request.user)
         ser = DeliveryStatusSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
-        new_status = ser.validated_data["status"]  # avoid shadowing rest_framework.status
+        new_status = ser.validated_data["status"]
 
         delivery.status = new_status
         if new_status == Delivery.Status.PICKED_UP:
@@ -484,19 +382,16 @@ class DeliveryStatusAPI(APIView):
         _publish_delivery(delivery, "status", {"status": new_status})
         return Response(DeliverySerializer(delivery, context={"request": request}).data)
 
-
 class DriverLocationAPI(APIView):
     permission_classes = [IsAuthenticated, InGroups]
-
     required_groups = [DRIVER]
 
-    class DriverLocationInSerializer(serializers.Serializer):  # guessed; refine as needed
+    class DriverLocationInSerializer(serializers.Serializer):
         delivery_id = serializers.IntegerField()
         lat = serializers.DecimalField(max_digits=9, decimal_places=6)
         lng = serializers.DecimalField(max_digits=9, decimal_places=6)
 
-
-    class DriverLocationOutSerializer(serializers.Serializer):  # guessed; refine as needed
+    class DriverLocationOutSerializer(serializers.Serializer):
         ok = serializers.BooleanField()
         status = serializers.CharField()
         ts = serializers.DateTimeField()
@@ -505,7 +400,6 @@ class DriverLocationAPI(APIView):
 
     @extend_schema(request=DriverLocationInSerializer, responses=DriverLocationOutSerializer)
     def post(self, request):
-        # Expect: {"delivery_id": int, "lat": number|string, "lng": number|string}
         delivery_id = request.data.get("delivery_id")
         try:
             delivery_id = int(delivery_id)
@@ -529,18 +423,10 @@ class DriverLocationAPI(APIView):
         delivery.last_ping_at = now
         delivery.save(update_fields=["last_lat", "last_lng", "last_ping_at", "updated_at"])
 
-        _publish_delivery(
-            delivery,
-            "position_update",
-            {"lat": float(lat), "lng": float(lng), "ts": now.isoformat()},
-        )
-
+        _publish_delivery(delivery, "position_update", {"lat": float(lat), "lng": float(lng), "ts": now.isoformat()})
         return Response({"ok": True, "status": "updated", "ts": now.isoformat()})
 
-
-# -----------------------
-# Products (create/import/export)
-# -----------------------
+# ----------------------- Products (create/import/export) -----------------------
 class VendorProductCreateAPI(CreateAPIView):
     permission_classes = [IsAuthenticated, IsVendorOrVendorStaff]
     serializer_class = VendorProductCreateSerializer
@@ -565,11 +451,12 @@ class VendorProductCreateAPI(CreateAPIView):
             pass
         return Response(out_ser.data, status=status.HTTP_201_CREATED, headers=headers)
 
-
 class VendorProductsImportCSV(APIView):
     permission_classes = [IsAuthenticated, IsVendorOrVendorStaff, HasVendorScope]
     required_vendor_scope = "catalog"
+    serializer_class = VendorProductsImportRequestSerializer
 
+    @extend_schema(request=VendorProductsImportRequestSerializer, responses=VendorProductsImportResultSerializer)
     def post(self, request):
         f = request.FILES.get("file")
         if not f:
@@ -606,10 +493,7 @@ class VendorProductsImportCSV(APIView):
                     raise ValueError("name required")
 
                 obj, was_created = Product.objects.update_or_create(
-                    **{
-                        f"{field}_id": owner_id,
-                        "slug": sku.lower().replace(" ", "-"),
-                    },
+                    **{f"{field}_id": owner_id, "slug": sku.lower().replace(" ", "-")},
                     defaults={"name": name, "price": price, "available": published},
                 )
                 created += int(was_created)
@@ -619,11 +503,12 @@ class VendorProductsImportCSV(APIView):
 
         return Response({"created": created, "updated": updated, "errors": errors})
 
-
 class VendorProductsExportCSV(APIView):
     permission_classes = [IsAuthenticated, IsVendorOrVendorStaff, HasVendorScope]
     required_vendor_scope = "catalog"
+    serializer_class = _EmptySerializer
 
+    @extend_schema(request=None, responses={(200, "text/csv"): OpenApiTypes.STR})
     def get(self, request):
         try:
             owner_id = resolve_vendor_owner_for(request.user, request.query_params.get("owner_id"))
@@ -643,15 +528,12 @@ class VendorProductsExportCSV(APIView):
 
         return Response(out.getvalue(), content_type="text/csv")
 
-
-# -----------------------
-# Vendor Staff (invite/accept/list/remove/deactivate)
-# -----------------------
+# ----------------------- Vendor Staff (invite/accept/list/remove/deactivate) -----------------------
 class VendorStaffInviteAPI(APIView):
     permission_classes = [permissions.IsAuthenticated, IsVendorOwner]
     serializer_class = VendorStaffInviteSerializer
 
-    class VendorStaffInviteOutSerializer(serializers.Serializer):  # guessed; refine as needed
+    class VendorStaffInviteOutSerializer(serializers.Serializer):
         ok = serializers.BooleanField()
         message = serializers.CharField()
         data = serializers.DictField()
@@ -666,22 +548,16 @@ class VendorStaffInviteAPI(APIView):
 
         with transaction.atomic():
             vs, created = VendorStaff.objects.select_for_update().get_or_create(
-                owner_id=owner_id,
-                staff=staff,
-                defaults={"is_active": False},
+                owner_id=owner_id, staff=staff, defaults={"is_active": False}
             )
 
             if vs.is_active:
-                return Response(
-                    {"detail": "Staff is already active for this owner."},
-                    status=status.HTTP_409_CONFLICT,
-                )
+                return Response({"detail": "Staff is already active for this owner."}, status=status.HTTP_409_CONFLICT)
 
             token = sign({"vs_id": vs.id, "staff_id": staff.id})
             path = reverse("vendor-staff-accept", args=[token])
             invite_link = request.build_absolute_uri(path)
 
-            # Only send email on first creation; for re-sends you can adjust policy
             if created:
                 domain = current_domain(request)
                 site_name = getattr(settings, "SITE_NAME", domain)
@@ -692,10 +568,8 @@ class VendorStaffInviteAPI(APIView):
                         "staff": staff,
                         "owner": request.user,
                         "invite_link": invite_link,
-
                         "site_name": site_name,
                         "support_email": getattr(settings, "SUPPORT_EMAIL", settings.DEFAULT_FROM_EMAIL),
-
                     },
                 )
                 text_content = f"You've been invited as vendor staff.\n\nAccept your invite: {invite_link}"
@@ -736,16 +610,14 @@ class VendorStaffInviteAPI(APIView):
             status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
         )
 
-
 class VendorStaffAcceptAPI(APIView):
     permission_classes = [permissions.IsAuthenticated]
     TOKEN_MAX_AGE = 60 * 60 * 24 * 7  # 7 days
-    # no request body; response is minimal ok/message
-    class VendorStaffAcceptOutSerializer(serializers.Serializer):  # guessed; refine as needed
+    serializer_class = _EmptySerializer
+
+    class VendorStaffAcceptOutSerializer(serializers.Serializer):
         ok = serializers.BooleanField()
         message = serializers.CharField()
-
-    serializer_class = _EmptySerializer
 
     @extend_schema(request=None, responses=VendorStaffAcceptOutSerializer)
     def post(self, request, token: str):
@@ -786,124 +658,6 @@ class VendorStaffAcceptAPI(APIView):
             pass
         return Response({"ok": True, "message": "Invite accepted."}, status=200)
 
-
-
-class VendorStaffRemoveAPI(APIView):
-    permission_classes = [IsAuthenticated, IsVendorOwner]
-    serializer_class = VendorStaffRemoveSerializer
-
-    class VendorStaffRemoveOutSerializer(serializers.Serializer):
-        ok = serializers.BooleanField()
-
-    @extend_schema(request=VendorStaffRemoveSerializer, responses=VendorStaffRemoveOutSerializer)
-    def post(self, request, staff_id: int = None):
-        # Accept staff_id from URL or body; body wins if provided
-        payload = dict(request.data)
-        if staff_id is not None and not payload.get("staff_id"):
-            payload["staff_id"] = staff_id
-        ser = VendorStaffRemoveSerializer(data=payload, context={"request": request})
-        ser.is_valid(raise_exception=True)
-        data = ser.save()
-        try:
-            raw_owner = request.data.get("owner_id")
-            from users.utils import resolve_vendor_owner_for
-            owner_id = resolve_vendor_owner_for(request.user, raw_owner)
-            staff_id = ser.validated_data.get("staff_id")
-            log_action(request.user, owner_id, "staff.remove", "user", staff_id)
-        except Exception:
-            pass
-        return Response(data)
-
-
-
-
-
-
-
-from rest_framework.authentication import SessionAuthentication
-from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
-
-
-class VendorApplyAPI(APIView):
-    permission_classes = [permissions.IsAuthenticated]
-    authentication_classes = [SessionAuthentication]  # or [JWTAuthentication, SessionAuthentication]
-    parser_classes = [MultiPartParser, FormParser, JSONParser]
-    serializer_class = VendorApplicationCreateSerializer
-
-    class VendorApplyOutSerializer(serializers.Serializer):
-        status = serializers.CharField()
-        id = serializers.IntegerField()
-        created = serializers.BooleanField()
-
-    @transaction.atomic
-    @extend_schema(request=VendorApplicationCreateSerializer, responses=VendorApplyOutSerializer)
-    def post(self, request):
-        user = request.user
-        VendorApplication = apps.get_model("users", "VendorApplication")
-
-        # 1) Block if already vendor/staff
-        is_vendor_group = user.groups.filter(name__in=["Vendor", "Vendor Staff"]).exists()
-        if is_vendor_group or VendorStaff.objects.filter(staff=user, is_active=True).exists():
-            return Response(
-                {"detail": "Already a vendor/staff."},
-                status=status.HTTP_409_CONFLICT,
-            )
-
-        # 2) Validate payload
-        ser = VendorApplicationCreateSerializer(data=request.data, context={'request': request})
-        ser.is_valid(raise_exception=True)
-
-        # 3) Idempotent: 1 pending per user (requires unique (user_id, status) index)
-        try:
-            app, created = VendorApplication.objects.get_or_create(
-                user=user,
-                status=VendorApplication.PENDING,
-                defaults=ser.validated_data,
-            )
-        except Exception as e:
-            # If uniqueness is enforced and a race occurs, fetch the existing row
-            app = (VendorApplication.objects
-                   .filter(user=user, status=VendorApplication.PENDING)
-                   .order_by('-id').first())
-            created = False
-
-        return Response(
-            {"status": "pending", "id": app.id, "created": created},
-            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
-        )
-
-
-
-from users.models import VendorApplication
-
-class VendorApplyStatusAPI(APIView):
-    permission_classes = [IsAuthenticated]
-    class VendorApplyStatusOutSerializer(serializers.Serializer):  # guessed; refine as needed
-        has_applied = serializers.BooleanField()
-        status = serializers.CharField(allow_null=True)
-        application_id = serializers.IntegerField(allow_null=True)
-
-    serializer_class = _EmptySerializer
-
-    @extend_schema(request=None, responses=VendorApplyStatusOutSerializer)
-    def get(self, request):
-        app = (VendorApplication.objects
-               .filter(user=request.user)
-               .order_by('-id')
-               .values('id','status')
-               .first())
-        return Response({
-          "has_applied": bool(app),
-          "status": app["status"] if app else None,
-          "application_id": app["id"] if app else None,
-        })
-
-
-
-
-
-
-
 class VendorStaffListCreateView(APIView):
     permission_classes = [permissions.IsAuthenticated, IsVendorOwner]
     serializer_class = VendorStaffCreateSerializer  # request body for POST
@@ -938,41 +692,45 @@ class VendorStaffListCreateView(APIView):
             pass
         return Response(VendorStaffOutSerializer(row).data, status=status.HTTP_201_CREATED)
 
-
 class VendorStaffRemoveAPI(APIView):
     permission_classes = [IsAuthenticated, IsVendorOwner]
+    serializer_class = VendorStaffRemoveSerializer
 
+    class VendorStaffRemoveOutSerializer(serializers.Serializer):
+        ok = serializers.BooleanField()
+
+    @extend_schema(request=VendorStaffRemoveSerializer, responses=VendorStaffRemoveOutSerializer)
     def post(self, request, staff_id: Optional[int] = None):
-        # accept staff_id via URL or body (body wins)
         payload = dict(request.data)
         if staff_id is not None and not payload.get("staff_id"):
             payload["staff_id"] = staff_id
 
-        try:
-            owner_id = resolve_vendor_owner_for(request.user, payload.get("owner_id"))
-        except ValueError as e:
-            return Response({"owner_id": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
         ser = VendorStaffRemoveSerializer(data=payload, context={"request": request})
         ser.is_valid(raise_exception=True)
         data = ser.save()
+
         try:
+            raw_owner = request.data.get("owner_id")
+            owner_id = resolve_vendor_owner_for(request.user, raw_owner)
             log_action(request.user, owner_id, "staff.remove", "user", ser.validated_data.get("staff_id"))
         except Exception:
             pass
         return Response(data)
 
-
 class VendorStaffDeactivateAPI(APIView):
     permission_classes = [IsAuthenticated, IsVendorOwner]
+    serializer_class = _EmptySerializer
 
+    class VendorStaffDeactivateOutSerializer(serializers.Serializer):
+        ok = serializers.BooleanField()
+
+    @extend_schema(request=None, responses=VendorStaffDeactivateOutSerializer)
     def post(self, request, staff_id: int):
         from users.services import deactivate_vendor_staff
         try:
             owner_id = resolve_vendor_owner_for(request.user, request.data.get("owner_id"))
         except ValueError as e:
             return Response({"owner_id": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
         try:
             staff = get_object_or_404(User, pk=staff_id)
             deactivate_vendor_staff(staff, owner_id)
@@ -981,16 +739,20 @@ class VendorStaffDeactivateAPI(APIView):
             return Response({"detail": str(e)}, status=400)
         return Response({"ok": True})
 
-
-# -----------------------
-# Vendor Application
-# -----------------------
+# ----------------------- Vendor Application -----------------------
 class VendorApplyAPI(APIView):
     permission_classes = [permissions.IsAuthenticated]
     authentication_classes = [SessionAuthentication]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
+    serializer_class = VendorApplicationCreateSerializer
+
+    class VendorApplyOutSerializer(serializers.Serializer):
+        status = serializers.CharField()
+        id = serializers.IntegerField()
+        created = serializers.BooleanField()
 
     @transaction.atomic
+    @extend_schema(request=VendorApplicationCreateSerializer, responses=VendorApplyOutSerializer)
     def post(self, request):
         user = request.user
 
@@ -1023,10 +785,16 @@ class VendorApplyAPI(APIView):
             status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
         )
 
-
 class VendorApplyStatusAPI(APIView):
     permission_classes = [IsAuthenticated]
+    serializer_class = _EmptySerializer
 
+    class VendorApplyStatusOutSerializer(serializers.Serializer):
+        has_applied = serializers.BooleanField()
+        status = serializers.CharField(allow_null=True)
+        application_id = serializers.IntegerField(allow_null=True)
+
+    @extend_schema(request=None, responses=VendorApplyStatusOutSerializer)
     def get(self, request):
         app = (
             VendorApplication.objects
@@ -1041,13 +809,11 @@ class VendorApplyStatusAPI(APIView):
             "application_id": app["id"] if app else None,
         })
 
-
-# -----------------------
-# Vendor owners list (for UI pickers)
-# -----------------------
+# ----------------------- Vendor owners list (for UI pickers) -----------------------
 class VendorOwnersAPI(APIView):
     permission_classes = [IsAuthenticated, IsVendorOrVendorStaff]
-    class VendorOwnerOutSerializer(serializers.Serializer):  # guessed; refine as needed
+
+    class VendorOwnerOutSerializer(serializers.Serializer):
         id = serializers.IntegerField()
         name = serializers.CharField()
 
@@ -1059,100 +825,5 @@ class VendorOwnersAPI(APIView):
         if not ids:
             return Response([])
         rows = User.objects.filter(id__in=ids).only("id", "first_name", "last_name", "email")
-        data = [
-            {"id": u.id, "name": (u.get_full_name() or u.email or str(u.id))}
-            for u in rows
-        ]
+        data = [{"id": u.id, "name": (u.get_full_name() or u.email or str(u.id))} for u in rows]
         return Response(sorted(data, key=lambda x: x["name"].lower()))
-
-
-
-class VendorProductsImportCSV(APIView):
-    permission_classes = [IsAuthenticated, IsVendorOrVendorStaff, HasVendorScope]
-    required_vendor_scope = "catalog"
-    serializer_class = VendorProductsImportRequestSerializer
-
-    @extend_schema(request=VendorProductsImportRequestSerializer, responses=VendorProductsImportResultSerializer)
-    def post(self, request):
-        f = request.FILES.get("file")
-        if not f:
-            return Response({"detail": "file required"}, status=400)
-        try:
-            buf = f.read().decode("utf-8", errors="replace")
-        except Exception:
-            return Response({"detail": "unable to read file"}, status=400)
-        reader = csv.DictReader(StringIO(buf))
-        norm = lambda s: (s or "").strip().lower()
-        wanted = {"name", "sku", "price", "stock", "published"}
-        header = {norm(h): h for h in (reader.fieldnames or [])}
-        if not wanted.issubset(set(header.keys())):
-            return Response({"detail": "missing columns", "required": sorted(list(wanted))}, status=400)
-        try:
-            owner_id = resolve_vendor_owner_for(request.user, request.data.get("owner_id"))
-        except ValueError as e:
-            return Response({"owner_id": str(e)}, status=400)
-        created = 0
-        updated = 0
-        errors = []
-        field = get_vendor_field(Product)
-        for i, row in enumerate(reader, start=2):
-            try:
-                name = (row.get(header["name"]) or "").strip()
-                price = str(row.get(header["price"]) or "0").strip()
-                published = str(row.get(header["published"]) or "").strip().lower() in ("1", "true", "yes")
-                if not name:
-                    raise ValueError("name required")
-                obj, was_created = Product.objects.update_or_create(
-                    **{field+"_id": owner_id, "slug": (row.get(header.get("sku")) or name).strip().lower().replace(" ", "-")},
-                    defaults={"name": name, "price": price, "available": published},
-                )
-                created += int(was_created)
-                updated += int(not was_created)
-            except Exception as e:
-                errors.append({"row": i, "error": str(e)})
-        return Response({"created": created, "updated": updated, "errors": errors})
-
-
-class VendorProductsExportCSV(APIView):
-    permission_classes = [IsAuthenticated, IsVendorOrVendorStaff, HasVendorScope]
-    required_vendor_scope = "catalog"
-    serializer_class = _EmptySerializer
-
-    @extend_schema(request=None, responses={(200, 'text/csv'): OpenApiTypes.STR})
-    def get(self, request):
-        try:
-            owner_id = resolve_vendor_owner_for(request.user, request.query_params.get("owner_id"))
-        except ValueError as e:
-            return Response({"owner_id": str(e)}, status=400)
-        field = get_vendor_field(Product)
-        qs = Product.objects.filter(**{field+"_id": owner_id}).only("id", "name", "slug", "price", "available")
-        out = StringIO()
-        w = csv.writer(out)
-        w.writerow(["name", "sku", "price", "stock", "published"])  # sku/stock placeholders
-        for p in qs:
-            w.writerow([p.name, "", p.price, "", str(bool(p.available)).lower()])
-        return Response(out.getvalue(), content_type="text/csv")
-
-
-class VendorStaffDeactivateAPI(APIView):
-    permission_classes = [IsAuthenticated, IsVendorOwner]
-    serializer_class = _EmptySerializer
-
-    class VendorStaffDeactivateOutSerializer(serializers.Serializer):
-        ok = serializers.BooleanField()
-
-    @extend_schema(request=None, responses=VendorStaffDeactivateOutSerializer)
-    def post(self, request, staff_id: int):
-        from users.services import deactivate_vendor_staff
-        try:
-            owner_id = resolve_vendor_owner_for(request.user, request.data.get("owner_id"))
-        except ValueError as e:
-            return Response({"owner_id": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-        try:
-            staff = get_object_or_404(User, pk=staff_id)
-            deactivate_vendor_staff(staff, owner_id)
-            log_action(request.user, owner_id, "staff.deactivate", "user", staff_id)
-        except Exception as e:
-            return Response({"detail": str(e)}, status=400)
-        return Response({"ok": True})
-
