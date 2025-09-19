@@ -1,6 +1,8 @@
 # users/views.py
 from __future__ import annotations
 
+from rest_framework import generics, permissions
+
 import logging
 import re
 from typing import Any, Dict
@@ -517,21 +519,16 @@ def vendor_apply_deprecated(request):
 
 # -------------------- Vendor Application APIs (DRF) --------------------
 class VendorApplyAPI(generics.CreateAPIView):
-
-
-
-    serializer_class = apps.get_model("users", "VendorApplicationCreateSerializer")
-
-
     permission_classes = [permissions.IsAuthenticated]
 
     def get_serializer_class(self):
-        # Import lazily to avoid circulars if you prefer real imports:
+        # Lazy import avoids circular import at app load
         from .serializers import VendorApplicationCreateSerializer
         return VendorApplicationCreateSerializer
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
+
 
 
 class VendorApplicationApproveAPI(generics.UpdateAPIView):

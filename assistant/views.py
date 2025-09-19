@@ -5,6 +5,8 @@ from typing import Tuple
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework import serializers
+from drf_spectacular.utils import extend_schema
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
 
@@ -28,7 +30,17 @@ def _normalize_msg(msg: str) -> str:
 @method_decorator(csrf_exempt, name="dispatch")  # keep if you don't want CSRF; safe to remove if you do
 class AskView(APIView):
     permission_classes = [IsAuthenticated]
+    class AskRequestSerializer(serializers.Serializer):  # guessed; refine as needed
+        session_key = serializers.CharField(required=False, allow_blank=True)
+        message = serializers.CharField()
+        persona = serializers.CharField(required=False, allow_blank=True)
+    class AskResponseSerializer(serializers.Serializer):  # guessed; refine as needed
+        reply = serializers.CharField()
+        table = serializers.JSONField(required=False, allow_null=True)
 
+    serializer_class = AskRequestSerializer
+
+    @extend_schema(request=AskRequestSerializer, responses=AskResponseSerializer)
     def post(self, request):
         data = request.data or {}
         # --- session key: optional; fall back to Django session id ---
