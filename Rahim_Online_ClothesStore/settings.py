@@ -173,29 +173,21 @@ TEMPLATES = [
 # Database
 # ---------------------------------------------------------------------
 # settings.py (production)
-import dj_database_url
-from environ import Env
-
-env = Env()
-DATABASE_URL = env("DATABASE_URL", default="")
-
-if not DATABASE_URL:
-    raise RuntimeError("DATABASE_URL is required in production")
 
 DATABASES = {
     "default": dj_database_url.parse(
-        DATABASE_URL,
-        conn_max_age=0,        # do NOT keep persistent conns with transaction poolers
-        ssl_require=True,      # enforce SSL at the adapter level
+        env("DATABASE_URL"),
+        conn_max_age=0,    # no persistence for transaction pooler
+        ssl_require=True,
     )
 }
-
-# Pooler-friendly tuning:
 DATABASES["default"].setdefault("OPTIONS", {})
 DATABASES["default"]["OPTIONS"].update({
-    "sslmode": "require",     # belt & suspenders
-    "prepare_threshold": 0,   # psycopg3: disable prepared statements (PgBouncer safe)
+    "sslmode": "require",
+    "prepare_threshold": 0,   # disable prepared statements
 })
+DATABASES["default"]["DISABLE_SERVER_SIDE_CURSORS"] = True
+
 
 # Django guidance for poolers:
 DATABASES["default"]["DISABLE_SERVER_SIDE_CURSORS"] = True  # pooler-safe
