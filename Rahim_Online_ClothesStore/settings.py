@@ -173,25 +173,23 @@ TEMPLATES = [
 # Database
 # ---------------------------------------------------------------------
 # settings.py (production)
+from environ import Env
+
+env = Env()
 
 DATABASES = {
     "default": dj_database_url.parse(
         env("DATABASE_URL"),
-        conn_max_age=0,    # no persistence for transaction pooler
+        conn_max_age=600,     # ok for direct
         ssl_require=True,
     )
 }
+
 DATABASES["default"].setdefault("OPTIONS", {})
 DATABASES["default"]["OPTIONS"].update({
     "sslmode": "require",
-    "prepare_threshold": 0,   # disable prepared statements
 })
-DATABASES["default"]["DISABLE_SERVER_SIDE_CURSORS"] = True
-
-
-# Django guidance for poolers:
-DATABASES["default"]["DISABLE_SERVER_SIDE_CURSORS"] = True  # pooler-safe
-
+DATABASES["default"]["DISABLE_SERVER_SIDE_CURSORS"] = False
 
 # In-tests: in-memory sqlite
 if os.environ.get("PYTEST_CURRENT_TEST"):
