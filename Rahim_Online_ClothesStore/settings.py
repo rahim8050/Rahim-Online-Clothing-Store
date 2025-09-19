@@ -172,23 +172,34 @@ TEMPLATES = [
 # ---------------------------------------------------------------------
 # Database
 # ---------------------------------------------------------------------
+# settings.py (production)
+import dj_database_url
+from environ import Env
+
+env = Env()
+DATABASE_URL = env("DATABASE_URL", default="")
+
+if not DATABASE_URL:
+    raise RuntimeError("DATABASE_URL is required in production")
+
 DATABASES = {
-    "default": dj_database_url.config(
-        default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
-        conn_max_age=600,
-        ssl_require=IS_PROD,
+    "default": dj_database_url.parse(
+        DATABASE_URL,
+        conn_max_age=0,        # do NOT keep persistent conns with transaction poolers
+        ssl_require=True,      # enforce SSL at the adapter level
     )
 }
 
-# MySQL options (if used)
-if DATABASES["default"].get("ENGINE") == "django.db.backends.mysql":
-    DATABASES["default"].setdefault("OPTIONS", {})
-    DATABASES["default"]["OPTIONS"].update({
-        "init_command": "SET sql_mode='STRICT_TRANS_TABLES', time_zone='+00:00'",
-        "charset": "utf8mb4",
-        "use_unicode": True,
-    })
-    DATABASES["default"]["CONN_HEALTH_CHECKS"] = True
+# Pooler-friendly tuning:
+DATABASES["default"].setdefault("OPTIONS", {})
+DATABASES["default"]["OPTIONS"].update({
+    "sslmode": "require",     # belt & suspenders
+    "prepare_threshold": 0,   # psycopg3: disable prepared statements (PgBouncer safe)
+})
+
+# Django guidance for poolers:
+DATABASES["default"]["DISABLE_SERVER_SIDE_CURSORS"] = True  # pooler-safe
+
 
 # In-tests: in-memory sqlite
 if os.environ.get("PYTEST_CURRENT_TEST"):
