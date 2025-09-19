@@ -191,6 +191,8 @@ DATABASES["default"]["OPTIONS"].update({
 })
 DATABASES["default"]["DISABLE_SERVER_SIDE_CURSORS"] = False
 
+print("==== DATABASE_URL ====", os.environ.get("DATABASE_URL"))
+
 # In-tests: in-memory sqlite
 if os.environ.get("PYTEST_CURRENT_TEST"):
     DATABASES = {"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": ":memory:"}}
