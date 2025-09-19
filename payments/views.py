@@ -14,7 +14,6 @@ from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.decorators import login_required
 
 from .models import Transaction, AuditLog
-from orders.models import PaymentEvent
 from .services import (
     init_checkout,
     verify_stripe,
@@ -22,13 +21,15 @@ from .services import (
     verify_mpesa,
     process_success,
     process_failure,
+    apply_org_settlement,
 )
+from .idempotency import accept_once
 from .enums import TxnStatus
 from payments.notify import emit_once, send_payment_email, send_refund_email
 
 
 # ---------------------------
-# Checkout (requires session)
+# Checkout (session required)
 # ---------------------------
 @method_decorator(login_required, name="dispatch")
 @method_decorator(csrf_exempt, name="dispatch")  # API-style: session-auth + CSRF exempt
@@ -47,7 +48,6 @@ class CheckoutView(View):
                 return JsonResponse({"ok": False, "error": f"missing_{key}"}, status=400)
 
         from orders.models import Order
-
         order = get_object_or_404(Order, pk=data["order_id"], user=request.user)
 
         # Strict amount check (Decimal)
@@ -83,29 +83,32 @@ class CheckoutView(View):
 # ---------------------------
 @method_decorator(csrf_exempt, name="dispatch")
 class StripeWebhookView(View):
+    http_method_names = ["post"]
+
     def post(self, request, *args, **kwargs):
         request_id = hashlib.sha256(request.body).hexdigest()[:16]
 
-        # 1) Verify signature -> event
+        # 1) Verify Stripe signature → parsed event (raises on invalid)
         try:
             event = verify_stripe(request)
         except ValidationError as e:
             AuditLog.log(event="WEBHOOK_SIGNATURE_INVALID", request_id=request_id, message=str(e))
             return JsonResponse({"ok": False}, status=400)
 
+        # 2) Idempotency (provider retries)
+        if not accept_once(scope="webhook:stripe", request=request):
+            return HttpResponse(status=200)
+
         event_type = event.get("type")
         obj = (event.get("data") or {}).get("object", {}) or {}
 
-        # Prefer explicit reference (metadata/client_reference_id).
-        reference = (
-            (obj.get("metadata") or {}).get("reference")
-            or obj.get("client_reference_id")
-        )
+        # Prefer explicit reference (metadata / client_reference_id)
+        reference = (obj.get("metadata") or {}).get("reference") or obj.get("client_reference_id")
 
-        # For success, we also want the gateway payment intent id
-        payment_intent = obj.get("payment_intent") or obj.get("id")  # PI id or Session id
+        # For success, capture gateway payment intent id
+        payment_intent = obj.get("payment_intent") or obj.get("id")
 
-        # 2) Resolve transaction
+        # 3) Resolve and process transaction
         with dbtx.atomic():
             txn = None
             if reference:
@@ -114,8 +117,8 @@ class StripeWebhookView(View):
                 except Transaction.DoesNotExist:
                     txn = None
 
-            # Fallback: try by gateway_reference if your model stores it
             if txn is None and payment_intent:
+                # Fallback if you store gateway reference on the txn
                 try:
                     txn = Transaction.objects.select_for_update().get(gateway_reference=payment_intent)
                 except Transaction.DoesNotExist:
@@ -134,34 +137,23 @@ class StripeWebhookView(View):
             txn.raw_event = event
             txn.save(update_fields=["callback_received", "signature_valid", "raw_event", "updated_at"])
 
-            # 3) Process
             if event_type in ("payment_intent.succeeded", "checkout.session.completed"):
                 txn = process_success(txn=txn, gateway_reference=payment_intent, request_id=request_id)
-                outcome = "received"
-                notif_key = f"payment_success:{txn.reference}"
-            elif event_type in ("payment_intent.payment_failed", "checkout.session.expired"):
-                txn = process_failure(txn=txn, request_id=request_id)
-                outcome = "failed"
-                notif_key = f"payment_failed:{txn.reference}"
-            else:
-                # Unhandled event; acknowledge so Stripe doesn't retry
-                return JsonResponse({"ok": True}, status=200)
-
-        # 4) Post-commit notifications (idempotent)
-        to_email = getattr(getattr(txn, "user", None), "email", None)
-        if to_email:
-            if outcome == "received":
-                emit_once(
-                    event_key=notif_key,
-                    user=getattr(txn, "user", None),
-                    channel="email",
-                    payload={"order_id": txn.order_id, "amount": str(txn.amount)},
-                    send_fn=lambda: send_payment_email(
-                        to_email, txn.order_id, txn.amount, txn.reference, "received"
-                    ),
-                )
-                # If duplicate + auto-refund happened, also notify refund
-                if txn.status == TxnStatus.REFUNDED and getattr(txn, "refund_reference", None):
+                apply_org_settlement(txn, provider="stripe", raw_body=request.body, payload=event)
+                to_email = getattr(getattr(txn, "user", None), "email", None)
+                if to_email:
+                    emit_once(
+                        event_key=f"payment_success:{txn.reference}",
+                        user=getattr(txn, "user", None),
+                        channel="email",
+                        payload={"order_id": txn.order_id, "amount": str(txn.amount)},
+                        send_fn=lambda: send_payment_email(to_email, txn.order_id, txn.amount, txn.reference, "received"),
+                    )
+                if (
+                    getattr(txn, "status", None) == TxnStatus.REFUNDED
+                    and to_email
+                    and getattr(txn, "refund_reference", None)
+                ):
                     emit_once(
                         event_key=f"refund_completed:{txn.refund_reference}",
                         user=getattr(txn, "user", None),
@@ -171,16 +163,20 @@ class StripeWebhookView(View):
                             to_email, txn.order_id, txn.amount, txn.refund_reference, "completed"
                         ),
                     )
-            else:  # failed
-                emit_once(
-                    event_key=notif_key,
-                    user=getattr(txn, "user", None),
-                    channel="email",
-                    payload={"order_id": txn.order_id, "amount": str(txn.amount)},
-                    send_fn=lambda: send_payment_email(
-                        to_email, txn.order_id, txn.amount, txn.reference, "failed"
-                    ),
-                )
+            elif event_type in ("payment_intent.payment_failed", "checkout.session.expired"):
+                txn = process_failure(txn=txn, request_id=request_id)
+                to_email = getattr(getattr(txn, "user", None), "email", None)
+                if to_email:
+                    emit_once(
+                        event_key=f"payment_failed:{txn.reference}",
+                        user=getattr(txn, "user", None),
+                        channel="email",
+                        payload={"order_id": txn.order_id, "amount": str(txn.amount)},
+                        send_fn=lambda: send_payment_email(to_email, txn.order_id, txn.amount, txn.reference, "failed"),
+                    )
+            else:
+                # Unhandled event; acknowledge to stop retries
+                return JsonResponse({"ok": True}, status=200)
 
         return JsonResponse({"ok": True})
 
@@ -190,6 +186,8 @@ class StripeWebhookView(View):
 # ---------------------------
 @method_decorator(csrf_exempt, name="dispatch")
 class PaystackWebhookView(View):
+    http_method_names = ["post"]
+
     def post(self, request, *args, **kwargs):
         request_id = hashlib.sha256(request.body).hexdigest()[:16]
 
@@ -203,21 +201,15 @@ class PaystackWebhookView(View):
             AuditLog.log(event="WEBHOOK_SIGNATURE_INVALID", request_id=request_id, message="invalid signature")
             return JsonResponse({"detail": "invalid signature"}, status=401)
 
-        # 2) Idempotency by body SHA256
-        body_sha256 = hashlib.sha256(request.body).hexdigest().lower()
+        # 2) Idempotency (provider retries)
+        if not accept_once(scope="webhook:paystack", request=request):
+            return HttpResponse(status=200)
+
         ref = (data.get("data") or {}).get("reference")
         if not ref:
             AuditLog.log(event="WEBHOOK_MISSING_REFERENCE", request_id=request_id)
-            return JsonResponse({"detail": "missing reference"}, status=400)
+            return JsonResponse({"ok": True}, status=202)
 
-        pe, created = PaymentEvent.objects.get_or_create(
-            body_sha256=body_sha256,
-            defaults={"provider": "paystack", "reference": ref, "body": data},
-        )
-        if not created:
-            return HttpResponse(status=200)  # duplicate/retry => ack
-
-        # 3) Resolve & process
         with dbtx.atomic():
             try:
                 txn = Transaction.objects.select_for_update().get(reference=ref)
@@ -226,39 +218,30 @@ class PaystackWebhookView(View):
                 return JsonResponse({"ok": True}, status=202)
 
             txn.callback_received = True
-            txn.signature_valid = True
+            txn.signature_valid = True  # verify_paystack passed => valid
             txn.raw_event = data
             txn.save(update_fields=["callback_received", "signature_valid", "raw_event", "updated_at"])
 
-            event_name = data.get("event")
             status_ = (data.get("data") or {}).get("status")
             gateway_ref = (data.get("data") or {}).get("id") or ref
 
-            if event_name == "charge.success" or status_ == "success":
+            if status_ == "success":
                 txn = process_success(txn=txn, gateway_reference=gateway_ref, request_id=request_id)
-                outcome = "received"
-                notif_key = f"payment_success:{txn.reference}"
-            elif event_name in {"charge.failed", "charge.cancelled"} or status_ in {"failed", "cancelled"}:
-                txn = process_failure(txn=txn, request_id=request_id)
-                outcome = "failed"
-                notif_key = f"payment_failed:{txn.reference}"
-            else:
-                return JsonResponse({"ok": True}, status=200)
-
-        # 4) Post-commit notifications
-        to_email = getattr(getattr(txn, "user", None), "email", None)
-        if to_email:
-            if outcome == "received":
-                emit_once(
-                    event_key=notif_key,
-                    user=getattr(txn, "user", None),
-                    channel="email",
-                    payload={"order_id": txn.order_id, "amount": str(txn.amount)},
-                    send_fn=lambda: send_payment_email(
-                        to_email, txn.order_id, txn.amount, txn.reference, "received"
-                    ),
-                )
-                if txn.status == TxnStatus.REFUNDED and getattr(txn, "refund_reference", None):
+                apply_org_settlement(txn, provider="paystack", raw_body=request.body, payload=data)
+                to_email = getattr(getattr(txn, "user", None), "email", None)
+                if to_email:
+                    emit_once(
+                        event_key=f"payment_success:{txn.reference}",
+                        user=getattr(txn, "user", None),
+                        channel="email",
+                        payload={"order_id": txn.order_id, "amount": str(txn.amount)},
+                        send_fn=lambda: send_payment_email(to_email, txn.order_id, txn.amount, txn.reference, "received"),
+                    )
+                if (
+                    getattr(txn, "status", None) == TxnStatus.REFUNDED
+                    and to_email
+                    and getattr(txn, "refund_reference", None)
+                ):
                     emit_once(
                         event_key=f"refund_completed:{txn.refund_reference}",
                         user=getattr(txn, "user", None),
@@ -269,15 +252,16 @@ class PaystackWebhookView(View):
                         ),
                     )
             else:
-                emit_once(
-                    event_key=notif_key,
-                    user=getattr(txn, "user", None),
-                    channel="email",
-                    payload={"order_id": txn.order_id, "amount": str(txn.amount)},
-                    send_fn=lambda: send_payment_email(
-                        to_email, txn.order_id, txn.amount, txn.reference, "failed"
-                    ),
-                )
+                txn = process_failure(txn=txn, request_id=request_id)
+                to_email = getattr(getattr(txn, "user", None), "email", None)
+                if to_email:
+                    emit_once(
+                        event_key=f"payment_failed:{txn.reference}",
+                        user=getattr(txn, "user", None),
+                        channel="email",
+                        payload={"order_id": txn.order_id, "amount": str(txn.amount)},
+                        send_fn=lambda: send_payment_email(to_email, txn.order_id, txn.amount, txn.reference, "failed"),
+                    )
 
         return JsonResponse({"ok": True})
 
@@ -287,6 +271,8 @@ class PaystackWebhookView(View):
 # ---------------------------
 @method_decorator(csrf_exempt, name="dispatch")
 class MPesaWebhookView(View):
+    http_method_names = ["post"]
+
     def post(self, request, *args, **kwargs):
         request_id = hashlib.sha256(request.body).hexdigest()[:16]
 
@@ -296,6 +282,11 @@ class MPesaWebhookView(View):
             AuditLog.log(event="WEBHOOK_SIGNATURE_INVALID", request_id=request_id, message=str(e))
             return JsonResponse({"ok": False}, status=400)
 
+        # 1) Idempotency (provider retries)
+        if not accept_once(scope="webhook:mpesa", request=request):
+            return HttpResponse(status=200)
+
+        # 2) Parse standard STK callback
         callback = (data.get("Body") or {}).get("stkCallback", {}) or {}
         items = (callback.get("CallbackMetadata") or {}).get("Item", []) or []
         meta = {i.get("Name"): i.get("Value") for i in items}
@@ -313,7 +304,7 @@ class MPesaWebhookView(View):
                 return JsonResponse({"ok": True}, status=202)
 
             txn.callback_received = True
-            txn.signature_valid = True  # if you add cert verification, set based on result
+            txn.signature_valid = True  # verify_mpesa passed
             txn.raw_event = data
             txn.save(update_fields=["callback_received", "signature_valid", "raw_event", "updated_at"])
 
@@ -322,27 +313,21 @@ class MPesaWebhookView(View):
 
             if result_code == 0:
                 txn = process_success(txn=txn, gateway_reference=gateway_ref, request_id=request_id)
-                outcome = "received"
-                notif_key = f"payment_success:{txn.reference}"
-            else:
-                txn = process_failure(txn=txn, request_id=request_id)
-                outcome = "failed"
-                notif_key = f"payment_failed:{txn.reference}"
-
-        # Post-commit notifications
-        to_email = getattr(getattr(txn, "user", None), "email", None)
-        if to_email:
-            if outcome == "received":
-                emit_once(
-                    event_key=notif_key,
-                    user=getattr(txn, "user", None),
-                    channel="email",
-                    payload={"order_id": txn.order_id, "amount": str(txn.amount)},
-                    send_fn=lambda: send_payment_email(
-                        to_email, txn.order_id, txn.amount, txn.reference, "received"
-                    ),
-                )
-                if txn.status == TxnStatus.REFUNDED and getattr(txn, "refund_reference", None):
+                apply_org_settlement(txn, provider="mpesa", raw_body=request.body, payload=data)
+                to_email = getattr(getattr(txn, "user", None), "email", None)
+                if to_email:
+                    emit_once(
+                        event_key=f"payment_success:{txn.reference}",
+                        user=getattr(txn, "user", None),
+                        channel="email",
+                        payload={"order_id": txn.order_id, "amount": str(txn.amount)},
+                        send_fn=lambda: send_payment_email(to_email, txn.order_id, txn.amount, txn.reference, "received"),
+                    )
+                if (
+                    getattr(txn, "status", None) == TxnStatus.REFUNDED
+                    and to_email
+                    and getattr(txn, "refund_reference", None)
+                ):
                     emit_once(
                         event_key=f"refund_completed:{txn.refund_reference}",
                         user=getattr(txn, "user", None),
@@ -353,14 +338,15 @@ class MPesaWebhookView(View):
                         ),
                     )
             else:
-                emit_once(
-                    event_key=notif_key,
-                    user=getattr(txn, "user", None),
-                    channel="email",
-                    payload={"order_id": txn.order_id, "amount": str(txn.amount)},
-                    send_fn=lambda: send_payment_email(
-                        to_email, txn.order_id, txn.amount, txn.reference, "failed"
-                    ),
-                )
+                txn = process_failure(txn=txn, request_id=request_id)
+                to_email = getattr(getattr(txn, "user", None), "email", None)
+                if to_email:
+                    emit_once(
+                        event_key=f"payment_failed:{txn.reference}",
+                        user=getattr(txn, "user", None),
+                        channel="email",
+                        payload={"order_id": txn.order_id, "amount": str(txn.amount)},
+                        send_fn=lambda: send_payment_email(to_email, txn.order_id, txn.amount, txn.reference, "failed"),
+                    )
 
         return JsonResponse({"ok": True})
