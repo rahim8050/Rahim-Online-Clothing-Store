@@ -42,18 +42,15 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
 ]
 
-DATABASES = {
-    "default": {"ENGINE": "django.db.backends.sqlite3", "NAME": ":memory:"}
-}
+DATABASES = {"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": ":memory:"}}
 
-CHANNEL_LAYERS = {
-    "default": {"BACKEND": "channels.layers.InMemoryChannelLayer"}
-}
+CHANNEL_LAYERS = {"default": {"BACKEND": "channels.layers.InMemoryChannelLayer"}}
 
-ROOT_URLCONF = 'tests.test_urls'
+ROOT_URLCONF = "tests.test_urls"
 ASGI_APPLICATION = __name__ + ".application"
 
 from channels.routing import ProtocolTypeRouter
+
 application = ProtocolTypeRouter({})
 
 # URL patterns are defined in tests/test_urls.py to avoid early app import.

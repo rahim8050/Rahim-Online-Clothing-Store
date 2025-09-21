@@ -2,15 +2,16 @@ import pytest
 from django.contrib.auth import get_user_model
 from rest_framework.test import APIClient
 
-from vendor_app.models import VendorOrg, VendorMember, VendorOrgAuditLog, VendorProfile
-
+from vendor_app.models import VendorMember, VendorOrg, VendorOrgAuditLog, VendorProfile
 
 pytestmark = pytest.mark.django_db
 
 
 def mk_user(username: str, is_staff=False):
     User = get_user_model()
-    return User.objects.create_user(username=username, email=f"{username}@ex.com", password="x", is_staff=is_staff)
+    return User.objects.create_user(
+        username=username, email=f"{username}@ex.com", password="x", is_staff=is_staff
+    )
 
 
 def seed_org():
@@ -27,7 +28,9 @@ def test_kra_pin_validation_accept_reject():
     client.force_authenticate(user=owner)
 
     # Accept valid
-    resp = client.patch(f"/apis/v1/vendor/orgs/{org.id}/", {"kra_pin": "A123456789B"}, format="json")
+    resp = client.patch(
+        f"/apis/v1/vendor/orgs/{org.id}/", {"kra_pin": "A123456789B"}, format="json"
+    )
     assert resp.status_code in (200, 202)
 
     # Reject invalid
@@ -79,11 +82,14 @@ def test_audit_log_on_kra_pin_change():
     owner, org = seed_org()
     client = APIClient()
     client.force_authenticate(user=owner)
-    resp = client.patch(f"/apis/v1/vendor/orgs/{org.id}/", {"kra_pin": "A123456789B", "tax_status": "verified"}, format="json")
+    resp = client.patch(
+        f"/apis/v1/vendor/orgs/{org.id}/",
+        {"kra_pin": "A123456789B", "tax_status": "verified"},
+        format="json",
+    )
     assert resp.status_code in (200, 202)
 
     logs = list(VendorOrgAuditLog.objects.filter(org=org))
     fields = {l.field for l in logs}
     assert "kra_pin" in fields and "tax_status" in fields
     assert any(l.actor_id == owner.id for l in logs)
-

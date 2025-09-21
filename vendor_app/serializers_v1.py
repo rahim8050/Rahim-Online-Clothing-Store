@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-from typing import Optional
-
 from django.contrib.auth import get_user_model
-from rest_framework import serializers
 from drf_spectacular.utils import extend_schema_field
+from rest_framework import serializers
 
 from .models import VendorMember, VendorOrg, VendorOrgAuditLog
 from .services import has_min_role
@@ -55,6 +53,7 @@ class OrgSerializer(serializers.ModelSerializer):
         if not v:
             return v
         import re
+
         if not re.match(r"^[A-Z]{1}[0-9]{9}[A-Z]{1}$", v):
             raise serializers.ValidationError("KRA PIN must look like A123456789B.")
         return v
@@ -71,7 +70,7 @@ class OrgSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({"detail": "Not allowed to modify tax fields."})
 
         # Track old values for audit
-        old_vals = {k: getattr(instance, k, None) for k in sensitive.keys()}
+        old_vals = {k: getattr(instance, k, None) for k in sensitive}
         obj = super().update(instance, validated_data)
         # Validate at model level for KRA PIN format & normalize
         obj.full_clean()

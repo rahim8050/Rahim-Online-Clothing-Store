@@ -31,4 +31,6 @@ class Command(BaseCommand):
                     updated += 1
                 else:
                     skipped += 1
-        self.stdout.write(self.style.SUCCESS(f"updated={updated} skipped={skipped} failed={failed}"))
+        self.stdout.write(
+            self.style.SUCCESS(f"updated={updated} skipped={skipped} failed={failed}")
+        )

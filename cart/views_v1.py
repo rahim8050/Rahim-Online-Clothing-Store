@@ -1,10 +1,10 @@
-from django.shortcuts import get_object_or_404
 from django.core.cache import cache
-from rest_framework import permissions, status, viewsets, decorators
+from django.shortcuts import get_object_or_404
+from rest_framework import decorators, permissions, viewsets
 from rest_framework.response import Response
 
 from .models import Cart, CartItem
-from .serializers_v1 import CartV1Serializer, CartItemV1WriteSerializer
+from .serializers_v1 import CartItemV1WriteSerializer, CartV1Serializer
 
 
 class CartV1ViewSet(viewsets.ReadOnlyModelViewSet):
@@ -42,7 +42,9 @@ class CartV1ViewSet(viewsets.ReadOnlyModelViewSet):
         ser.is_valid(raise_exception=True)
         product = ser.validated_data["product"]
         qty = ser.validated_data["quantity"]
-        item, _ = CartItem.objects.get_or_create(cart=cart, product=product, defaults={"quantity": qty})
+        item, _ = CartItem.objects.get_or_create(
+            cart=cart, product=product, defaults={"quantity": qty}
+        )
         if not _:
             item.quantity += qty
             item.save(update_fields=["quantity"])
@@ -56,4 +58,3 @@ class CartV1ViewSet(viewsets.ReadOnlyModelViewSet):
             return Response({"item_id": "This field is required."}, status=400)
         CartItem.objects.filter(pk=item_id, cart=cart).delete()
         return Response(CartV1Serializer(cart).data)
-

@@ -1,21 +1,27 @@
-import pytest
 from uuid import uuid4
+
+import pytest
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
-from users.constants import VENDOR, VENDOR_STAFF, DRIVER
-from orders.models import Order, Delivery
+
+from orders.models import Delivery, Order
+from users.constants import DRIVER, VENDOR, VENDOR_STAFF
 
 User = get_user_model()
 
+
 def mk_user(prefix):
     suf = uuid4().hex[:6]
-    return User.objects.create_user(username=f"{prefix}{suf}", email=f"{prefix}{suf}@t.local", password="x")
+    return User.objects.create_user(
+        username=f"{prefix}{suf}", email=f"{prefix}{suf}@t.local", password="x"
+    )
+
 
 @pytest.mark.django_db
 def test_idempotent_accept_assign_unassign_status(client):
     # users & groups
-    owner  = mk_user("owner")
-    staff  = mk_user("staff")
+    owner = mk_user("owner")
+    staff = mk_user("staff")
     driver = mk_user("driver")
 
     Group.objects.get_or_create(name=DRIVER)[0].user_set.add(driver)
@@ -24,9 +30,15 @@ def test_idempotent_accept_assign_unassign_status(client):
     staff.groups.add(vg, vsg)
 
     # order + delivery (pending)
-    order = Order.objects.create(full_name="X", email=f"c{uuid4().hex[:6]}@t.local",
-                                 address="addr", dest_address_text="dest",
-                                 dest_lat=0, dest_lng=0, user=owner)
+    order = Order.objects.create(
+        full_name="X",
+        email=f"c{uuid4().hex[:6]}@t.local",
+        address="addr",
+        dest_address_text="dest",
+        dest_lat=0,
+        dest_lng=0,
+        user=owner,
+    )
     d = Delivery.objects.create(order=order, dest_lat=0, dest_lng=0, status=Delivery.Status.PENDING)
 
     # Accept is idempotent for the same driver:
@@ -56,7 +68,8 @@ def test_idempotent_accept_assign_unassign_status(client):
     assert d.picked_up_at == ts1  # unchanged
 
     # Vendor unassign is idempotent
-    client.logout(); client.force_login(staff)
+    client.logout()
+    client.force_login(staff)
     u1 = client.post(f"/apis/deliveries/{d.id}/unassign/")
     assert u1.status_code == 200
     d.refresh_from_db()

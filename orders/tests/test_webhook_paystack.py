@@ -1,13 +1,13 @@
-import json
-import hmac
 import hashlib
+import hmac
+import json
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
-from product_app.models import Category, Product, Warehouse, ProductStock
-from orders.models import Order, OrderItem, Transaction, PaymentEvent
+from orders.models import Order, OrderItem, PaymentEvent, Transaction
+from product_app.models import Category, Product, ProductStock, Warehouse
 
 
 @override_settings(PAYSTACK_SECRET_KEY="sk_test_example")
@@ -46,10 +46,13 @@ class PaystackWebhookHardenedTests(TestCase):
         return hmac.new(b"sk_test_example", body, hashlib.sha512).hexdigest()
 
     def test_webhook_valid_signature_returns_200_and_creates_transaction(self):
-        body = json.dumps({
-            "event": "charge.success",
-            "data": {"reference": self.tx.reference, "metadata": {"order_id": self.order.id}},
-        }, separators=(",", ":")).encode()
+        body = json.dumps(
+            {
+                "event": "charge.success",
+                "data": {"reference": self.tx.reference, "metadata": {"order_id": self.order.id}},
+            },
+            separators=(",", ":"),
+        ).encode()
         sig = self._sign(body)
         resp = self.client.post(
             reverse("orders:paystack_webhook"),
@@ -66,10 +69,13 @@ class PaystackWebhookHardenedTests(TestCase):
         self.assertTrue(PaymentEvent.objects.filter(reference=self.tx.reference).exists())
 
     def test_webhook_invalid_signature_returns_401_and_creates_nothing(self):
-        body = json.dumps({
-            "event": "charge.success",
-            "data": {"reference": self.tx.reference},
-        }, separators=(",", ":")).encode()
+        body = json.dumps(
+            {
+                "event": "charge.success",
+                "data": {"reference": self.tx.reference},
+            },
+            separators=(",", ":"),
+        ).encode()
         # Wrong signature
         sig = "deadbeef"
         resp = self.client.post(
@@ -83,14 +89,21 @@ class PaystackWebhookHardenedTests(TestCase):
         self.assertFalse(PaymentEvent.objects.exists())
 
     def test_webhook_replay_same_body_returns_200_without_duplicate_transaction(self):
-        body = json.dumps({
-            "event": "charge.success",
-            "data": {"reference": self.tx.reference, "metadata": {"order_id": self.order.id}},
-        }, separators=(",", ":")).encode()
+        body = json.dumps(
+            {
+                "event": "charge.success",
+                "data": {"reference": self.tx.reference, "metadata": {"order_id": self.order.id}},
+            },
+            separators=(",", ":"),
+        ).encode()
         sig = self._sign(body)
         url = reverse("orders:paystack_webhook")
-        r1 = self.client.post(url, body, content_type="application/json", HTTP_X_PAYSTACK_SIGNATURE=sig)
-        r2 = self.client.post(url, body, content_type="application/json", HTTP_X_PAYSTACK_SIGNATURE=sig)
+        r1 = self.client.post(
+            url, body, content_type="application/json", HTTP_X_PAYSTACK_SIGNATURE=sig
+        )
+        r2 = self.client.post(
+            url, body, content_type="application/json", HTTP_X_PAYSTACK_SIGNATURE=sig
+        )
         self.assertEqual(r1.status_code, 200)
         self.assertEqual(r2.status_code, 200)
         self.assertEqual(PaymentEvent.objects.count(), 1)
@@ -98,6 +111,7 @@ class PaystackWebhookHardenedTests(TestCase):
         self.assertEqual(self.tx.status, "success")
         # body_sha256 set on the transaction for idempotency
         import hashlib as _hashlib
+
         expected_sha = _hashlib.sha256(body).hexdigest().lower()
         self.assertEqual(self.tx.body_sha256, expected_sha)
 

@@ -1,9 +1,9 @@
 # orders/models.py
+from decimal import ROUND_HALF_UP, Decimal
 from uuid import uuid4
-from decimal import Decimal, ROUND_HALF_UP
 
 from django.conf import settings
-from django.core.validators import MinValueValidator, MaxValueValidator
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models, transaction
 from django.db.models import CheckConstraint, Index, Q
 from django.utils import timezone
@@ -74,8 +74,12 @@ class Order(models.Model):
             # both set & valid OR both NULL
             CheckConstraint(
                 check=(
-                    (Q(latitude__gte=-90) & Q(latitude__lte=90) &
-                     Q(longitude__gte=-180) & Q(longitude__lte=180))
+                    (
+                        Q(latitude__gte=-90)
+                        & Q(latitude__lte=90)
+                        & Q(longitude__gte=-180)
+                        & Q(longitude__lte=180)
+                    )
                     | (Q(latitude__isnull=True) & Q(longitude__isnull=True))
                 ),
                 name="order_lat_lng_range_or_null",
@@ -179,38 +183,60 @@ class Delivery(models.Model):
         on_delete=models.SET_NULL,
     )
 
-    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING, db_index=True)
+    status = models.CharField(
+        max_length=20, choices=Status.choices, default=Status.PENDING, db_index=True
+    )
     assigned_at = models.DateTimeField(null=True, blank=True)
     picked_up_at = models.DateTimeField(null=True, blank=True)
     delivered_at = models.DateTimeField(null=True, blank=True)
 
     origin_lat = models.DecimalField(
-        max_digits=9, decimal_places=6, null=True, blank=True,
+        max_digits=9,
+        decimal_places=6,
+        null=True,
+        blank=True,
         validators=[MinValueValidator(Decimal("-90")), MaxValueValidator(Decimal("90"))],
     )
     origin_lng = models.DecimalField(
-        max_digits=9, decimal_places=6, null=True, blank=True,
+        max_digits=9,
+        decimal_places=6,
+        null=True,
+        blank=True,
         validators=[MinValueValidator(Decimal("-180")), MaxValueValidator(Decimal("180"))],
     )
     dest_lat = models.DecimalField(
-        max_digits=9, decimal_places=6, null=True, blank=True,
+        max_digits=9,
+        decimal_places=6,
+        null=True,
+        blank=True,
         validators=[MinValueValidator(Decimal("-90")), MaxValueValidator(Decimal("90"))],
     )
     dest_lng = models.DecimalField(
-        max_digits=9, decimal_places=6, null=True, blank=True,
+        max_digits=9,
+        decimal_places=6,
+        null=True,
+        blank=True,
         validators=[MinValueValidator(Decimal("-180")), MaxValueValidator(Decimal("180"))],
     )
     last_lat = models.DecimalField(
-        max_digits=9, decimal_places=6, null=True, blank=True,
+        max_digits=9,
+        decimal_places=6,
+        null=True,
+        blank=True,
         validators=[MinValueValidator(Decimal("-90")), MaxValueValidator(Decimal("90"))],
     )
     last_lng = models.DecimalField(
-        max_digits=9, decimal_places=6, null=True, blank=True,
+        max_digits=9,
+        decimal_places=6,
+        null=True,
+        blank=True,
         validators=[MinValueValidator(Decimal("-180")), MaxValueValidator(Decimal("180"))],
     )
     last_ping_at = models.DateTimeField(null=True, blank=True)
 
-    channel_key = models.CharField(max_length=32, unique=True, default=channel_key_default, editable=False)
+    channel_key = models.CharField(
+        max_length=32, unique=True, default=channel_key_default, editable=False
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -235,7 +261,8 @@ class Delivery(models.Model):
             ),
             CheckConstraint(
                 name="delivery_origin_lng_range",
-                check=Q(origin_lng__isnull=True) | (Q(origin_lng__gte=-180) & Q(origin_lng__lte=180)),
+                check=Q(origin_lng__isnull=True)
+                | (Q(origin_lng__gte=-180) & Q(origin_lng__lte=180)),
             ),
         ]
         indexes = [
@@ -259,7 +286,11 @@ class Delivery(models.Model):
         self.dest_lng = self.order.dest_lng
         item = self.order.items.select_related("warehouse").first()
         wh = getattr(item, "warehouse", None)
-        if wh and getattr(wh, "latitude", None) is not None and getattr(wh, "longitude", None) is not None:
+        if (
+            wh
+            and getattr(wh, "latitude", None) is not None
+            and getattr(wh, "longitude", None) is not None
+        ):
             self.origin_lat = wh.latitude
             self.origin_lng = wh.longitude
 
@@ -331,8 +362,8 @@ class Delivery(models.Model):
 
     def save(self, *args, **kwargs):
         self.origin_lat, self.origin_lng = self._norm_pair(self.origin_lat, self.origin_lng)
-        self.dest_lat,   self.dest_lng   = self._norm_pair(self.dest_lat, self.dest_lng)
-        self.last_lat,   self.last_lng   = self._norm_pair(self.last_lat, self.last_lng)
+        self.dest_lat, self.dest_lng = self._norm_pair(self.dest_lat, self.dest_lng)
+        self.last_lat, self.last_lng = self._norm_pair(self.last_lat, self.last_lng)
         super().save(*args, **kwargs)
 
 
@@ -370,7 +401,9 @@ class DeliveryEvent(models.Model):
         ("position", "Position"),
     )
     delivery = models.ForeignKey("orders.Delivery", on_delete=models.CASCADE, related_name="events")
-    actor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True
+    )
     type = models.CharField(max_length=20, choices=TYPE_CHOICES)
     at = models.DateTimeField(auto_now_add=True)
     note = models.JSONField(null=True, blank=True)
@@ -445,4 +478,3 @@ class PaymentEvent(models.Model):
 
     class Meta:
         indexes = [models.Index(fields=["provider", "reference"])]
-

@@ -82,4 +82,3 @@ export function sanitize(html: string): string {
 }
 
 export default sanitize;
-

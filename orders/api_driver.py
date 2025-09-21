@@ -1,7 +1,7 @@
 from django.db import transaction
-from django.utils import timezone
 from django.shortcuts import get_object_or_404
-from rest_framework import viewsets, permissions, decorators, response, status
+from django.utils import timezone
+from rest_framework import decorators, permissions, response, status, viewsets
 
 from .models import Delivery
 from .serializers import DeliverySerializer, DriverDeliveryListSerializer
@@ -73,4 +73,3 @@ class DeliveryViewSet(viewsets.GenericViewSet):
             return timezone.datetime.fromisoformat(str(w))
         except Exception:
             return timezone.now()
-

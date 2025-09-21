@@ -1,39 +1,52 @@
 # assistant/views.py
 import re
-from typing import Tuple
 
+from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import csrf_exempt
+from drf_spectacular.utils import extend_schema
+from rest_framework import serializers
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework import serializers
-from drf_spectacular.utils import extend_schema
-from django.utils.decorators import method_decorator
-from django.views.decorators.csrf import csrf_exempt
 
-from .models import ChatSession, ChatMessage
 from . import tools
+from .models import ChatMessage, ChatSession
 
 PATTERNS = {
     "list_orders": re.compile(r"\b(list|show|see|check|tell me about|view|my)\s+orders?\b", re.I),
     "order_status_id": re.compile(r"\b(order\s+status|status\s+of\s+order)\s+#?\s*(\d+)\b", re.I),
-    "order_status_no": re.compile(r"\b(order\s+status|status\s+of\s+order)\s+(rah[-\s]?\d+)\b", re.I),
-    "payment_status": re.compile(r"\b(payment\s+status|status\s+of\s+payment)\s+(?:for\s+)?(?:order\s+)?#?\s*([\w-]+)\b", re.I),
-    "delivery_status": re.compile(r"\b(delivery\s+status|where(?:'s| is)\s+(?:my\s+)?(?:delivery|order))\s+(?:for\s+)?(?:order\s+)?#?\s*([\w-]+)\b", re.I),
+    "order_status_no": re.compile(
+        r"\b(order\s+status|status\s+of\s+order)\s+(rah[-\s]?\d+)\b", re.I
+    ),
+    "payment_status": re.compile(
+        r"\b(payment\s+status|status\s+of\s+payment)\s+(?:for\s+)?(?:order\s+)?#?\s*([\w-]+)\b",
+        re.I,
+    ),
+    "delivery_status": re.compile(
+        r"\b(delivery\s+status|where(?:'s| is)\s+(?:my\s+)?(?:delivery|order))\s+(?:for\s+)?(?:order\s+)?#?\s*([\w-]+)\b",
+        re.I,
+    ),
     "shipping": re.compile(r"\bshipping\b", re.I),
     "returns": re.compile(r"\breturns?\b", re.I),
 }
+
 
 def _normalize_msg(msg: str) -> str:
     s = (msg or "").strip().lower()
     return re.sub(r"\s+", " ", s)
 
-@method_decorator(csrf_exempt, name="dispatch")  # keep if you don't want CSRF; safe to remove if you do
+
+@method_decorator(
+    csrf_exempt, name="dispatch"
+)  # keep if you don't want CSRF; safe to remove if you do
 class AskView(APIView):
     permission_classes = [IsAuthenticated]
+
     class AskRequestSerializer(serializers.Serializer):  # guessed; refine as needed
         session_key = serializers.CharField(required=False, allow_blank=True)
         message = serializers.CharField()
         persona = serializers.CharField(required=False, allow_blank=True)
+
     class AskResponseSerializer(serializers.Serializer):  # guessed; refine as needed
         reply = serializers.CharField()
         table = serializers.JSONField(required=False, allow_null=True)
@@ -55,10 +68,13 @@ class AskView(APIView):
 
         if not message:
             # gentle fallback (keeps frontend happy)
-            return Response({
-                "reply": "Hi! Try: 'list orders', 'order status 123' or 'order status RAH123', "
-                         "'payment status 123', 'delivery status 123', 'shipping', 'returns'."
-            }, status=200)
+            return Response(
+                {
+                    "reply": "Hi! Try: 'list orders', 'order status 123' or 'order status RAH123', "
+                    "'payment status 123', 'delivery status 123', 'shipping', 'returns'."
+                },
+                status=200,
+            )
 
         # create / load session scoped to user
         sess, _ = ChatSession.objects.get_or_create(user=request.user, session_key=sess_key)
@@ -99,11 +115,15 @@ class AskView(APIView):
             try:
                 reply = tools.route_message(message, persona=persona, user=request.user)
             except Exception:
-                reply = ("Try: 'list orders', 'order status 123' or 'order status RAH123', "
-                         "'payment status 123', 'delivery status 123', 'shipping', 'returns'.")
+                reply = (
+                    "Try: 'list orders', 'order status 123' or 'order status RAH123', "
+                    "'payment status 123', 'delivery status 123', 'shipping', 'returns'."
+                )
 
         safe_reply = tools.redact(reply)
-        ChatMessage.objects.create(session=sess, role=ChatMessage.Role.ASSISTANT, content=safe_reply)
+        ChatMessage.objects.create(
+            session=sess, role=ChatMessage.Role.ASSISTANT, content=safe_reply
+        )
 
         payload = {"reply": safe_reply}
         if table:

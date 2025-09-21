@@ -1,16 +1,14 @@
-
-import json
-import hmac
 import hashlib
+import hmac
+import json
 import time
 
-from django.core.management.base import BaseCommand, CommandError
-from django.core.management import call_command
 from django.conf import settings
+from django.core.management.base import BaseCommand, CommandError
 from django.test import Client
-from django.urls import reverse, NoReverseMatch
+from django.urls import NoReverseMatch, reverse
 
-from orders.models import Transaction, Order
+from orders.models import Order, Transaction
 
 
 class Command(BaseCommand):
@@ -46,9 +44,8 @@ class Command(BaseCommand):
 
         if not reference:
             try:
-                tx = (
-                    Transaction.objects.filter(order_id=order_id, gateway="paystack")
-                    .latest("created_at")
+                tx = Transaction.objects.filter(order_id=order_id, gateway="paystack").latest(
+                    "created_at"
                 )
             except Transaction.DoesNotExist:
                 raise CommandError("No Paystack transaction for given order")
@@ -104,12 +101,11 @@ class Command(BaseCommand):
         self.stdout.write(
             f"Transaction status={tx.status}, callback_received={tx.callback_received}"
         )
-        self.stdout.write(
-            f"Order paid={order.paid}, payment_status={order.payment_status}"
-        )
+        self.stdout.write(f"Order paid={order.paid}, payment_status={order.payment_status}")
 
         # if options["send_drone"] and status == "success":
-         
+
+
 # from django.core.management.base import BaseCommand, CommandError
 # from django.conf import settings
 # from django.test import Client
@@ -201,4 +197,3 @@ class Command(BaseCommand):
 #             )
 #         except Transaction.DoesNotExist:
 #             self.stdout.write(self.style.ERROR("Transaction not found after replay."))
-

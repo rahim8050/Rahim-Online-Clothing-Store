@@ -1,12 +1,12 @@
-from rest_framework import permissions
+from drf_spectacular.utils import extend_schema
+from rest_framework import permissions, serializers
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework import serializers
-from drf_spectacular.utils import extend_schema
 
 try:
     from apis.serializers import WhoAmISerializer as _WhoAmISerializer  # reuse existing serializer
 except Exception:  # pragma: no cover
+
     class _WhoAmISerializer(serializers.Serializer):  # minimal fallback for docs
         id = serializers.IntegerField()
         email = serializers.EmailField(allow_null=True, required=False)
@@ -24,4 +24,3 @@ class MeV1View(APIView):
         except Exception:
             # fallback shape
             return Response({"id": request.user.id, "email": request.user.email})
-

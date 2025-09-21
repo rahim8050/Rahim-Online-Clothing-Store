@@ -16,4 +16,3 @@ describe('sanitize', () => {
     expect(clean).toContain('href="#"');
   });
 });
-

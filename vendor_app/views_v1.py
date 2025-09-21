@@ -1,40 +1,40 @@
 from __future__ import annotations
 
-from typing import Any
-
 from django.db import transaction
 from django.db.models import QuerySet
+from drf_spectacular.utils import OpenApiExample, extend_schema, extend_schema_view
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from .models import VendorMember, VendorOrg
-from .permissions import IsInOrg, IsOrgManager, IsOrgOwner, IsOrgStaff
-from .serializers_v1 import InviteSerializer, MemberSerializer, OrgSerializer
-from .selectors import org_scoped_queryset, get_kpis, get_realtime
-from drf_spectacular.utils import extend_schema, OpenApiExample, extend_schema_view
-from .permissions import IsOrgManager
-from .throttling import VendorOrgScopedRateThrottle
-
-from product_app.models import Product
-from product_app.serializers_v1 import ProductV1Serializer
 from orders.models import Order, OrderItem
 from orders.serializers_v1 import OrderV1Serializer
+from product_app.models import Product
+from product_app.serializers_v1 import ProductV1Serializer
+
+from .models import VendorMember, VendorOrg
+from .permissions import IsInOrg, IsOrgManager, IsOrgStaff
+from .selectors import get_kpis, get_realtime, org_scoped_queryset
+from .serializers_v1 import InviteSerializer, MemberSerializer, OrgSerializer
+from .throttling import VendorOrgScopedRateThrottle
 
 try:
     # Optional: enrich OpenAPI with tags/operation summaries
     from drf_spectacular.utils import extend_schema, extend_schema_view
 except Exception:  # pragma: no cover - spectacular may be absent in some envs
+
     def extend_schema(*args, **kwargs):  # type: ignore
         def deco(func):
             return func
+
         return deco
 
     def extend_schema_view(**kwargs):  # type: ignore
         def deco(cls):
             return cls
+
         return deco
 
 
@@ -133,10 +133,20 @@ class OrgViewSet(viewsets.ModelViewSet):
         summary="List KPI aggregates",
         examples=[
             OpenApiExample(
-                'KPIs Response',
+                "KPIs Response",
                 value={
                     "results": [
-                        {"period_start": "2025-09-01", "period_end": "2025-09-01", "window": "daily", "gross_revenue": "1000.00", "net_revenue": "950.00", "orders": 10, "refunds": 1, "success_rate": "90.00", "fulfillment_avg_mins": "45.00"}
+                        {
+                            "period_start": "2025-09-01",
+                            "period_end": "2025-09-01",
+                            "window": "daily",
+                            "gross_revenue": "1000.00",
+                            "net_revenue": "950.00",
+                            "orders": 10,
+                            "refunds": 1,
+                            "success_rate": "90.00",
+                            "fulfillment_avg_mins": "45.00",
+                        }
                     ]
                 },
                 response_only=True,
@@ -146,6 +156,7 @@ class OrgViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["get"], url_path="kpis")
     def kpis(self, request, pk=None):
         from django.conf import settings
+
         if not getattr(settings, "KPIS_ENABLED", False):
             return Response({"detail": "KPIs disabled"}, status=status.HTTP_404_NOT_FOUND)
         # OWNER/MANAGER only
@@ -175,8 +186,13 @@ class OrgViewSet(viewsets.ModelViewSet):
         summary="Realtime KPI snapshot",
         examples=[
             OpenApiExample(
-                'Realtime Snapshot',
-                value={"gross_revenue": "100.00", "net_revenue": "95.00", "orders": 1, "refunds": 0},
+                "Realtime Snapshot",
+                value={
+                    "gross_revenue": "100.00",
+                    "net_revenue": "95.00",
+                    "orders": 1,
+                    "refunds": 0,
+                },
                 response_only=True,
             )
         ],
@@ -184,13 +200,14 @@ class OrgViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["get"], url_path="kpis/realtime")
     def kpis_realtime(self, request, pk=None):
         from django.conf import settings
+
         if not getattr(settings, "KPIS_ENABLED", False):
             return Response({"detail": "KPIs disabled"}, status=status.HTTP_404_NOT_FOUND)
         if not IsOrgManager().has_permission(request, self):
             return Response({"detail": "Forbidden"}, status=status.HTTP_403_FORBIDDEN)
         snap = get_realtime(int(pk))
         # serialize decimals as strings
-        snap = {k: (str(v) if hasattr(v, 'quantize') else v) for k, v in snap.items()}
+        snap = {k: (str(v) if hasattr(v, "quantize") else v) for k, v in snap.items()}
         return Response(snap)
 
 
@@ -207,9 +224,11 @@ class MemberViewSet(mixins.DestroyModelMixin, mixins.RetrieveModelMixin, viewset
         user = self.request.user
         if not user.is_authenticated:
             return VendorMember.objects.none()
-        return VendorMember.objects.filter(
-            org__members__user=user, org__members__is_active=True
-        ).select_related("org", "user").order_by("id")
+        return (
+            VendorMember.objects.filter(org__members__user=user, org__members__is_active=True)
+            .select_related("org", "user")
+            .order_by("id")
+        )
 
     def destroy(self, request, *args, **kwargs):  # soft-deactivate
         member: VendorMember = self.get_object()
@@ -224,7 +243,9 @@ class MemberViewSet(mixins.DestroyModelMixin, mixins.RetrieveModelMixin, viewset
 
         if member.role == VendorMember.Role.OWNER:
             # Disallow deactivating the sole owner
-            return Response({"detail": "Cannot deactivate an OWNER."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"detail": "Cannot deactivate an OWNER."}, status=status.HTTP_400_BAD_REQUEST
+            )
 
         member.is_active = False
         member.save(update_fields=["is_active", "updated_at"])

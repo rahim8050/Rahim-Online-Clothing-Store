@@ -1,13 +1,13 @@
 from decimal import Decimal
 from unittest.mock import patch
 
+from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 from django.urls import reverse
-from django.contrib.auth import get_user_model
 
-from product_app.models import Category, Product
 from cart.models import Cart, CartItem
 from orders.models import Order
+from product_app.models import Category, Product
 
 
 class CheckoutDestinationTests(TestCase):
@@ -38,15 +38,18 @@ class CheckoutDestinationTests(TestCase):
         self.assertEqual(Order.objects.count(), 0)
 
     def test_post_with_valid_coords(self):
-        resp = self.client.post(reverse("orders:order_create"), {
-            "full_name": "F",
-            "email": "e@e.com",
-            "address": "Umoja",
-            "payment_method": "card",
-            "dest_address_text": "Umoja",
-            "dest_lat": "1.0",
-            "dest_lng": "36.8",
-        })
+        resp = self.client.post(
+            reverse("orders:order_create"),
+            {
+                "full_name": "F",
+                "email": "e@e.com",
+                "address": "Umoja",
+                "payment_method": "card",
+                "dest_address_text": "Umoja",
+                "dest_lat": "1.0",
+                "dest_lng": "36.8",
+            },
+        )
         self.assertEqual(resp.status_code, 302)
         self.assertEqual(Order.objects.count(), 1)
         order = Order.objects.first()
@@ -64,7 +67,9 @@ class GeoAutocompleteViewTests(TestCase):
         mock_get.return_value.json.return_value = {
             "results": [{"formatted": "Umoja", "lat": 1, "lon": 2}]
         }
-        resp = self.client.get(reverse("orders:geo-autocomplete"), {"q": "Umo"}, REMOTE_ADDR="1.1.1.1")
+        resp = self.client.get(
+            reverse("orders:geo-autocomplete"), {"q": "Umo"}, REMOTE_ADDR="1.1.1.1"
+        )
         self.assertEqual(resp.status_code, 200)
         self.assertIn("results", resp.json())
         mock_get.assert_called_once()

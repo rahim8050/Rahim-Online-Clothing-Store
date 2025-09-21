@@ -29,4 +29,3 @@ celery -A Rahim_Online_ClothesStore worker -l info -Q default
 ## OpenAPI Docs
 - Served at `/apis/v1/docs/`.
 - Schema at `/apis/v1/schema/`.
-

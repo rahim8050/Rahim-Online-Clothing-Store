@@ -44,4 +44,3 @@ Throttle: `VendorOrgScopedRateThrottle` (scope `vendor.org`, configure rates in 
 ## Notes
 - Legacy vendor endpoints remain as-is. New v1 endpoints are additive.
 - VendorProfile.org is non-null after backfill migrations; `vendor_app` migrations include backfill steps.
-

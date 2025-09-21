@@ -1,11 +1,12 @@
 from django.db import transaction
 from django.shortcuts import get_object_or_404
-from rest_framework import permissions, viewsets, decorators, status
+from rest_framework import decorators, permissions, status, viewsets
 from rest_framework.response import Response
 
-from .models import Order, OrderItem
-from .serializers_v1 import OrderV1Serializer, CheckoutV1Serializer
 from cart.models import Cart, CartItem
+
+from .models import Order, OrderItem
+from .serializers_v1 import CheckoutV1Serializer, OrderV1Serializer
 
 
 class OrderV1ViewSet(viewsets.ReadOnlyModelViewSet):
@@ -33,7 +34,9 @@ class OrderV1ViewSet(viewsets.ReadOnlyModelViewSet):
         if not u.is_authenticated:
             return Response({"detail": "Authentication required."}, status=401)
 
-        cart = get_object_or_404(Cart.objects.prefetch_related("items__product"), pk=data["cart_id"]) 
+        cart = get_object_or_404(
+            Cart.objects.prefetch_related("items__product"), pk=data["cart_id"]
+        )
         if not cart.items.exists():
             return Response({"detail": "Cart is empty."}, status=400)
 
@@ -51,17 +54,18 @@ class OrderV1ViewSet(viewsets.ReadOnlyModelViewSet):
         items = []
         for item in cart.items.select_related("product"):
             p = item.product
-            items.append(OrderItem(
-                order=order,
-                product=p,
-                product_version=getattr(p, "product_version", 1),
-                price=p.price,
-                quantity=item.quantity,
-            ))
+            items.append(
+                OrderItem(
+                    order=order,
+                    product=p,
+                    product_version=getattr(p, "product_version", 1),
+                    price=p.price,
+                    quantity=item.quantity,
+                )
+            )
         OrderItem.objects.bulk_create(items)
 
         # Deactivate cart by clearing items
         CartItem.objects.filter(cart=cart).delete()
 
         return Response(OrderV1Serializer(order).data, status=status.HTTP_201_CREATED)
-

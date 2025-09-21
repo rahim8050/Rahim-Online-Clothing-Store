@@ -1,12 +1,11 @@
-import pytest
 from decimal import Decimal
 
+import pytest
 from django.contrib.auth import get_user_model
 
-from vendor_app.models import VendorOrg, VendorMember, VendorProfile
 from invoicing.models import Invoice, InvoiceLine
 from orders.models import Order
-
+from vendor_app.models import VendorMember, VendorOrg, VendorProfile
 
 pytestmark = pytest.mark.django_db
 
@@ -41,8 +40,22 @@ def test_invoice_totals_consistency():
     org = mk_org()
     order = mk_order()
     inv = Invoice.objects.create(org=org, order=order, buyer_name="Buyer")
-    InvoiceLine.objects.create(invoice=inv, sku="SKU1", name="Item 1", qty=Decimal("2"), unit_price=Decimal("10.00"), tax_rate=Decimal("0.16"))
-    InvoiceLine.objects.create(invoice=inv, sku="SKU2", name="Item 2", qty=Decimal("1"), unit_price=Decimal("5.00"), tax_rate=Decimal("0.16"))
+    InvoiceLine.objects.create(
+        invoice=inv,
+        sku="SKU1",
+        name="Item 1",
+        qty=Decimal("2"),
+        unit_price=Decimal("10.00"),
+        tax_rate=Decimal("0.16"),
+    )
+    InvoiceLine.objects.create(
+        invoice=inv,
+        sku="SKU2",
+        name="Item 2",
+        qty=Decimal("1"),
+        unit_price=Decimal("5.00"),
+        tax_rate=Decimal("0.16"),
+    )
     inv.save()  # recompute totals
     inv.refresh_from_db()
     assert str(inv.subtotal) == "25.00"
@@ -52,6 +65,7 @@ def test_invoice_totals_consistency():
 
 def test_unique_invoice_per_order():
     import django.db
+
     org = mk_org()
     order = mk_order()
     Invoice.objects.create(org=org, order=order, buyer_name="B")
@@ -63,6 +77,13 @@ def test_line_calculation_quantization():
     org = mk_org()
     order = mk_order()
     inv = Invoice.objects.create(org=org, order=order, buyer_name="Buyer")
-    line = InvoiceLine.objects.create(invoice=inv, sku="SKU3", name="Item 3", qty=Decimal("1"), unit_price=Decimal("99.995"), tax_rate=Decimal("0.1600"))
+    line = InvoiceLine.objects.create(
+        invoice=inv,
+        sku="SKU3",
+        name="Item 3",
+        qty=Decimal("1"),
+        unit_price=Decimal("99.995"),
+        tax_rate=Decimal("0.1600"),
+    )
     assert str(line.line_total) == "100.00"
     assert str(line.tax_total) == "16.00"

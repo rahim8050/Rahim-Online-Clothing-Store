@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from decimal import Decimal
+
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 
@@ -33,4 +33,3 @@ def check_low_stock_and_notify(product) -> None:
         owner_id = getattr(product, "owner_id", None)
         if owner_id:
             _publish_vendor(owner_id, "inventory.low_stock", {"rid": product.id})
-

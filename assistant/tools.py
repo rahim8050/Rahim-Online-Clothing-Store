@@ -1,15 +1,14 @@
 import re
 from dataclasses import asdict, is_dataclass
-from decimal import Decimal
-from typing import Any, Iterable
+from typing import Any
 
 from django.apps import apps
 from django.utils import timezone
 
-from orders.utils import derive_ui_payment_status
 from orders.models import Order, OrderItem
-from .models import ToolCallLog, ChatSession
+from orders.utils import derive_ui_payment_status
 
+from .models import ChatSession, ToolCallLog
 
 EMAIL_RE = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b", re.I)
 PHONE_RE = re.compile(r"\b(?:\+?\d[\d\s().-]{7,}\d)\b")
@@ -71,7 +70,7 @@ def _redact_args(v: Any) -> Any:
     if isinstance(v, dict):
         return {k: _redact_args(val) for k, val in v.items()}
     if isinstance(v, (list, tuple, set)):
-        return [ _redact_args(x) for x in v ]
+        return [_redact_args(x) for x in v]
     if is_dataclass(v):
         return _redact_args(asdict(v))
     return v
@@ -113,14 +112,20 @@ def list_orders_table(user, limit: int = 10) -> dict:
     """Structured table for recent orders used by the new ChatPanel.
     Columns: [#, Order Code, Status, Item]
     """
-    qs = Order.objects.filter(user=user).order_by("-created_at").only("id", "paid", "payment_status")[: max(1, min(50, int(limit)))]
+    qs = (
+        Order.objects.filter(user=user)
+        .order_by("-created_at")
+        .only("id", "paid", "payment_status")[: max(1, min(50, int(limit)))]
+    )
     ids = [o.id for o in qs]
     first_items = {
         it["order_id"]: it
-        for it in (OrderItem.objects.filter(order_id__in=ids)
-                   .select_related("product")
-                   .values("order_id", "product__name", "quantity")
-                   .order_by("order_id", "id"))
+        for it in (
+            OrderItem.objects.filter(order_id__in=ids)
+            .select_related("product")
+            .values("order_id", "product__name", "quantity")
+            .order_by("order_id", "id")
+        )
     }
     rows = []
     for o in qs:
@@ -132,8 +137,9 @@ def list_orders_table(user, limit: int = 10) -> dict:
         "title": "Recent orders",
         "columns": ["#", "Order Code", "Status", "Item"],
         "rows": rows,
-        "footnote": f"Showing latest {len(rows)}."
+        "footnote": f"Showing latest {len(rows)}.",
     }
+
 
 # Minimal routing fallback for tests/new UI
 def route_message(msg: str, persona: str = "customer", user=None) -> str:
@@ -151,7 +157,9 @@ def order_status(user, token: str, session: ChatSession | None = None) -> str:
     total = getattr(o, "get_total_cost", None)
     total_val = total() if callable(total) else "-"
     status = derive_ui_payment_status(o)
-    return redact(f"Order {_order_number(o)}: status={status}, total={total_val}, placed={_fmt_dt(o.created_at)}.")
+    return redact(
+        f"Order {_order_number(o)}: status={status}, total={total_val}, placed={_fmt_dt(o.created_at)}."
+    )
 
 
 def payment_status(user, token: str, session: ChatSession | None = None) -> str:
@@ -195,4 +203,3 @@ FAQS = {
 def faq(key: str, session: ChatSession | None = None) -> str:
     _log(session, "faq", {"key": key})
     return redact(FAQS.get(key, "I can help with shipping and returns."))
-

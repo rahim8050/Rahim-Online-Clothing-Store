@@ -1,9 +1,11 @@
-from django.core.management.base import BaseCommand
-from django.utils import timezone
 from datetime import timedelta
-from orders.models import Transaction
+
 import requests
 from django.conf import settings
+from django.core.management.base import BaseCommand
+from django.utils import timezone
+
+from orders.models import Transaction
 
 
 class Command(BaseCommand):
@@ -13,9 +15,7 @@ class Command(BaseCommand):
         cutoff_time = timezone.now() - timedelta(minutes=15)
 
         stale_transactions = Transaction.objects.filter(
-            status='unknown',
-            callback_received=False,
-            created_at__lt=cutoff_time
+            status="unknown", callback_received=False, created_at__lt=cutoff_time
         )
 
         for tx in stale_transactions:
@@ -37,11 +37,9 @@ class Command(BaseCommand):
                 tx.save()
 
                 self.stdout.write(
-                    self.style.SUCCESS(
-                        f"[✓] Verified {tx.reference} → {tx.status.upper()}"
-                    )
+                    self.style.SUCCESS(f"[✓] Verified {tx.reference} → {tx.status.upper()}")
                 )
             except Exception as e:
-                self.stdout.write(self.style.WARNING(
-                    f"[!] Could not verify {tx.reference}: {str(e)}"
-                ))
+                self.stdout.write(
+                    self.style.WARNING(f"[!] Could not verify {tx.reference}: {str(e)}")
+                )

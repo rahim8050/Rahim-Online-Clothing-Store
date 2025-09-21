@@ -1,8 +1,9 @@
 # users/management/commands/sync_roles.py
-from django.core.management.base import BaseCommand
 from django.contrib.auth.models import Group, Permission
+from django.core.management.base import BaseCommand
 from django.db import transaction
-from users.constants import ALL_GROUPS, VENDOR, VENDOR_STAFF, DRIVER, ADMIN, CUSTOMER
+
+from users.constants import ADMIN, ALL_GROUPS, CUSTOMER, DRIVER, VENDOR, VENDOR_STAFF
 
 ROLE_PERMS = {
     ADMIN: ["add_user", "change_user", "delete_user", "view_user"],
@@ -29,7 +30,7 @@ def sync_roles(dry_run: bool = False, stdout=None):
 
             perms = list(Permission.objects.filter(codename__in=wanted))
             found = {p.codename for p in perms}
-            missing |= (wanted - found)
+            missing |= wanted - found
 
             if not dry_run:
                 group.permissions.set(perms)  # idempotent
@@ -68,4 +69,6 @@ class Command(BaseCommand):
         tag = "DRY-RUN " if options["dry_run"] else ""
         self.stdout.write(self.style.SUCCESS(f"{tag}Processed {processed} groups"))
         if missing:
-            self.stdout.write(self.style.WARNING(f"Missing permission codenames: {', '.join(missing)}"))
+            self.stdout.write(
+                self.style.WARNING(f"Missing permission codenames: {', '.join(missing)}")
+            )

@@ -1,9 +1,10 @@
 import pytest
-from django.contrib.auth.models import Group
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
+
 from users.constants import VENDOR_STAFF
-from users.services import deactivate_vendor_staff
 from users.models import VendorStaff
+from users.services import deactivate_vendor_staff
 
 
 @pytest.fixture

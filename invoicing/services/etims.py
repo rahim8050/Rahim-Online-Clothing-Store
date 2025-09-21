@@ -1,32 +1,34 @@
 from __future__ import annotations
 
-import uuid
-from dataclasses import dataclass
 import logging
 import time
-from django.utils.module_loading import import_string
-from typing import Any, Dict
+import uuid
+from dataclasses import dataclass
+from typing import Any
 
 from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
+from django.utils.module_loading import import_string
 
-from payments.idempotency import idempotent
-from invoicing.models import Invoice
-from vendor_app.models import VendorOrg
 from core import metrics
+from invoicing.models import Invoice
+from payments.idempotency import idempotent
+from vendor_app.models import VendorOrg
 
 
 @dataclass
 class EtimsResult:
     status: str
     irn: str | None = None
-    errors: Dict[str, Any] | None = None
+    errors: dict[str, Any] | None = None
 
 
 class EtimsClient:
     def __init__(self, base_url: str | None = None, api_key: str | None = None) -> None:
-        self.base_url = base_url or getattr(settings, "ETIMS_BASE_URL", "https://sandbox.etims.local")
+        self.base_url = base_url or getattr(
+            settings, "ETIMS_BASE_URL", "https://sandbox.etims.local"
+        )
         self.api_key = api_key or getattr(settings, "ETIMS_API_KEY", None)
 
     def submit_invoice(self, invoice: Invoice) -> EtimsResult:  # pragma: no cover - abstract
@@ -45,7 +47,9 @@ class SandboxEtimsClient(EtimsClient):
 
 def get_client() -> EtimsClient:
     # For now always sandbox; wire toggle via settings if needed later
-    cls_path = getattr(settings, "ETIMS_CLIENT_CLASS", "invoicing.services.etims.SandboxEtimsClient")
+    cls_path = getattr(
+        settings, "ETIMS_CLIENT_CLASS", "invoicing.services.etims.SandboxEtimsClient"
+    )
     try:
         cls = import_string(cls_path)
         return cls()
@@ -131,7 +135,11 @@ def submit_invoice(*, invoice: Invoice, idempotency_key: str | None = None) -> E
             return EtimsResult(status="accepted", irn=invoice.irn or None)
 
         # Move to SUBMITTED if still draft/rejected
-        if invoice.status in {Invoice.Status.DRAFT, Invoice.Status.REJECTED, Invoice.Status.SUBMITTED}:
+        if invoice.status in {
+            Invoice.Status.DRAFT,
+            Invoice.Status.REJECTED,
+            Invoice.Status.SUBMITTED,
+        }:
             invoice.status = Invoice.Status.SUBMITTED
             invoice.submitted_at = invoice.submitted_at or timezone.now()
             invoice.save(update_fields=["status", "submitted_at", "updated_at"])

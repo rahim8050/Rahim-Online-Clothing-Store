@@ -1,6 +1,5 @@
 import logging
 import time
-from typing import Optional, Tuple
 
 import httpx
 from django.conf import settings
@@ -15,7 +14,7 @@ def _client() -> httpx.Client:
     return httpx.Client(timeout=settings.GEOCODING_TIMEOUT, follow_redirects=False)
 
 
-def _geocode_geoapify(address: str) -> Optional[Tuple[float, float]]:
+def _geocode_geoapify(address: str) -> tuple[float, float] | None:
     api_key = getattr(settings, "GEOAPIFY_API_KEY", "")
     if not api_key:
         return None
@@ -59,7 +58,7 @@ def _geocode_geoapify(address: str) -> Optional[Tuple[float, float]]:
     return None
 
 
-def _geocode_nominatim(address: str) -> Optional[Tuple[float, float]]:
+def _geocode_nominatim(address: str) -> tuple[float, float] | None:
     params = {"q": address, "format": "json", "limit": 1}
     headers = {"User-Agent": settings.GEOCODING_USER_AGENT}
     for attempt in range(2):
@@ -90,7 +89,7 @@ def _geocode_nominatim(address: str) -> Optional[Tuple[float, float]]:
     return None
 
 
-def geocode_address(address: str) -> Optional[Tuple[float, float]]:
+def geocode_address(address: str) -> tuple[float, float] | None:
     """Return (lat, lon) for address or None."""
     coords = _geocode_geoapify(address)
     if coords:

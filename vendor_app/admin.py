@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import VendorOrg, VendorMember, VendorProfile, VendorOrgAuditLog, VendorKPI
+from .models import VendorKPI, VendorMember, VendorOrg, VendorOrgAuditLog, VendorProfile
 
 
 @admin.register(VendorOrg)
@@ -34,6 +34,15 @@ class VendorOrgAuditLogAdmin(admin.ModelAdmin):
 
 @admin.register(VendorKPI)
 class VendorKPIAdmin(admin.ModelAdmin):
-    list_display = ("org", "window", "period_start", "gross_revenue", "net_revenue", "orders", "refunds", "success_rate")
+    list_display = (
+        "org",
+        "window",
+        "period_start",
+        "gross_revenue",
+        "net_revenue",
+        "orders",
+        "refunds",
+        "success_rate",
+    )
     list_filter = ("window", "org")
     search_fields = ("org__slug",)

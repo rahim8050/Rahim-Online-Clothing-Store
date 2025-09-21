@@ -1,8 +1,9 @@
 # users/services.py
-from django.db import transaction
 from django.contrib.auth.models import Group
-from users.models import VendorStaff  # your model lives here
+from django.db import transaction
+
 from users.constants import VENDOR_STAFF as GROUP_VENDOR_STAFF
+from users.models import VendorStaff  # your model lives here
 
 
 @transaction.atomic
@@ -11,10 +12,8 @@ def add_or_activate_staff(owner, staff, role="staff"):
     Idempotent: exactly one row per (owner, staff).
     If it exists => activate + update role; else create active row.
     """
-    row, created = (
-        VendorStaff.objects
-        .select_for_update()
-        .get_or_create(owner=owner, staff=staff, defaults={"role": role, "is_active": True})
+    row, created = VendorStaff.objects.select_for_update().get_or_create(
+        owner=owner, staff=staff, defaults={"role": role, "is_active": True}
     )
     if not created:
         update_fields = []
@@ -38,11 +37,7 @@ def add_or_activate_staff(owner, staff, role="staff"):
 
 @transaction.atomic
 def deactivate_staff(owner, staff):
-    row = (
-        VendorStaff.objects
-        .select_for_update()
-        .get(owner=owner, staff=staff)
-    )
+    row = VendorStaff.objects.select_for_update().get(owner=owner, staff=staff)
     if row.is_active:
         row.is_active = False
         row.save(update_fields=["is_active"])
@@ -55,6 +50,7 @@ def deactivate_staff(owner, staff):
     except Exception:
         pass
     return row
+
 
 @transaction.atomic
 def activate_vendor_staff(staff, owner_id):
@@ -71,6 +67,7 @@ def activate_vendor_staff(staff, owner_id):
     except Exception:
         pass
     return row
+
 
 @transaction.atomic
 def deactivate_vendor_staff(staff_or_membership, owner_id=None):
@@ -96,4 +93,3 @@ def deactivate_vendor_staff(staff_or_membership, owner_id=None):
     except Exception:
         pass
     return row
-

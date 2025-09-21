@@ -1,16 +1,14 @@
 from django.db import transaction
 from django.db.models import F
 from django.shortcuts import get_object_or_404
-from rest_framework import permissions, mixins, viewsets, decorators, status
+from rest_framework import decorators, mixins, permissions, viewsets
 from rest_framework.response import Response
 
 from .models import Cart, CartItem
-from .serializers_v2 import CartSerializer, CartItemWriteSerializer
+from .serializers_v2 import CartItemWriteSerializer, CartSerializer
 
 
-class CartViewSet(mixins.ListModelMixin,
-                  mixins.RetrieveModelMixin,
-                  viewsets.GenericViewSet):
+class CartViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet):
     """Cart v2 API with strong ownership and safe concurrency.
 
     All endpoints require authentication and only expose the caller's carts.
@@ -27,10 +25,11 @@ class CartViewSet(mixins.ListModelMixin,
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        return (Cart.objects
-                .filter(user=self.request.user)
-                .prefetch_related("items__product")
-                .order_by("-updated_at"))
+        return (
+            Cart.objects.filter(user=self.request.user)
+            .prefetch_related("items__product")
+            .order_by("-updated_at")
+        )
 
     @decorators.action(detail=False, methods=["get"], url_path="my/active")
     @transaction.atomic
@@ -52,6 +51,7 @@ class CartViewSet(mixins.ListModelMixin,
             raise_response = Response({"detail": "Cart is not active."}, status=400)
             # Raise via DRF shortcut
             from rest_framework.exceptions import ValidationError
+
             raise ValidationError({"status": "Cart is not active."})
         return cart
 
@@ -93,7 +93,11 @@ class CartViewSet(mixins.ListModelMixin,
         # Lock item row and set exact quantity
         item = get_object_or_404(CartItem.objects.select_for_update(), pk=item_id, cart=cart)
         item.quantity = qty
-        item.save(update_fields=["quantity", "updated_at"] if hasattr(item, "updated_at") else ["quantity"])
+        item.save(
+            update_fields=(
+                ["quantity", "updated_at"] if hasattr(item, "updated_at") else ["quantity"]
+            )
+        )
         return Response(CartSerializer(cart).data)
 
     @decorators.action(detail=True, methods=["post"], url_path="remove_item")
@@ -112,4 +116,3 @@ class CartViewSet(mixins.ListModelMixin,
         cart = self._ensure_active_owned(request, pk)
         CartItem.objects.filter(cart=cart).delete()
         return Response({"cleared": True})
-

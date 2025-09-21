@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Callable
 from functools import wraps
-from typing import Callable, Optional
 
 from django.db import transaction
 
-from .models import IdempotencyKey, AuditLog
+from .models import AuditLog, IdempotencyKey
 
 
 def body_sha256(data: bytes) -> str:
@@ -24,7 +24,7 @@ def idempotent(scope: str) -> Callable:
     def deco(func: Callable) -> Callable:
         @wraps(func)
         def wrapper(*args, **kwargs):
-            key: Optional[str] = kwargs.pop("idempotency_key", None)
+            key: str | None = kwargs.pop("idempotency_key", None)
             request = kwargs.get("request")
             if key is None and request is not None:
                 key = request.META.get("HTTP_X_IDEMPOTENCY_KEY")
@@ -61,7 +61,7 @@ def idempotent(scope: str) -> Callable:
     return deco
 
 
-def accept_once(*, scope: str, request=None, key: Optional[str] = None) -> bool:
+def accept_once(*, scope: str, request=None, key: str | None = None) -> bool:
     """Return True if this (scope,key) is accepted for first processing.
 
     - If key not given, derive as SHA256 of raw request.body
@@ -77,5 +77,9 @@ def accept_once(*, scope: str, request=None, key: Optional[str] = None) -> bool:
     with transaction.atomic():
         _, created = IdempotencyKey.objects.select_for_update().get_or_create(scope=scope, key=key)
         if not created:
-            AuditLog.log(event="IDEMPOTENT_REPLAY", request_id=getattr(request, "request_id", ""), message=f"{scope}:{key}")
+            AuditLog.log(
+                event="IDEMPOTENT_REPLAY",
+                request_id=getattr(request, "request_id", ""),
+                message=f"{scope}:{key}",
+            )
         return created

@@ -8,81 +8,149 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('orders', '0006_rename_orders_paym_provider_ref_idx_orders_paym_provide_95adf4_idx'),
+        ("orders", "0006_rename_orders_paym_provider_ref_idx_orders_paym_provide_95adf4_idx"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
     operations = [
         migrations.RemoveConstraint(
-            model_name='delivery',
-            name='delivery_dest_lat_range',
+            model_name="delivery",
+            name="delivery_dest_lat_range",
         ),
         migrations.RemoveConstraint(
-            model_name='delivery',
-            name='delivery_dest_lng_range',
+            model_name="delivery",
+            name="delivery_dest_lng_range",
         ),
         migrations.AlterField(
-            model_name='delivery',
-            name='dest_lat',
-            field=models.DecimalField(blank=True, decimal_places=6, max_digits=9, null=True, validators=[django.core.validators.MinValueValidator(-90), django.core.validators.MaxValueValidator(90)]),
+            model_name="delivery",
+            name="dest_lat",
+            field=models.DecimalField(
+                blank=True,
+                decimal_places=6,
+                max_digits=9,
+                null=True,
+                validators=[
+                    django.core.validators.MinValueValidator(-90),
+                    django.core.validators.MaxValueValidator(90),
+                ],
+            ),
         ),
         migrations.AlterField(
-            model_name='delivery',
-            name='dest_lng',
-            field=models.DecimalField(blank=True, decimal_places=6, max_digits=9, null=True, validators=[django.core.validators.MinValueValidator(-180), django.core.validators.MaxValueValidator(180)]),
+            model_name="delivery",
+            name="dest_lng",
+            field=models.DecimalField(
+                blank=True,
+                decimal_places=6,
+                max_digits=9,
+                null=True,
+                validators=[
+                    django.core.validators.MinValueValidator(-180),
+                    django.core.validators.MaxValueValidator(180),
+                ],
+            ),
         ),
         migrations.AlterField(
-            model_name='delivery',
-            name='last_lat',
-            field=models.DecimalField(blank=True, decimal_places=6, max_digits=9, null=True, validators=[django.core.validators.MinValueValidator(-90), django.core.validators.MaxValueValidator(90)]),
+            model_name="delivery",
+            name="last_lat",
+            field=models.DecimalField(
+                blank=True,
+                decimal_places=6,
+                max_digits=9,
+                null=True,
+                validators=[
+                    django.core.validators.MinValueValidator(-90),
+                    django.core.validators.MaxValueValidator(90),
+                ],
+            ),
         ),
         migrations.AlterField(
-            model_name='delivery',
-            name='last_lng',
-            field=models.DecimalField(blank=True, decimal_places=6, max_digits=9, null=True, validators=[django.core.validators.MinValueValidator(-180), django.core.validators.MaxValueValidator(180)]),
+            model_name="delivery",
+            name="last_lng",
+            field=models.DecimalField(
+                blank=True,
+                decimal_places=6,
+                max_digits=9,
+                null=True,
+                validators=[
+                    django.core.validators.MinValueValidator(-180),
+                    django.core.validators.MaxValueValidator(180),
+                ],
+            ),
         ),
         migrations.AlterField(
-            model_name='delivery',
-            name='origin_lat',
-            field=models.DecimalField(blank=True, decimal_places=6, max_digits=9, null=True, validators=[django.core.validators.MinValueValidator(-90), django.core.validators.MaxValueValidator(90)]),
+            model_name="delivery",
+            name="origin_lat",
+            field=models.DecimalField(
+                blank=True,
+                decimal_places=6,
+                max_digits=9,
+                null=True,
+                validators=[
+                    django.core.validators.MinValueValidator(-90),
+                    django.core.validators.MaxValueValidator(90),
+                ],
+            ),
         ),
         migrations.AlterField(
-            model_name='delivery',
-            name='origin_lng',
-            field=models.DecimalField(blank=True, decimal_places=6, max_digits=9, null=True, validators=[django.core.validators.MinValueValidator(-180), django.core.validators.MaxValueValidator(180)]),
+            model_name="delivery",
+            name="origin_lng",
+            field=models.DecimalField(
+                blank=True,
+                decimal_places=6,
+                max_digits=9,
+                null=True,
+                validators=[
+                    django.core.validators.MinValueValidator(-180),
+                    django.core.validators.MaxValueValidator(180),
+                ],
+            ),
         ),
         migrations.AlterField(
-            model_name='order',
-            name='latitude',
+            model_name="order",
+            name="latitude",
             field=models.DecimalField(blank=True, decimal_places=6, max_digits=9, null=True),
         ),
         migrations.AlterField(
-            model_name='order',
-            name='longitude',
+            model_name="order",
+            name="longitude",
             field=models.DecimalField(blank=True, decimal_places=6, max_digits=9, null=True),
         ),
         migrations.AddIndex(
-            model_name='delivery',
-            index=models.Index(fields=['created_at'], name='orders_deli_created_1a3ff3_idx'),
+            model_name="delivery",
+            index=models.Index(fields=["created_at"], name="orders_deli_created_1a3ff3_idx"),
         ),
         migrations.AddIndex(
-            model_name='delivery',
-            index=models.Index(fields=['updated_at'], name='orders_deli_updated_53e0ec_idx'),
+            model_name="delivery",
+            index=models.Index(fields=["updated_at"], name="orders_deli_updated_53e0ec_idx"),
         ),
         migrations.AddIndex(
-            model_name='order',
-            index=models.Index(fields=['created_at'], name='orders_orde_created_0e92de_idx'),
+            model_name="order",
+            index=models.Index(fields=["created_at"], name="orders_orde_created_0e92de_idx"),
         ),
         migrations.AddIndex(
-            model_name='order',
-            index=models.Index(fields=['updated_at'], name='orders_orde_updated_94e16c_idx'),
+            model_name="order",
+            index=models.Index(fields=["updated_at"], name="orders_orde_updated_94e16c_idx"),
         ),
         migrations.AddConstraint(
-            model_name='delivery',
-            constraint=models.CheckConstraint(condition=models.Q(('dest_lat__isnull', True), models.Q(('dest_lat__gte', -90), ('dest_lat__lte', 90)), _connector='OR'), name='delivery_dest_lat_range_or_null'),
+            model_name="delivery",
+            constraint=models.CheckConstraint(
+                condition=models.Q(
+                    ("dest_lat__isnull", True),
+                    models.Q(("dest_lat__gte", -90), ("dest_lat__lte", 90)),
+                    _connector="OR",
+                ),
+                name="delivery_dest_lat_range_or_null",
+            ),
         ),
         migrations.AddConstraint(
-            model_name='delivery',
-            constraint=models.CheckConstraint(condition=models.Q(('dest_lng__isnull', True), models.Q(('dest_lng__gte', -180), ('dest_lng__lte', 180)), _connector='OR'), name='delivery_dest_lng_range_or_null'),
+            model_name="delivery",
+            constraint=models.CheckConstraint(
+                condition=models.Q(
+                    ("dest_lng__isnull", True),
+                    models.Q(("dest_lng__gte", -180), ("dest_lng__lte", 180)),
+                    _connector="OR",
+                ),
+                name="delivery_dest_lng_range_or_null",
+            ),
         ),
     ]

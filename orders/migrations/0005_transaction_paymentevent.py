@@ -52,7 +52,9 @@ class Migration(migrations.Migration):
             ],
             options={
                 "indexes": [
-                    models.Index(fields=["provider", "reference"], name="orders_paym_provider_ref_idx")
+                    models.Index(
+                        fields=["provider", "reference"], name="orders_paym_provider_ref_idx"
+                    )
                 ],
             },
         ),

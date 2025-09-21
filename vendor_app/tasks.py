@@ -5,9 +5,10 @@ import logging
 from celery import shared_task
 from django.conf import settings
 
-from .models import VendorOrg
-from .kpi import aggregate_kpis_daily
 from core import metrics
+
+from .kpi import aggregate_kpis_daily
+from .models import VendorOrg
 
 logger = logging.getLogger(__name__)
 
@@ -24,8 +25,7 @@ def aggregate_kpis_daily_all() -> int:
             aggregate_kpis_daily(org_id)
             metrics.inc("kpi_jobs_success", org_id=org_id)
             count += 1
-        except Exception as e:  # pragma: no cover
+        except Exception:  # pragma: no cover
             logger.exception("kpi.error", extra={"org_id": org_id})
             metrics.inc("kpi_jobs_fail", org_id=org_id)
     return count
-

@@ -2,17 +2,24 @@
 Production settings for Rahim_Online_ClothesStore (Render).
 """
 
-from pathlib import Path
-from datetime import timedelta
+import logging
 import os
+from datetime import timedelta
+from pathlib import Path
 
-from django.core.management.utils import get_random_secret_key
-import environ
 import dj_database_url
+import environ
 from django.contrib import messages
+from django.core.management.utils import get_random_secret_key
 from django.db import models
 from django.db.models.functions import Length
 
+# at top of Rahim_Online_ClothesStore/settings.py
+try:
+    from csp.constants import NONCE, SELF  # noqa: F401
+except Exception:
+    NONCE = "'nonce-placeholder'"
+    SELF = "'self'"
 # ---------------------------------------------------------------------
 # Paths / env
 # ---------------------------------------------------------------------
@@ -49,14 +56,22 @@ for _host in REQUIRED_HOSTS:
     if _host not in ALLOWED_HOSTS:
         ALLOWED_HOSTS.append(_host)
 
+
 def _with_scheme(host: str) -> str:
     return host if host.startswith(("http://", "https://")) else f"https://{host}"
 
-CSRF_TRUSTED_ORIGINS = env.list("CSRF_TRUSTED_ORIGINS", default=[_with_scheme(h) for h in ALLOWED_HOSTS])
+
+CSRF_TRUSTED_ORIGINS = env.list(
+    "CSRF_TRUSTED_ORIGINS", default=[_with_scheme(h) for h in ALLOWED_HOSTS]
+)
 if DEBUG:
     CSRF_TRUSTED_ORIGINS += ["https://127.0.0.1:8000", "https://localhost:8000"]
 
-REQUIRED_CSRF_ORIGINS = ["http://127.0.0.1:8000", "http://localhost:8000", "https://codealpa-online-clothesstore.onrender.com"]
+REQUIRED_CSRF_ORIGINS = [
+    "http://127.0.0.1:8000",
+    "http://localhost:8000",
+    "https://codealpa-online-clothesstore.onrender.com",
+]
 for _origin in REQUIRED_CSRF_ORIGINS:
     if _origin not in CSRF_TRUSTED_ORIGINS:
         CSRF_TRUSTED_ORIGINS.append(_origin)
@@ -75,7 +90,6 @@ ASGI_APPLICATION = "Rahim_Online_ClothesStore.asgi.application"
 INSTALLED_APPS = [
     # ASGI server
     "daphne",
-
     # Django core
     "django.contrib.admin",
     "django.contrib.auth",
@@ -85,7 +99,6 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "django.contrib.humanize",
     "django.contrib.sites",
-
     # Third-party
     "channels",
     "csp",
@@ -96,7 +109,6 @@ INSTALLED_APPS = [
     "widget_tweaks",
     "django_daraja",  # M-Pesa SDK
     # "corsheaders",  # <- auto-added below if importable
-
     # First-party apps
     "users.apps.UsersConfig",
     "core",
@@ -105,7 +117,6 @@ INSTALLED_APPS = [
     "product_app",
     "cart.apps.CartConfig",
     "Mpesa",
-    
     "orders.apps.OrdersConfig",
     "payments.apps.PaymentsConfig",
     "apis.apps.ApisConfig",
@@ -117,13 +128,10 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
-
     # CSP early
     "csp.middleware.CSPMiddleware",
-
     # Static
     "whitenoise.middleware.WhiteNoiseMiddleware",
-
     # Standard Django stack
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -131,7 +139,6 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
-
     # Custom
     "core.middleware.PermissionsPolicyMiddleware",
     "core.middleware.RequestIDMiddleware",
@@ -168,6 +175,25 @@ TEMPLATES = [
         },
     },
 ]
+# ---------------------------------------------------------------------
+# Sentry
+# settings.py
+SENTRY_DSN = os.getenv("SENTRY_DSN", "")
+if SENTRY_DSN:
+    try:
+        import sentry_sdk
+        from sentry_sdk.integrations.django import DjangoIntegration
+
+        sentry_sdk.init(
+            dsn=SENTRY_DSN,
+            integrations=[DjangoIntegration()],
+            traces_sample_rate=float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", "0.1")),
+            send_default_pii=True,
+            environment=os.getenv("ENVIRONMENT", "development"),
+        )
+    except Exception as exc:
+        logging.getLogger(__name__).warning("Sentry not initialized: %s", exc)
+
 
 # ---------------------------------------------------------------------
 # Database
@@ -183,11 +209,13 @@ DATABASES = {
 # MySQL options (if used)
 if DATABASES["default"].get("ENGINE") == "django.db.backends.mysql":
     DATABASES["default"].setdefault("OPTIONS", {})
-    DATABASES["default"]["OPTIONS"].update({
-        "init_command": "SET sql_mode='STRICT_TRANS_TABLES', time_zone='+00:00'",
-        "charset": "utf8mb4",
-        "use_unicode": True,
-    })
+    DATABASES["default"]["OPTIONS"].update(
+        {
+            "init_command": "SET sql_mode='STRICT_TRANS_TABLES', time_zone='+00:00'",
+            "charset": "utf8mb4",
+            "use_unicode": True,
+        }
+    )
     DATABASES["default"]["CONN_HEALTH_CHECKS"] = True
 
 # In-tests: in-memory sqlite
@@ -268,6 +296,7 @@ KPIS_ENABLED = env.bool("KPIS_ENABLED", default=bool(DEBUG))
 # Schedule daily Vendor KPI aggregation at 00:30 Africa/Nairobi
 try:
     from celery.schedules import crontab  # type: ignore
+
     _kpi_schedule = crontab(minute=30, hour=0)
 except Exception:  # pragma: no cover
     _kpi_schedule = 24 * 60 * 60  # fallback: every 24h
@@ -304,10 +333,10 @@ SIMPLE_JWT = {
 AUTH_USER_MODEL = "users.CustomUser"
 LOGIN_URL = "/login/"
 LOGIN_REDIRECT_URL = "/dashboard/"
-SITE_ID = int(os.getenv('SITE_ID', 1))
-SITE_DOMAIN = os.getenv('SITE_DOMAIN', '127.0.0.1:8000')
-SITE_SCHEME = os.getenv('SITE_SCHEME', 'https' if IS_PROD else 'http')
-SITE_NAME = os.getenv('SITE_NAME', 'Rahim Online Shop')
+SITE_ID = int(os.getenv("SITE_ID", 1))
+SITE_DOMAIN = os.getenv("SITE_DOMAIN", "127.0.0.1:8000")
+SITE_SCHEME = os.getenv("SITE_SCHEME", "https" if IS_PROD else "http")
+SITE_NAME = os.getenv("SITE_NAME", "Rahim Online Shop")
 
 LOGOUT_REDIRECT_URL = "/accounts/login/"
 
@@ -322,9 +351,9 @@ AUTH_PASSWORD_VALIDATORS = [
 # I18N / Time
 # ---------------------------------------------------------------------
 LANGUAGE_CODE = "en-us"
-TIME_ZONE = "Africa/Nairobi"   # App display timezone
+TIME_ZONE = "Africa/Nairobi"  # App display timezone
 USE_I18N = True
-USE_TZ = True                  # DB stored in UTC
+USE_TZ = True  # DB stored in UTC
 
 # ---------------------------------------------------------------------
 # Static & Media (WhiteNoise)
@@ -337,7 +366,8 @@ STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
     "staticfiles": {
         "BACKEND": (
-            "whitenoise.storage.CompressedManifestStaticFilesStorage" if IS_PROD
+            "whitenoise.storage.CompressedManifestStaticFilesStorage"
+            if IS_PROD
             else "whitenoise.storage.CompressedStaticFilesStorage"
         )
     },
@@ -395,12 +425,16 @@ PAYSTACK_SECRET_KEY = env("PAYSTACK_SECRET_KEY", default=None)
 PAYSTACK_CURRENCY = env("PAYSTACK_CURRENCY", default="KES")
 
 if IS_PROD:
-    missing = [k for k, v in {
-        "PAYSTACK_PUBLIC_KEY": PAYSTACK_PUBLIC_KEY,
-        "PAYSTACK_SECRET_KEY": PAYSTACK_SECRET_KEY,
-        "STRIPE_SECRET_KEY": STRIPE_SECRET_KEY,
-        "STRIPE_WEBHOOK_SECRET": STRIPE_WEBHOOK_SECRET,
-    }.items() if not v]
+    missing = [
+        k
+        for k, v in {
+            "PAYSTACK_PUBLIC_KEY": PAYSTACK_PUBLIC_KEY,
+            "PAYSTACK_SECRET_KEY": PAYSTACK_SECRET_KEY,
+            "STRIPE_SECRET_KEY": STRIPE_SECRET_KEY,
+            "STRIPE_WEBHOOK_SECRET": STRIPE_WEBHOOK_SECRET,
+        }.items()
+        if not v
+    ]
     if missing:
         raise RuntimeError(f"Missing required payment envs: {', '.join(missing)}")
 
@@ -422,6 +456,7 @@ MPESA_EXPRESS_SHORTCODE = env("MPESA_EXPRESS_SHORTCODE", default=None)
 MPESA_SHORTCODE_TYPE = env("MPESA_SHORTCODE_TYPE", default="paybill")
 MPESA_PASSKEY = env("MPESA_PASS_KEY", default=None)
 
+
 # ---------------------------------------------------------------------
 # Email
 # ---------------------------------------------------------------------
@@ -429,9 +464,11 @@ def _env_bool(key: str, default: bool = False) -> bool:
     v = os.getenv(key)
     return default if v is None else str(v).lower() in {"1", "true", "yes", "on"}
 
+
 def _env_str(key: str, default: str = "") -> str:
     v = os.getenv(key, default)
     return (v or "").strip().strip('"').strip("'")
+
 
 EMAIL_BACKEND = _env_str("EMAIL_BACKEND", "django.core.mail.backends.smtp.EmailBackend")
 EMAIL_HOST = _env_str("EMAIL_HOST", "smtp.gmail.com")
@@ -459,7 +496,7 @@ if IS_PROD and EMAIL_BACKEND.endswith("smtp.EmailBackend"):
 # CSP (django-csp)
 # ---------------------------------------------------------------------
 # settings.py
-from csp.constants import SELF, NONCE  # plus NONE/STRICT_DYNAMIC if you need them
+from csp.constants import NONCE, SELF  # plus NONE/STRICT_DYNAMIC if you need them
 
 CONTENT_SECURITY_POLICY = {
     "DIRECTIVES": {
@@ -468,22 +505,40 @@ CONTENT_SECURITY_POLICY = {
         "font-src": [SELF, "https://fonts.gstatic.com", "https://cdnjs.cloudflare.com", "data:"],
         "frame-ancestors": [SELF],
         "frame-src": [
-            "https://js.stripe.com", "https://*.stripe.com",
-            "https://js.paystack.co", "https://*.paystack.co", "https://*.paystack.com",
+            "https://js.stripe.com",
+            "https://*.stripe.com",
+            "https://js.paystack.co",
+            "https://*.paystack.co",
+            "https://*.paystack.com",
         ],
         "img-src": [
-            SELF, "data:", "blob:",
+            SELF,
+            "data:",
+            "blob:",
             "https://res.cloudinary.com",
-            "https://tile.openstreetmap.org", "https://*.tile.openstreetmap.org",
+            "https://tile.openstreetmap.org",
+            "https://*.tile.openstreetmap.org",
         ],
         "script-src": [
-            SELF, NONCE,
-            "https://cdn.tailwindcss.com", "https://cdn.jsdelivr.net", "https://unpkg.com",
+            SELF,
+            NONCE,
+            "https://cdn.tailwindcss.com",
+            "https://cdn.jsdelivr.net",
+            "https://unpkg.com",
             "https://widget.cloudinary.com",
-            "https://js.stripe.com", "https://*.stripe.com",
-            "https://js.paystack.co", "https://*.paystack.co", "https://*.paystack.com",
+            "https://js.stripe.com",
+            "https://*.stripe.com",
+            "https://js.paystack.co",
+            "https://*.paystack.co",
+            "https://*.paystack.com",
         ],
-        "style-src": [SELF, NONCE, "https://cdnjs.cloudflare.com", "https://unpkg.com", "https://fonts.googleapis.com"],
+        "style-src": [
+            SELF,
+            NONCE,
+            "https://cdnjs.cloudflare.com",
+            "https://unpkg.com",
+            "https://fonts.googleapis.com",
+        ],
         # keep this only if you truly need inline style attributes:
         "style-src-attr": ["'unsafe-inline'"],
         "worker-src": [SELF, "blob:"],
@@ -548,4 +603,3 @@ REST_FRAMEWORK = {
         "vendor.org": "60/min",
     },
 }
-

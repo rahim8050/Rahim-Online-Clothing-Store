@@ -1,16 +1,15 @@
 from __future__ import annotations
 
-from typing import Optional
-
 from django.core.exceptions import FieldError
-from django.db.models import Model, QuerySet
+from django.db.models import QuerySet
 
-from .models import VendorOrg
 from .kpi import get_realtime_kpi_snapshot
-from .services import resolve_org_from_request
+from .models import VendorOrg
 
 
-def org_scoped_queryset(qs: QuerySet, *, org: Optional[VendorOrg] = None, org_id: Optional[int] = None) -> QuerySet:
+def org_scoped_queryset(
+    qs: QuerySet, *, org: VendorOrg | None = None, org_id: int | None = None
+) -> QuerySet:
     """Restrict a queryset to a specific org.
 
     Attempts model.org filtering first, then falls back to owner->vendor_profile->org.
@@ -29,10 +28,10 @@ def org_scoped_queryset(qs: QuerySet, *, org: Optional[VendorOrg] = None, org_id
 
 def get_kpis(org_id: int, window: str, last_n: int = 30):
     from .models import VendorKPI
+
     qs = VendorKPI.objects.filter(org_id=org_id, window=window).order_by("-period_start")
-    return qs[: last_n]
+    return qs[:last_n]
 
 
 def get_realtime(org_id: int):
     return get_realtime_kpi_snapshot(org_id)
-

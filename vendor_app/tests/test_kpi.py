@@ -1,13 +1,13 @@
-import pytest
 from decimal import Decimal
+
+import pytest
 from django.contrib.auth import get_user_model
 from rest_framework.test import APIClient
 
-from vendor_app.models import VendorOrg, VendorMember, VendorProfile, VendorKPI
-from vendor_app.kpi import aggregate_kpis_daily, bump_realtime_on_success, get_realtime_kpi_snapshot
-from payments.models import Transaction
 from orders.models import Order
-
+from payments.models import Transaction
+from vendor_app.kpi import aggregate_kpis_daily, bump_realtime_on_success, get_realtime_kpi_snapshot
+from vendor_app.models import VendorMember, VendorOrg, VendorProfile
 
 pytestmark = pytest.mark.django_db
 
@@ -26,7 +26,15 @@ def seed_org():
 
 
 def mk_order_for(user):
-    return Order.objects.create(user=user, full_name="B", email=user.email, address="A", dest_address_text="D", dest_lat=0.1, dest_lng=36.8)
+    return Order.objects.create(
+        user=user,
+        full_name="B",
+        email=user.email,
+        address="A",
+        dest_address_text="D",
+        dest_lat=0.1,
+        dest_lng=36.8,
+    )
 
 
 def test_kpi_daily_aggregation_consistency():
@@ -35,8 +43,24 @@ def test_kpi_daily_aggregation_consistency():
     order = mk_order_for(buyer)
     # record a transaction tied to org
     from django.utils import timezone
-    tx = Transaction.objects.create(order=order, user=buyer, method="card", gateway="paystack", amount=Decimal("100.00"), currency="KES", status="success", idempotency_key="i1", reference="r1", vendor_org=org, gross_amount=Decimal("100.00"), net_to_vendor=Decimal("98.00"), processed_at=timezone.now())
+
+    tx = Transaction.objects.create(
+        order=order,
+        user=buyer,
+        method="card",
+        gateway="paystack",
+        amount=Decimal("100.00"),
+        currency="KES",
+        status="success",
+        idempotency_key="i1",
+        reference="r1",
+        vendor_org=org,
+        gross_amount=Decimal("100.00"),
+        net_to_vendor=Decimal("98.00"),
+        processed_at=timezone.now(),
+    )
     from decimal import Decimal as D
+
     kpi = aggregate_kpis_daily(org.id)
     assert kpi.orders >= 1 and kpi.gross_revenue >= D("100.00")
 

@@ -1,14 +1,15 @@
 from decimal import Decimal
+
 from django.shortcuts import get_object_or_404
-from rest_framework import permissions, status
+from drf_spectacular.utils import extend_schema
+from rest_framework import permissions
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from drf_spectacular.utils import extend_schema
 
-from .serializers_v1 import CheckoutInitV1Serializer, CheckoutInitV1ResponseSerializer
-from .services import init_checkout
-from .models import Transaction
 from orders.models import Order
+
+from .serializers_v1 import CheckoutInitV1ResponseSerializer, CheckoutInitV1Serializer
+from .services import init_checkout
 
 
 class CheckoutInitV1(APIView):
@@ -36,9 +37,10 @@ class CheckoutInitV1(APIView):
             idempotency_key=data["idempotency_key"],
             reference=f"ORD-{order.id}-{request.user.id}",
         )
-        return Response({
-            "ok": True,
-            "reference": txn.reference,
-            "gateway": txn.gateway,
-        })
-
+        return Response(
+            {
+                "ok": True,
+                "reference": txn.reference,
+                "gateway": txn.gateway,
+            }
+        )

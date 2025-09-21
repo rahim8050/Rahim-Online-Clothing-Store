@@ -1,6 +1,5 @@
 from django.db import migrations, models
 
-
 ROLE_CHOICES = (
     ("customer", "Customer"),
     ("vendor", "Vendor"),
@@ -40,9 +39,7 @@ def backfill_roles(apps, schema_editor):
     # Vendor Staff (via relation if present)
     try:
         staff_ids = (
-            VendorStaff.objects.filter(is_active=True)
-            .values_list("staff_id", flat=True)
-            .distinct()
+            VendorStaff.objects.filter(is_active=True).values_list("staff_id", flat=True).distinct()
         )
         # Use batched updates to avoid IN too large
         batch = []
@@ -62,7 +59,9 @@ def backfill_roles(apps, schema_editor):
             driver_group = Group.objects.get(pk=group_names["Driver"])  # re-fetch
             for u in driver_group.user_set.only("id").iterator(chunk_size=2000):
                 # do not override admin or vendor/vendor_staff already set unless they were default
-                User.objects.filter(pk=u.pk).exclude(role__in=["admin", "vendor", "vendor_staff"]).update(role="driver")
+                User.objects.filter(pk=u.pk).exclude(
+                    role__in=["admin", "vendor", "vendor_staff"]
+                ).update(role="driver")
         except Exception:
             pass
 
@@ -86,8 +85,9 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name="customuser",
             name="role",
-            field=models.CharField(blank=True, choices=ROLE_CHOICES, default="customer", max_length=32),
+            field=models.CharField(
+                blank=True, choices=ROLE_CHOICES, default="customer", max_length=32
+            ),
         ),
         migrations.RunPython(backfill_roles, unbackfill_roles),
     ]
-

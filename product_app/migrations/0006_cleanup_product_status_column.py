@@ -8,7 +8,7 @@ def drop_status_if_exists(apps, schema_editor):
     try:
         with connection.cursor() as cursor:
             desc = connection.introspection.get_table_description(cursor, table)
-            cols = {getattr(c, 'name', None) or c[0] for c in desc}
+            cols = {getattr(c, "name", None) or c[0] for c in desc}
     except Exception:
         cols = set()
     if "status" not in cols:
@@ -17,7 +17,9 @@ def drop_status_if_exists(apps, schema_editor):
         if vendor == "mysql":
             schema_editor.execute("ALTER TABLE `product_app_product` DROP COLUMN `status`")
         elif vendor == "postgresql":
-            schema_editor.execute('ALTER TABLE "product_app_product" DROP COLUMN IF EXISTS "status"')
+            schema_editor.execute(
+                'ALTER TABLE "product_app_product" DROP COLUMN IF EXISTS "status"'
+            )
         elif vendor == "sqlite":
             # SQLite < 3.35 cannot drop columns easily; skip to avoid destructive changes.
             # On SQLite dev, table likely doesn't have this column.
@@ -38,4 +40,3 @@ class Migration(migrations.Migration):
     operations = [
         migrations.RunPython(drop_status_if_exists, migrations.RunPython.noop),
     ]
-

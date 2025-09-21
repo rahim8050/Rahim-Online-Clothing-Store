@@ -2,12 +2,12 @@
 from __future__ import annotations
 
 import logging
-from typing import Callable, Optional
+from collections.abc import Callable
 
 from django.conf import settings
-from django.utils import timezone
 from django.core.mail import EmailMultiAlternatives
-from django.db import transaction, IntegrityError
+from django.db import IntegrityError, transaction
+from django.utils import timezone
 
 from payments.models import NotificationEvent  # Model lives in payments/models.py
 
@@ -16,7 +16,9 @@ __all__ = ["emit_once", "send_refund_email", "send_payment_email"]
 log = logging.getLogger(__name__)
 
 
-def emit_once(event_key: str, user, channel: str, send_fn: Callable[[], None], payload: Optional[dict] = None) -> bool:
+def emit_once(
+    event_key: str, user, channel: str, send_fn: Callable[[], None], payload: dict | None = None
+) -> bool:
     """
     Insert a NotificationEvent with a unique event_key.
     If it already exists, do nothing (idempotent).
@@ -45,7 +47,9 @@ def _safe_send(send_fn: Callable[[], None]) -> None:
 
 
 def _send_html_email(subject: str, to_email: str, text_body: str, html_body: str) -> None:
-    from_email = getattr(settings, "DEFAULT_FROM_EMAIL", f"no-reply@{settings.SITE_DOMAIN.split(":")[0]}")
+    from_email = getattr(
+        settings, "DEFAULT_FROM_EMAIL", f"no-reply@{settings.SITE_DOMAIN.split(":")[0]}"
+    )
     reply_to = [getattr(settings, "SUPPORT_EMAIL", from_email)]
     msg = EmailMultiAlternatives(subject, text_body, from_email, [to_email], reply_to=reply_to)
     msg.attach_alternative(html_body, "text/html")
@@ -59,10 +63,10 @@ def send_refund_email(
     reference: str,
     stage: str,  # "completed" or "initiated"
     *,
-    refund_id: Optional[str] = None,
-    gateway: Optional[str] = None,
-    order_url: Optional[str] = None,
-    customer_name: Optional[str] = None,
+    refund_id: str | None = None,
+    gateway: str | None = None,
+    order_url: str | None = None,
+    customer_name: str | None = None,
     currency: str = "KES",
 ) -> None:
     """Send a branded refund email (HTML + text)."""
@@ -82,8 +86,11 @@ def send_refund_email(
         + (f"Refund id: {refund_id}\n" if refund_id else "")
         + f"Processed at: {processed}\n"
         + (f"\nView your order: {order_url}\n" if order_url else "")
-        + (f"\nIf you didn’t request this, contact support at {support_email}."
-           if support_email else "\nIf you didn’t request this, contact support.")
+        + (
+            f"\nIf you didn’t request this, contact support at {support_email}."
+            if support_email
+            else "\nIf you didn’t request this, contact support."
+        )
     )
 
     html_body = f"""\
@@ -134,9 +141,9 @@ def send_payment_email(
     reference: str,
     stage: str,  # "received", "failed", "cancelled"
     *,
-    gateway: Optional[str] = None,
-    order_url: Optional[str] = None,
-    customer_name: Optional[str] = None,
+    gateway: str | None = None,
+    order_url: str | None = None,
+    customer_name: str | None = None,
     currency: str = "KES",
 ) -> None:
     """Send a branded payment status email (HTML + text)."""
@@ -155,8 +162,11 @@ def send_payment_email(
         f"Transaction ref: {reference}\n"
         f"Processed at: {processed}\n"
         + (f"\nView your order: {order_url}\n" if order_url else "")
-        + (f"\nIf you didn’t request this, contact support at {support_email}."
-           if support_email else "\nIf you didn’t request this, contact support.")
+        + (
+            f"\nIf you didn’t request this, contact support at {support_email}."
+            if support_email
+            else "\nIf you didn’t request this, contact support."
+        )
     )
 
     html_body = f"""\

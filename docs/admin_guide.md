@@ -18,4 +18,3 @@ KPIS_ENABLED=true
 ## Roles & Access
 - Only MANAGER or OWNER may submit or download invoices for an org.
 - Only MANAGER or OWNER may view KPIs.
-

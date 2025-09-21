@@ -1,9 +1,9 @@
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
-from product_app.models import Category, Product, Warehouse, ProductStock
 from orders.models import Order, OrderItem
 from orders.services import assign_warehouses_and_update_stock
+from product_app.models import Category, Product, ProductStock, Warehouse
 
 
 class StockDeductionTests(TestCase):
@@ -27,7 +27,9 @@ class StockDeductionTests(TestCase):
             dest_lat=1.0,
             dest_lng=36.0,
         )
-        OrderItem.objects.create(order=order, product=self.product, price=10, quantity=qty, warehouse=self.wh)
+        OrderItem.objects.create(
+            order=order, product=self.product, price=10, quantity=qty, warehouse=self.wh
+        )
         return order
 
     def test_deducts_stock_atomically(self):
@@ -40,4 +42,3 @@ class StockDeductionTests(TestCase):
         order = self._make_order(10)
         with self.assertRaises(ValueError):
             assign_warehouses_and_update_stock(order)
-

@@ -3,10 +3,10 @@ from __future__ import annotations
 from django.conf import settings
 from django.core.validators import MinValueValidator
 from django.db import models
-from django.db.models import Sum, Q
+from django.db.models import Q, Sum
 
-from product_app.models import Product
 from orders.money import D
+from product_app.models import Product
 
 
 class Cart(models.Model):
@@ -19,7 +19,7 @@ class Cart(models.Model):
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="carts",
-        null=True,   # allow anonymous carts
+        null=True,  # allow anonymous carts
         blank=True,
     )
     status = models.CharField(
