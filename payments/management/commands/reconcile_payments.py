@@ -9,8 +9,8 @@ class Command(BaseCommand):
         parser.add_argument("--limit", type=int, default=500)
         parser.add_argument("--dry-run", action="store_true")
         parser.add_argument("--sync", action="store_true")  # bypass Celery
+
     def handle(self, *args, **opts):
-        from payments.tasks import reconcile_stale_transactions
         task_kwargs = dict(
             max_age_mins=opts["max_age_mins"],
             limit=opts["limit"],
@@ -27,4 +27,3 @@ class Command(BaseCommand):
                 self.stdout.write("Celery not running, running synchronously")
                 reconcile_stale_transactions(**task_kwargs)
         self.stdout.write(self.style.SUCCESS("Done"))
-

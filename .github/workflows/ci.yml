@@ -1,0 +1,55 @@
+name: ci
+on:
+  push: { branches: [main, development] }
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: testdb
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd="pg_isready -U postgres" --health-interval=10s
+          --health-timeout=5s --health-retries=5
+    env:
+      DJANGO_SETTINGS_MODULE: Rahim_Online_ClothesStore.settings
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/testdb
+      PYTHONDONTWRITEBYTECODE: 1
+      PYTHONUNBUFFERED: 1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install -U pip
+      - run: pip install -r requirements.txt || true
+      - run: pip install pre-commit ruff black isort mypy django-stubs djangorestframework-stubs pytest pytest-django pytest-cov radon xenon bandit dj-database-url
+      - name: Lint & type-check
+        run: |
+          ruff . && ruff format --check .
+          black --check .
+          isort --check-only .
+          mypy .
+      - name: Run tests
+        run: |
+          python manage.py migrate --noinput
+          pytest -q --disable-warnings --maxfail=1 --cov=. --cov-report=term-missing
+      - name: Complexity budgets
+        run: |
+          radon cc -s -a .
+          xenon . --max-absolute B --max-modules B --max-average A
+      - name: Snapshot size (cloc)
+        run: |
+          pip install cloc
+          cloc --vcs=git --json --out cloc.json --include-ext=py,js,vue,html,css
+      - uses: actions/upload-artifact@v4
+        with:
+          name: reports
+          path: |
+            cloc.json
+            ./.coverage

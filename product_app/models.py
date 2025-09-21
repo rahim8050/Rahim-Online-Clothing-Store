@@ -1,8 +1,9 @@
-from django.db import models
-from django.urls import reverse
-from django.core.exceptions import ValidationError
-from django.db.models import CheckConstraint, Q
 from django.conf import settings
+from django.core.exceptions import ValidationError
+from django.db import models
+from django.db.models import CheckConstraint, Q
+from django.urls import reverse
+
 
 class Category(models.Model):
     name = models.CharField(max_length=100)
@@ -21,14 +22,13 @@ class Product(models.Model):
         ACTIVE = "active", "Active"
         ARCHIVED = "archived", "Archived"
 
-    category = models.ForeignKey(
-        Category, related_name="products", on_delete=models.CASCADE
-    )
+    category = models.ForeignKey(Category, related_name="products", on_delete=models.CASCADE)
     owner = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         related_name="vendor_products",
         on_delete=models.CASCADE,
-        null=True, blank=True,   
+        null=True,
+        blank=True,
     )
     name = models.CharField(max_length=100)
     slug = models.SlugField(max_length=100, unique=True)
@@ -45,16 +45,14 @@ class Product(models.Model):
     updated = models.DateTimeField(auto_now=True)
     # Keep for DB compatibility (MySQL strict error 1364): ensure default exists
     version = models.PositiveIntegerField(default=1)
-    product_version = models.PositiveIntegerField(default=1) 
+    product_version = models.PositiveIntegerField(default=1)
     image = models.ImageField(upload_to="products", blank=True, null=True)
 
     def __str__(self) -> str:
         return self.name
 
     def get_absolute_url(self):
-        return reverse(
-            "product_app:product_detail", kwargs={"id": self.id, "slug": self.slug}
-        )
+        return reverse("product_app:product_detail", kwargs={"id": self.id, "slug": self.slug})
 
 
 class Warehouse(models.Model):
@@ -62,7 +60,7 @@ class Warehouse(models.Model):
     latitude = models.FloatField()
     longitude = models.FloatField()
     address = models.CharField(max_length=255, blank=True)
-    is_active = models.BooleanField(default=True) 
+    is_active = models.BooleanField(default=True)
 
     def clean(self) -> None:
         """Validate coordinates are within the global range and inside Kenya."""
@@ -102,12 +100,8 @@ class Warehouse(models.Model):
 
 
 class ProductStock(models.Model):
-    product = models.ForeignKey(
-        Product, related_name="stocks", on_delete=models.CASCADE
-    )
-    warehouse = models.ForeignKey(
-        Warehouse, related_name="stock_items", on_delete=models.CASCADE
-    )
+    product = models.ForeignKey(Product, related_name="stocks", on_delete=models.CASCADE)
+    warehouse = models.ForeignKey(Warehouse, related_name="stock_items", on_delete=models.CASCADE)
     quantity = models.PositiveIntegerField(default=0)
 
     class Meta:
@@ -118,4 +112,3 @@ class ProductStock(models.Model):
 
     def __str__(self) -> str:
         return f"{self.product.name} - {self.warehouse.name}"
-

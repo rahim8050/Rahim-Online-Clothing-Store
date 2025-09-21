@@ -15,7 +15,7 @@
         <i class="fas fa-user-circle mr-2 text-green-600"></i> My Account
       </h2>
       <nav class="space-y-2 text-gray-700">
-        <a href="{% url 'users:profile_settings' %}" 
+        <a href="{% url 'users:profile_settings' %}"
            class="block px-3 py-2 rounded hover:bg-green-100 transition-colors duration-200 {% if request.path == '/users/profile/settings/' %}bg-green-200 font-semibold{% endif %}">
           <i class="fas fa-cog mr-2"></i> Profile Settings
         </a>
@@ -23,7 +23,7 @@
            class="block px-3 py-2 rounded hover:bg-green-100 transition-colors duration-200 {% if request.path == '/users/profile/password/' %}bg-green-200 font-semibold{% endif %}">
           <i class="fas fa-lock mr-2"></i> Change Password
         </a>
-        <a href="{% url 'users:my_orders' %}" 
+        <a href="{% url 'users:my_orders' %}"
            class="block px-3 py-2 rounded hover:bg-green-100 transition-colors duration-200 {% if request.path == '/users/my_orders/' %}bg-green-200 font-semibold{% endif %}">
           <i class="fas fa-receipt mr-2"></i> My Orders
         </a>
@@ -50,7 +50,7 @@
       <section class="flex flex-col sm:flex-row items-center bg-white p-5 rounded-lg shadow mb-10 space-y-4 sm:space-y-0 sm:space-x-8">
         <div class="relative">
           {% if request.user.avatar %}
-            <img src="{{ request.user.avatar.url }}" alt="Avatar" 
+            <img src="{{ request.user.avatar.url }}" alt="Avatar"
                  class="w-24 h-24 rounded-full object-cover border-4 border-white shadow" />
           {% else %}
             <div class="w-24 h-24 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-full flex items-center justify-center text-gray-400 text-4xl shadow">
@@ -65,7 +65,7 @@
           <p class="text-xl font-semibold text-gray-900">{{ request.user.get_full_name|default:request.user.username }}</p>
           <p class="text-sm text-gray-600 mt-1">Member since: <span class="font-medium">{{ request.user.date_joined|date:"F Y" }}</span></p>
           <p class="mt-2">
-            Status: 
+            Status:
             {% if request.user.is_member %}
               <span class="inline-block px-3 py-1 rounded-full bg-green-50 text-green-700 font-semibold">Active Member</span>
             {% else %}
@@ -90,7 +90,7 @@
               <label class="block text-sm font-medium text-gray-700 mb-2">Profile Picture</label>
               <div class="flex items-center space-x-4">
                 {% if request.user.avatar %}
-                  <img id="avatar-preview" src="{{ request.user.avatar.url }}" 
+                  <img id="avatar-preview" src="{{ request.user.avatar.url }}"
                        alt="Avatar preview" class="w-20 h-20 rounded-full object-cover border-2 border-white shadow" />
                 {% else %}
                   <div id="avatar-preview" class="w-20 h-20 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-full flex items-center justify-center text-gray-400 text-2xl shadow">
@@ -143,9 +143,9 @@
               </div>
             </div>
 
-            <button type="submit" name="update_profile" 
-                    class="w-full bg-gradient-to-r from-blue-600 to-indigo-700 hover:from-blue-700 hover:to-indigo-800 
-                           text-white py-3 rounded-lg font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500 
+            <button type="submit" name="update_profile"
+                    class="w-full bg-gradient-to-r from-blue-600 to-indigo-700 hover:from-blue-700 hover:to-indigo-800
+                           text-white py-3 rounded-lg font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500
                            focus:ring-offset-2 flex justify-center items-center space-x-2">
               <i class="fas fa-save"></i>
               <span>Save Changes</span>

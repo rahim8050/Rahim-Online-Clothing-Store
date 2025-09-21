@@ -1,9 +1,9 @@
 import pytest
 from django.contrib.auth import get_user_model
 from rest_framework.test import APIClient
-from product_app.models import Category, Product
-from cart.models import Cart, CartItem
 
+from cart.models import Cart, CartItem
+from product_app.models import Category, Product
 
 User = get_user_model()
 
@@ -45,11 +45,14 @@ def test_guest_add_and_merge_on_login(api, user, product):
     # create guest cart + add item
     r = api.post(v2_guest("/carts/my_active/"))
     cid = r.json()["id"]
-    api.post(v2_guest(f"/carts/{cid}/add_item/"), {"product": product.id, "quantity": 2}, format="json")
+    api.post(
+        v2_guest(f"/carts/{cid}/add_item/"), {"product": product.id, "quantity": 2}, format="json"
+    )
 
     # simulate login signal to trigger merge
     from django.contrib.auth.signals import user_logged_in
     from django.test.client import RequestFactory
+
     rf = RequestFactory()
     req = rf.get("/")
     user_logged_in.send(sender=user.__class__, request=req, user=user)

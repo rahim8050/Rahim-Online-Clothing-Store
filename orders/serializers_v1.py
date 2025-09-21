@@ -1,7 +1,8 @@
 from rest_framework import serializers
 
-from .models import Order, OrderItem
 from product_app.serializers_v1 import ProductV1Serializer
+
+from .models import Order, OrderItem
 
 
 class OrderItemV1Serializer(serializers.ModelSerializer):
@@ -71,4 +72,3 @@ class CheckoutV1Serializer(serializers.Serializer):
     dest_lat = serializers.DecimalField(max_digits=9, decimal_places=6)
     dest_lng = serializers.DecimalField(max_digits=9, decimal_places=6)
     payment_method = serializers.CharField(max_length=20)
-

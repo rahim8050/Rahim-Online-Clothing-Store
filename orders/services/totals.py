@@ -1,5 +1,6 @@
 from orders.money import D, q2
 
+
 def safe_order_total(order):
     items = order.items.select_related("product").all()
 
@@ -11,10 +12,13 @@ def safe_order_total(order):
     tax = D("0.00")
 
     return q2(subtotal - discount + shipping + tax)
+
+
 # orders/services/totals.py
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import ROUND_HALF_UP, Decimal
 
 Q2 = Decimal("0.01")
+
 
 def safe_order_total(order) -> Decimal:
     # Use OrderItem.price (copied at checkout), not Product.price

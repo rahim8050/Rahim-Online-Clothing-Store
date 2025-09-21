@@ -1,10 +1,11 @@
 # core/permissions.py
 from __future__ import annotations
 
-from typing import Any, Iterable, Optional
+from typing import Any
 
 from rest_framework.permissions import BasePermission
-from users.constants import VENDOR, VENDOR_STAFF, DRIVER
+
+from users.constants import DRIVER, VENDOR, VENDOR_STAFF
 from users.utils import in_groups as _in_groups
 
 
@@ -52,6 +53,7 @@ class InGroups(BasePermission):
     """
     Allow if the user is authenticated and belongs to ANY of required_groups.
     """
+
     required_groups: tuple[str, ...] = ()
 
     def has_permission(self, request, view) -> bool:
@@ -67,7 +69,7 @@ class IsDriver(InGroups):
     required_groups = (DRIVER,)
 
 
-class IsVendorOrVendorStaff(InGroups):     # <-- match name used in your views
+class IsVendorOrVendorStaff(InGroups):  # <-- match name used in your views
     required_groups = (VENDOR, VENDOR_STAFF)
 
 
@@ -83,7 +85,8 @@ class HasScope(BasePermission):
         CatalogRead = HasScope.require('catalog:read')
         permission_classes = [CatalogRead]
     """
-    required_scope: Optional[str] = None
+
+    required_scope: str | None = None
 
     def has_permission(self, request, view) -> bool:
         scope = getattr(self, "required_scope", None)
@@ -93,7 +96,7 @@ class HasScope(BasePermission):
         return scope in scopes
 
     @classmethod
-    def require(cls, scope: str) -> type["HasScope"]:
+    def require(cls, scope: str) -> type[HasScope]:
         name = f"HasScope_{scope.replace(':', '_')}"
         return type(name, (cls,), {"required_scope": scope})
 
@@ -106,6 +109,7 @@ class HasVendorScope(BasePermission):
             required_vendor_scope = "delivery"
     This checks for 'vendor:<required_vendor_scope>' in request.auth scopes.
     """
+
     def has_permission(self, request, view) -> bool:
         required = getattr(view, "required_vendor_scope", None)
         if not required:

@@ -2,10 +2,9 @@ import pytest
 from django.contrib.auth import get_user_model
 from rest_framework.test import APIRequestFactory
 
-from vendor_app.models import VendorOrg, VendorMember
-from vendor_app.permissions import IsInOrg, IsOrgStaff, IsOrgManager, IsOrgOwner
+from vendor_app.models import VendorMember, VendorOrg
+from vendor_app.permissions import IsInOrg, IsOrgManager, IsOrgOwner, IsOrgStaff
 from vendor_app.selectors import org_scoped_queryset
-
 
 pytestmark = pytest.mark.django_db
 
@@ -84,4 +83,3 @@ def test_org_scoped_queryset_filters_outside_org_data():
 
     assert scoped.count() == 3
     assert set(scoped.values_list("org_id", flat=True)) == {org_a.id}
-

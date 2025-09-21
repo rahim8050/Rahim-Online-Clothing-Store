@@ -26,4 +26,3 @@ class PaystackWebhookSerializer(serializers.Serializer):
         if status is not None and not isinstance(status, str):
             raise serializers.ValidationError({"data.status": "invalid"})
         return attrs
-

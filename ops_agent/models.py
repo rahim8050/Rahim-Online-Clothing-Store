@@ -1,15 +1,15 @@
 # ──────────────────────────────────────────────────────────────────────────────
 # ops_agent/models.py
 # ──────────────────────────────────────────────────────────────────────────────
-from django.db import models
 from django.contrib.auth import get_user_model
-
+from django.db import models
 
 User = get_user_model()
 
 
 class OpsTask(models.Model):
     """Simple ops task created by the agent (e.g., restock request)."""
+
     KIND_CHOICES = (
         ("restock", "Restock"),
         ("investigate", "Investigate"),

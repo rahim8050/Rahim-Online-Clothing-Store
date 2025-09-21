@@ -2,4 +2,3 @@
   "version": 1,
   "note": "Sample config bundled in the extension to validate web_accessible_resources and chrome.runtime.getURL."
 }
-

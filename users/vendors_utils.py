@@ -1,5 +1,6 @@
 # users/vendor_utils.py
 from django.contrib.auth import get_user_model
+
 from .utils import resolve_vendor_owner_for
 
 

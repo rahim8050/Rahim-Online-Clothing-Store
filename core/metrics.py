@@ -2,19 +2,20 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Dict, Optional
 
 logger = logging.getLogger("metrics")
 
-_COUNTERS: Dict[str, int] = {}
-_HIST: Dict[str, list[float]] = {}
+_COUNTERS: dict[str, int] = {}
+_HIST: dict[str, list[float]] = {}
 
 
 def inc(name: str, amount: int = 1, **labels) -> None:
     key = _key(name, labels)
     _COUNTERS[key] = _COUNTERS.get(key, 0) + int(amount)
     try:
-        logger.info("metric.counter", extra={"metric": name, "value": _COUNTERS[key], "labels": labels})
+        logger.info(
+            "metric.counter", extra={"metric": name, "value": _COUNTERS[key], "labels": labels}
+        )
     except Exception:
         pass
 
@@ -32,7 +33,7 @@ class timer:
     def __init__(self, name: str, **labels) -> None:
         self.name = name
         self.labels = labels
-        self._t0: Optional[float] = None
+        self._t0: float | None = None
 
     def __enter__(self):
         self._t0 = time.perf_counter()
@@ -46,7 +47,7 @@ class timer:
         return False
 
 
-def _key(name: str, labels: Dict[str, object]) -> str:
+def _key(name: str, labels: dict[str, object]) -> str:
     if not labels:
         return name
     try:
@@ -54,4 +55,3 @@ def _key(name: str, labels: Dict[str, object]) -> str:
         return ":".join(parts)
     except Exception:
         return name
-

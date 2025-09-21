@@ -8,23 +8,59 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('orders', '0008_deliveryping'),
+        ("orders", "0008_deliveryping"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='DeliveryEvent',
+            name="DeliveryEvent",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('type', models.CharField(choices=[('assign', 'Assigned'), ('unassign', 'Unassigned'), ('picked', 'Picked up'), ('en_route', 'En route'), ('delivered', 'Delivered'), ('position', 'Position')], max_length=20)),
-                ('at', models.DateTimeField(auto_now_add=True)),
-                ('note', models.JSONField(blank=True, null=True)),
-                ('actor', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, to=settings.AUTH_USER_MODEL)),
-                ('delivery', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='events', to='orders.delivery')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True, primary_key=True, serialize=False, verbose_name="ID"
+                    ),
+                ),
+                (
+                    "type",
+                    models.CharField(
+                        choices=[
+                            ("assign", "Assigned"),
+                            ("unassign", "Unassigned"),
+                            ("picked", "Picked up"),
+                            ("en_route", "En route"),
+                            ("delivered", "Delivered"),
+                            ("position", "Position"),
+                        ],
+                        max_length=20,
+                    ),
+                ),
+                ("at", models.DateTimeField(auto_now_add=True)),
+                ("note", models.JSONField(blank=True, null=True)),
+                (
+                    "actor",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
+                (
+                    "delivery",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="events",
+                        to="orders.delivery",
+                    ),
+                ),
             ],
             options={
-                'indexes': [models.Index(fields=['delivery', 'at'], name='orders_deli_deliver_bdaf63_idx'), models.Index(fields=['at'], name='orders_deli_at_1a879c_idx')],
+                "indexes": [
+                    models.Index(fields=["delivery", "at"], name="orders_deli_deliver_bdaf63_idx"),
+                    models.Index(fields=["at"], name="orders_deli_at_1a879c_idx"),
+                ],
             },
         ),
     ]

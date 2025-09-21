@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from django.views import View
-from django.http import FileResponse, JsonResponse, Http404
-
-from .utils import verify_signed_download_token, ensure_invoice_pdf_path
-from .models import Invoice
 import csv
 from io import StringIO
+
+from django.http import FileResponse, Http404, JsonResponse
+from django.views import View
+
+from .models import Invoice
+from .utils import ensure_invoice_pdf_path, verify_signed_download_token
 
 
 class DownloadPdfView(View):
@@ -28,13 +29,14 @@ class DownloadPdfView(View):
         except FileNotFoundError:
             # generate on-demand
             try:
-                from reportlab.pdfgen import canvas
                 from reportlab.lib.pagesizes import letter
+                from reportlab.pdfgen import canvas
+
                 c = canvas.Canvas(path, pagesize=letter)
                 c.drawString(72, 720, f"Invoice #{inv_id}")
                 c.save()
             except Exception:
-                with open(path, 'wb') as f:
+                with open(path, "wb") as f:
                     f.write(b"%PDF-1.4\n% Fake PDF\n")
             return FileResponse(open(path, "rb"), content_type="application/pdf")
 

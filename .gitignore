@@ -1,10 +1,8 @@
 # ===== Python =====
 **/__pycache__/
-*.pyc
+*.py[cod]
 *.pyo
 *.pyd
-*.py[cod]
-
 
 # ===== Virtual Environments =====
 .venv/
@@ -12,7 +10,22 @@ venv/
 env/
 ENV/
 
-# ===== Environment Variables =====
+# ===== Tool caches =====
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.cache/
+
+# ===== Coverage / test artifacts =====
+htmlcov/
+.coverage
+.coverage.*
+nosetests.xml
+coverage.xml
+*.cover
+*.log
+
+# ===== Environment files =====
 .env
 .env.*
 .env.local
@@ -20,11 +33,9 @@ ENV/
 .env.production
 .env.staging
 
-# ===== macOS/Linux System Files =====
+# ===== OS / Editor =====
 .DS_Store
 Thumbs.db
-
-# ===== VS Code / JetBrains IDEs =====
 .vscode/
 .idea/
 
@@ -32,7 +43,9 @@ Thumbs.db
 db.sqlite3
 db.sqlite3-journal
 media/
+!media/.gitkeep
 staticfiles/
+!staticfiles/.gitkeep
 /static/CACHE/
 *.log
 
@@ -40,47 +53,35 @@ staticfiles/
 **/migrations/*.pyc
 **/migrations/*.pyo
 
-# If you use coverage or testing tools
-htmlcov/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-*.log
-
-# ===== Tailwind / Node.js / PostCSS =====
+# ===== Frontend / Tailwind / Node =====
 node_modules/
-package-lock.json
-pnpm-lock.yaml
-yarn.lock
-postcss.config.js
+# Prefer committing ONE lockfile; uncomment the one you use:
+# package-lock.json
+# yarn.lock
+# pnpm-lock.yaml
 
-# ===== Build artifacts (optional) =====
+# Build outputs
+static/dist/
+!static/dist/.gitkeep
+static/build/
+!static/build/.gitkeep
+
+# Tailwind standalone binary (downloaded at build time)
+tailwindcss
+tailwindcss.exe
+
+# Keep config files in git
+# (Do NOT ignore these)
+# tailwind.config.*    ← keep
+# postcss.config.js    ← keep
+
+# ===== Build artifacts (misc) =====
 build/
 dist/
 *.egg-info/
 .eggs/
 *.spec
 
-# ===== Celery / Redis / Other Services (if used) =====
+# ===== Celery / processes =====
 celerybeat-schedule
 *.pid
-
-# ===== Pytest =====
-.pytest_cache/# Python bytecode
-__pycache__/
-*.py[cod]
-*.pyo
-# Python bytecode
-__pycache__/
-*.py[cod]
-*.pyo
-node_modules/
-tailwindcss
-tailwindcss.exe
-static/dist/*
-static/dist/*
-!static/dist/.gitkeep
-

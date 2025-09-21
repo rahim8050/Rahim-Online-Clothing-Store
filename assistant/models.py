@@ -3,7 +3,9 @@ from django.db import models
 
 
 class ChatSession(models.Model):
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="assistant_sessions")
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="assistant_sessions"
+    )
     session_key = models.CharField(max_length=64, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -34,4 +36,3 @@ class ToolCallLog(models.Model):
 
     def __str__(self) -> str:
         return f"{self.tool_name} ({self.session_id})"
-

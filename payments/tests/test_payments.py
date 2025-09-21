@@ -2,14 +2,13 @@ import json
 from decimal import Decimal
 from unittest.mock import patch
 
-from django.test import TestCase
-from django.urls import reverse
 from django.contrib.auth import get_user_model
+from django.test import TestCase
 
-from product_app.models import Category, Product
 from orders.models import Order, OrderItem
 from payments.enums import Gateway, PaymentMethod, TxnStatus
-from payments.models import Transaction, AuditLog
+from payments.models import AuditLog, Transaction
+from product_app.models import Category, Product
 
 
 class PaymentTestCase(TestCase):
@@ -60,7 +59,9 @@ class PaymentTestCase(TestCase):
         )
         event = {
             "type": "payment_intent.succeeded",
-            "data": {"object": {"metadata": {"reference": txn.reference}, "payment_intent": "pi_1"}},
+            "data": {
+                "object": {"metadata": {"reference": txn.reference}, "payment_intent": "pi_1"}
+            },
         }
         mock_verify.return_value = event
         url = "/webhook/stripe/"
@@ -72,7 +73,9 @@ class PaymentTestCase(TestCase):
         r2 = self.client.post(url, body, content_type="application/json")
         txn.refresh_from_db()
         self.assertEqual(txn.status, TxnStatus.SUCCESS)
-        self.assertTrue(AuditLog.objects.filter(event="WEBHOOK_REPLAY_BLOCKED", transaction=txn).exists())
+        self.assertTrue(
+            AuditLog.objects.filter(event="WEBHOOK_REPLAY_BLOCKED", transaction=txn).exists()
+        )
 
     @patch("payments.services.issue_refund")
     @patch("payments.views.verify_stripe")
@@ -101,17 +104,23 @@ class PaymentTestCase(TestCase):
         )
         event = {
             "type": "payment_intent.succeeded",
-            "data": {"object": {"metadata": {"reference": txn2.reference}, "payment_intent": "pi_2"}},
+            "data": {
+                "object": {"metadata": {"reference": txn2.reference}, "payment_intent": "pi_2"}
+            },
         }
         mock_verify.return_value = event
+
         def fake_refund(t, request_id=""):
             t.refund_reference = "rr1"
+
         mock_refund.side_effect = fake_refund
         self.client.post("/webhook/stripe/", json.dumps(event), content_type="application/json")
         txn2.refresh_from_db()
         self.assertEqual(txn2.status, TxnStatus.REFUNDED)
         self.assertEqual(txn2.refund_reference, "rr1")
-        self.assertTrue(AuditLog.objects.filter(event="DUPLICATE_REFUND_ISSUED", transaction=txn2).exists())
+        self.assertTrue(
+            AuditLog.objects.filter(event="DUPLICATE_REFUND_ISSUED", transaction=txn2).exists()
+        )
 
     @patch("payments.views.verify_mpesa")
     def test_duplicate_mpesa_manual(self, mock_verify):
@@ -142,9 +151,7 @@ class PaymentTestCase(TestCase):
                 "stkCallback": {
                     "MerchantRequestID": txn2.reference,
                     "ResultCode": 0,
-                    "CallbackMetadata": {
-                        "Item": [{"Name": "MpesaReceiptNumber", "Value": "xyz"}]
-                    },
+                    "CallbackMetadata": {"Item": [{"Name": "MpesaReceiptNumber", "Value": "xyz"}]},
                 }
             }
         }
@@ -153,5 +160,7 @@ class PaymentTestCase(TestCase):
         txn2.refresh_from_db()
         self.assertEqual(txn2.status, TxnStatus.DUPLICATE_SUCCESS)
         self.assertTrue(
-            AuditLog.objects.filter(event="DUPLICATE_MANUAL_REVERSAL_REQUIRED", transaction=txn2).exists()
+            AuditLog.objects.filter(
+                event="DUPLICATE_MANUAL_REVERSAL_REQUIRED", transaction=txn2
+            ).exists()
         )

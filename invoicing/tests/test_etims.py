@@ -1,13 +1,12 @@
-import pytest
 from decimal import Decimal
 
+import pytest
 from django.contrib.auth import get_user_model
 
-from vendor_app.models import VendorOrg, VendorMember, VendorProfile
 from invoicing.models import Invoice, InvoiceLine
 from invoicing.services.etims import submit_invoice
 from orders.models import Order
-
+from vendor_app.models import VendorMember, VendorOrg, VendorProfile
 
 pytestmark = pytest.mark.django_db
 
@@ -42,7 +41,13 @@ def test_submit_invoice_idempotent():
     org = mk_org()
     order = mk_order()
     inv = Invoice.objects.create(org=org, order=order, buyer_name="Buyer")
-    InvoiceLine.objects.create(invoice=inv, name="X", qty=Decimal("1"), unit_price=Decimal("10.00"), tax_rate=Decimal("0.16"))
+    InvoiceLine.objects.create(
+        invoice=inv,
+        name="X",
+        qty=Decimal("1"),
+        unit_price=Decimal("10.00"),
+        tax_rate=Decimal("0.16"),
+    )
     r1 = submit_invoice(invoice=inv, idempotency_key=f"invoice:submit:{inv.id}")
     inv.refresh_from_db()
     irn1 = inv.irn
@@ -56,7 +61,13 @@ def test_state_transitions_and_irn_persist():
     org = mk_org()
     order = mk_order()
     inv = Invoice.objects.create(org=org, order=order, buyer_name="Buyer")
-    InvoiceLine.objects.create(invoice=inv, name="Y", qty=Decimal("2"), unit_price=Decimal("5.00"), tax_rate=Decimal("0.16"))
+    InvoiceLine.objects.create(
+        invoice=inv,
+        name="Y",
+        qty=Decimal("2"),
+        unit_price=Decimal("5.00"),
+        tax_rate=Decimal("0.16"),
+    )
     r = submit_invoice(invoice=inv, idempotency_key=f"invoice:submit:{inv.id}")
     inv.refresh_from_db()
     assert inv.status == Invoice.Status.ACCEPTED
@@ -68,10 +79,15 @@ def test_reject_flow_preserves_error_msg():
     org = mk_org()
     order = mk_order()
     inv = Invoice.objects.create(org=org, order=order, buyer_name="REJECT ME")
-    InvoiceLine.objects.create(invoice=inv, name="Z", qty=Decimal("1"), unit_price=Decimal("1.00"), tax_rate=Decimal("0.00"))
+    InvoiceLine.objects.create(
+        invoice=inv,
+        name="Z",
+        qty=Decimal("1"),
+        unit_price=Decimal("1.00"),
+        tax_rate=Decimal("0.00"),
+    )
     r = submit_invoice(invoice=inv, idempotency_key=f"invoice:submit:{inv.id}")
     inv.refresh_from_db()
     assert inv.status == Invoice.Status.REJECTED
     assert inv.irn == ""
     assert "rejection" in (inv.last_error or "").lower()
-

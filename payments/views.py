@@ -1,31 +1,32 @@
 # payments/views.py
-from decimal import Decimal
+import hashlib
 import json
 import uuid
-import hashlib
+from decimal import Decimal
 
-from django.db import transaction as dbtx
-from django.http import JsonResponse, HttpResponse
+from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
+from django.db import transaction as dbtx
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.csrf import csrf_exempt
-from django.contrib.auth.decorators import login_required
 
-from .models import Transaction, AuditLog
-from .services import (
-    init_checkout,
-    verify_stripe,
-    verify_paystack,
-    verify_mpesa,
-    process_success,
-    process_failure,
-    apply_org_settlement,
-)
-from .idempotency import accept_once
-from .enums import TxnStatus
 from payments.notify import emit_once, send_payment_email, send_refund_email
+
+from .enums import TxnStatus
+from .idempotency import accept_once
+from .models import AuditLog, Transaction
+from .services import (
+    apply_org_settlement,
+    init_checkout,
+    process_failure,
+    process_success,
+    verify_mpesa,
+    verify_paystack,
+    verify_stripe,
+)
 
 
 # ---------------------------
@@ -48,6 +49,7 @@ class CheckoutView(View):
                 return JsonResponse({"ok": False, "error": f"missing_{key}"}, status=400)
 
         from orders.models import Order
+
         order = get_object_or_404(Order, pk=data["order_id"], user=request.user)
 
         # Strict amount check (Decimal)
@@ -120,7 +122,9 @@ class StripeWebhookView(View):
             if txn is None and payment_intent:
                 # Fallback if you store gateway reference on the txn
                 try:
-                    txn = Transaction.objects.select_for_update().get(gateway_reference=payment_intent)
+                    txn = Transaction.objects.select_for_update().get(
+                        gateway_reference=payment_intent
+                    )
                 except Transaction.DoesNotExist:
                     txn = None
 
@@ -135,10 +139,14 @@ class StripeWebhookView(View):
             txn.callback_received = True
             txn.signature_valid = True
             txn.raw_event = event
-            txn.save(update_fields=["callback_received", "signature_valid", "raw_event", "updated_at"])
+            txn.save(
+                update_fields=["callback_received", "signature_valid", "raw_event", "updated_at"]
+            )
 
             if event_type in ("payment_intent.succeeded", "checkout.session.completed"):
-                txn = process_success(txn=txn, gateway_reference=payment_intent, request_id=request_id)
+                txn = process_success(
+                    txn=txn, gateway_reference=payment_intent, request_id=request_id
+                )
                 apply_org_settlement(txn, provider="stripe", raw_body=request.body, payload=event)
                 to_email = getattr(getattr(txn, "user", None), "email", None)
                 if to_email:
@@ -147,7 +155,9 @@ class StripeWebhookView(View):
                         user=getattr(txn, "user", None),
                         channel="email",
                         payload={"order_id": txn.order_id, "amount": str(txn.amount)},
-                        send_fn=lambda: send_payment_email(to_email, txn.order_id, txn.amount, txn.reference, "received"),
+                        send_fn=lambda: send_payment_email(
+                            to_email, txn.order_id, txn.amount, txn.reference, "received"
+                        ),
                     )
                 if (
                     getattr(txn, "status", None) == TxnStatus.REFUNDED
@@ -172,7 +182,9 @@ class StripeWebhookView(View):
                         user=getattr(txn, "user", None),
                         channel="email",
                         payload={"order_id": txn.order_id, "amount": str(txn.amount)},
-                        send_fn=lambda: send_payment_email(to_email, txn.order_id, txn.amount, txn.reference, "failed"),
+                        send_fn=lambda: send_payment_email(
+                            to_email, txn.order_id, txn.amount, txn.reference, "failed"
+                        ),
                     )
             else:
                 # Unhandled event; acknowledge to stop retries
@@ -198,7 +210,11 @@ class PaystackWebhookView(View):
             msg = (str(e) or "").lower()
             if "json" in msg:
                 return JsonResponse({"detail": "invalid json"}, status=400)
-            AuditLog.log(event="WEBHOOK_SIGNATURE_INVALID", request_id=request_id, message="invalid signature")
+            AuditLog.log(
+                event="WEBHOOK_SIGNATURE_INVALID",
+                request_id=request_id,
+                message="invalid signature",
+            )
             return JsonResponse({"detail": "invalid signature"}, status=401)
 
         # 2) Idempotency (provider retries)
@@ -214,13 +230,19 @@ class PaystackWebhookView(View):
             try:
                 txn = Transaction.objects.select_for_update().get(reference=ref)
             except Transaction.DoesNotExist:
-                AuditLog.log(event="WEBHOOK_UNKNOWN_REFERENCE", request_id=request_id, meta={"reference": ref})
+                AuditLog.log(
+                    event="WEBHOOK_UNKNOWN_REFERENCE",
+                    request_id=request_id,
+                    meta={"reference": ref},
+                )
                 return JsonResponse({"ok": True}, status=202)
 
             txn.callback_received = True
             txn.signature_valid = True  # verify_paystack passed => valid
             txn.raw_event = data
-            txn.save(update_fields=["callback_received", "signature_valid", "raw_event", "updated_at"])
+            txn.save(
+                update_fields=["callback_received", "signature_valid", "raw_event", "updated_at"]
+            )
 
             status_ = (data.get("data") or {}).get("status")
             gateway_ref = (data.get("data") or {}).get("id") or ref
@@ -235,7 +257,9 @@ class PaystackWebhookView(View):
                         user=getattr(txn, "user", None),
                         channel="email",
                         payload={"order_id": txn.order_id, "amount": str(txn.amount)},
-                        send_fn=lambda: send_payment_email(to_email, txn.order_id, txn.amount, txn.reference, "received"),
+                        send_fn=lambda: send_payment_email(
+                            to_email, txn.order_id, txn.amount, txn.reference, "received"
+                        ),
                     )
                 if (
                     getattr(txn, "status", None) == TxnStatus.REFUNDED
@@ -260,7 +284,9 @@ class PaystackWebhookView(View):
                         user=getattr(txn, "user", None),
                         channel="email",
                         payload={"order_id": txn.order_id, "amount": str(txn.amount)},
-                        send_fn=lambda: send_payment_email(to_email, txn.order_id, txn.amount, txn.reference, "failed"),
+                        send_fn=lambda: send_payment_email(
+                            to_email, txn.order_id, txn.amount, txn.reference, "failed"
+                        ),
                     )
 
         return JsonResponse({"ok": True})
@@ -300,13 +326,19 @@ class MPesaWebhookView(View):
             try:
                 txn = Transaction.objects.select_for_update().get(reference=ref)
             except Transaction.DoesNotExist:
-                AuditLog.log(event="WEBHOOK_UNKNOWN_REFERENCE", request_id=request_id, meta={"reference": ref})
+                AuditLog.log(
+                    event="WEBHOOK_UNKNOWN_REFERENCE",
+                    request_id=request_id,
+                    meta={"reference": ref},
+                )
                 return JsonResponse({"ok": True}, status=202)
 
             txn.callback_received = True
             txn.signature_valid = True  # verify_mpesa passed
             txn.raw_event = data
-            txn.save(update_fields=["callback_received", "signature_valid", "raw_event", "updated_at"])
+            txn.save(
+                update_fields=["callback_received", "signature_valid", "raw_event", "updated_at"]
+            )
 
             result_code = callback.get("ResultCode")
             gateway_ref = meta.get("MpesaReceiptNumber")
@@ -321,7 +353,9 @@ class MPesaWebhookView(View):
                         user=getattr(txn, "user", None),
                         channel="email",
                         payload={"order_id": txn.order_id, "amount": str(txn.amount)},
-                        send_fn=lambda: send_payment_email(to_email, txn.order_id, txn.amount, txn.reference, "received"),
+                        send_fn=lambda: send_payment_email(
+                            to_email, txn.order_id, txn.amount, txn.reference, "received"
+                        ),
                     )
                 if (
                     getattr(txn, "status", None) == TxnStatus.REFUNDED
@@ -346,7 +380,9 @@ class MPesaWebhookView(View):
                         user=getattr(txn, "user", None),
                         channel="email",
                         payload={"order_id": txn.order_id, "amount": str(txn.amount)},
-                        send_fn=lambda: send_payment_email(to_email, txn.order_id, txn.amount, txn.reference, "failed"),
+                        send_fn=lambda: send_payment_email(
+                            to_email, txn.order_id, txn.amount, txn.reference, "failed"
+                        ),
                     )
 
         return JsonResponse({"ok": True})

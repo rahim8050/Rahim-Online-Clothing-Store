@@ -1,5 +1,6 @@
-import pytest
 from decimal import Decimal
+
+import pytest
 from django.contrib.auth import get_user_model
 from django.urls import reverse
 
@@ -32,4 +33,3 @@ def test_admin_add_product_uses_default_status(client):
     assert r.status_code == 200
     p = Product.objects.get(slug="y-1")
     assert p.status in (Product.Status.ACTIVE, "active")
-

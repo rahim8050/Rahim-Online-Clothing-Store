@@ -27,14 +27,10 @@ Notes
 
 from __future__ import annotations
 
-from typing import Optional
-
 from django.conf import settings
 from django.db import models
 from django.db.models import Q
-from django.utils import timezone
 from django.utils.text import slugify
-
 
 UserRef = settings.AUTH_USER_MODEL
 
@@ -66,6 +62,7 @@ class VendorOrg(models.Model):
         choices=[("mpesa", "M-PESA"), ("bank", "Bank")],
         default="mpesa",
     )
+
     # Kenya tax details
     class TaxStatus(models.TextChoices):
         UNKNOWN = "unknown", "Unknown"
@@ -73,7 +70,9 @@ class VendorOrg(models.Model):
         BLOCKED = "blocked", "Blocked"
 
     kra_pin = models.CharField(max_length=12, blank=True, default="")
-    tax_status = models.CharField(max_length=16, choices=TaxStatus.choices, default=TaxStatus.UNKNOWN)
+    tax_status = models.CharField(
+        max_length=16, choices=TaxStatus.choices, default=TaxStatus.UNKNOWN
+    )
     tax_registered_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -94,7 +93,7 @@ class VendorOrg(models.Model):
         return f"{self.name} ({self.slug})"
 
     # --------------------- helpers / RBAC ---------------------
-    def add_member(self, user, role: str) -> "VendorMember":
+    def add_member(self, user, role: str) -> VendorMember:
         """Add or update a member with a role in this org.
 
         - Ensures only one OWNER per org (via partial unique constraint).
@@ -122,9 +121,7 @@ class VendorOrg(models.Model):
         role = (role or "").upper()
         if role not in VendorMember.Role.values:
             return False
-        return VendorMember.objects.filter(
-            org=self, user=user, role=role, is_active=True
-        ).exists()
+        return VendorMember.objects.filter(org=self, user=user, role=role, is_active=True).exists()
 
     def save(self, *args, **kwargs):
         # keep slug normalized and unique
@@ -138,9 +135,11 @@ class VendorOrg(models.Model):
 
     def clean(self):
         from django.core.exceptions import ValidationError
+
         super().clean()
         if getattr(self, "kra_pin", ""):
             import re
+
             pin = (self.kra_pin or "").strip().upper()
             if not re.match(r"^[A-Z]{1}[0-9]{9}[A-Z]{1}$", pin):
                 raise ValidationError({"kra_pin": "KRA PIN must look like A123456789B."})
@@ -177,18 +176,14 @@ class VendorMember(models.Model):
 
     class Meta:
         constraints = [
-            models.UniqueConstraint(
-                fields=["org", "user"], name="uniq_vendormember_org_user"
-            ),
+            models.UniqueConstraint(fields=["org", "user"], name="uniq_vendormember_org_user"),
             # Enforce only one OWNER per org
             models.UniqueConstraint(
                 fields=["org"],
                 condition=Q(role="OWNER"),
                 name="uniq_owner_per_org",
             ),
-            models.CheckConstraint(
-                check=~Q(role=""), name="vendormember_role_not_empty"
-            ),
+            models.CheckConstraint(check=~Q(role=""), name="vendormember_role_not_empty"),
         ]
         indexes = [
             models.Index(fields=["role"], name="vendormember_role_idx"),
@@ -226,9 +221,7 @@ class VendorProfile(models.Model):
       Do not use it for staff membership queries; use `VendorMember` instead.
     """
 
-    user = models.OneToOneField(
-        UserRef, on_delete=models.CASCADE, related_name="vendor_profile"
-    )
+    user = models.OneToOneField(UserRef, on_delete=models.CASCADE, related_name="vendor_profile")
     org = models.ForeignKey(
         VendorOrg, on_delete=models.PROTECT, null=False, blank=False, related_name="profiles"
     )
@@ -247,7 +240,13 @@ class VendorProfile(models.Model):
 
 
 class VendorOrgAuditLog(models.Model):
-    actor = models.ForeignKey(UserRef, on_delete=models.SET_NULL, null=True, blank=True, related_name="vendor_org_audit_entries")
+    actor = models.ForeignKey(
+        UserRef,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="vendor_org_audit_entries",
+    )
     org = models.ForeignKey(VendorOrg, on_delete=models.CASCADE, related_name="audit_entries")
     field = models.CharField(max_length=64)
     old_value = models.TextField(blank=True, default="")
@@ -282,7 +281,9 @@ class VendorKPI(models.Model):
 
     class Meta:
         constraints = [
-            models.UniqueConstraint(fields=["org", "window", "period_start"], name="uniq_vendor_kpi_window_start"),
+            models.UniqueConstraint(
+                fields=["org", "window", "period_start"], name="uniq_vendor_kpi_window_start"
+            ),
         ]
         indexes = [
             models.Index(fields=["org", "period_start", "window"], name="vendorkpi_org_date_idx"),

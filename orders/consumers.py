@@ -1,11 +1,12 @@
 # orders/consumers.py
-from channels.generic.websocket import AsyncJsonWebsocketConsumer
-from channels.db import database_sync_to_async
-from django.utils import timezone
-from django.core.cache import cache
-from django.apps import apps
-from decimal import Decimal, ROUND_HALF_UP, InvalidOperation
 import math
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
+
+from channels.db import database_sync_to_async
+from channels.generic.websocket import AsyncJsonWebsocketConsumer
+from django.apps import apps
+from django.core.cache import cache
+from django.utils import timezone
 
 Q6 = Decimal("0.000001")  # 6 dp (~0.11m at equator)
 
@@ -72,13 +73,15 @@ class DeliveryTrackerConsumer(AsyncJsonWebsocketConsumer):
     async def delivery_event(self, event):
         kind = event.get("kind")
         if kind == "position_update":
-            await self.send_json({
-                "type": "position_update",
-                "lat": event.get("lat"),
-                "lng": event.get("lng"),
-                "status": event.get("status"),
-                "ts": event.get("ts"),
-            })
+            await self.send_json(
+                {
+                    "type": "position_update",
+                    "lat": event.get("lat"),
+                    "lng": event.get("lng"),
+                    "status": event.get("status"),
+                    "ts": event.get("ts"),
+                }
+            )
             return
         if kind == "status":
             await self.send_json({"type": "status", "status": event.get("status")})
@@ -86,14 +89,16 @@ class DeliveryTrackerConsumer(AsyncJsonWebsocketConsumer):
 
     async def status_update(self, event):
         # Emitted by post_save signals via group_send(type="status.update")
-        await self.send_json({
-            "type": "status_update",
-            "id": event.get("id"),
-            "status": event.get("status"),
-            "assigned_at": event.get("assigned_at"),
-            "picked_up_at": event.get("picked_up_at"),
-            "delivered_at": event.get("delivered_at"),
-        })
+        await self.send_json(
+            {
+                "type": "status_update",
+                "id": event.get("id"),
+                "status": event.get("status"),
+                "assigned_at": event.get("assigned_at"),
+                "picked_up_at": event.get("picked_up_at"),
+                "delivered_at": event.get("delivered_at"),
+            }
+        )
 
     # Back-compat for older senders using type="tracker.update"
     async def tracker_update(self, event):
@@ -112,9 +117,10 @@ class DeliveryTrackerConsumer(AsyncJsonWebsocketConsumer):
         R = 6371000.0
         dLat = math.radians(lat2 - lat1)
         dLng = math.radians(lng2 - lng1)
-        s1 = (math.sin(dLat / 2) ** 2
-              + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2))
-              * math.sin(dLng / 2) ** 2)
+        s1 = (
+            math.sin(dLat / 2) ** 2
+            + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dLng / 2) ** 2
+        )
         return 2 * R * math.asin(math.sqrt(s1))
 
     @database_sync_to_async
@@ -230,7 +236,9 @@ class DeliveryTrackerConsumer(AsyncJsonWebsocketConsumer):
             await self.send_json({"type": "error", "error": "invalid_payload"})
             return
 
-        if not (Decimal("-90") <= lat_d <= Decimal("90") and Decimal("-180") <= lng_d <= Decimal("180")):
+        if not (
+            Decimal("-90") <= lat_d <= Decimal("90") and Decimal("-180") <= lng_d <= Decimal("180")
+        ):
             await self.send_json({"type": "error", "error": "out_of_range"})
             return
 
@@ -245,13 +253,17 @@ class DeliveryTrackerConsumer(AsyncJsonWebsocketConsumer):
         # Connection throttle: save every ≥8s AND after ≥25m movement
         due = (now_ms - self._last_saved_at_ms) >= 8000
         lat_f, lng_f = float(lat_d), float(lng_d)
-        moved_enough = True if self._last_saved_ll is None else (
-            self._haversine_m(self._last_saved_ll, (lat_f, lng_f)) >= 25.0
+        moved_enough = (
+            True
+            if self._last_saved_ll is None
+            else (self._haversine_m(self._last_saved_ll, (lat_f, lng_f)) >= 25.0)
         )
 
         # Persist if due + moved
         if due and moved_enough:
-            changed, new_status = await self._save_position(self.delivery_id, self.user_id, lat_d, lng_d)
+            changed, new_status = await self._save_position(
+                self.delivery_id, self.user_id, lat_d, lng_d
+            )
             if changed:
                 self._last_saved_at_ms = now_ms
                 self._last_saved_ll = (lat_f, lng_f)

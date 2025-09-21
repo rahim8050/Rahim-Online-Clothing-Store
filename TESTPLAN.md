@@ -43,4 +43,3 @@ Acceptance Criteria Trace
 - WS Fallback: Streaming preferred, HTTP fallback functional, reconnection backoff capped at 30s.
 - Theme: Hybrid toggles only gradients/shadows; radii/spacing/tokens consistent.
 - Dark mode: `.dark` class switches tokens while maintaining AA+ contrast.
-

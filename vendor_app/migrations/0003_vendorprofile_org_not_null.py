@@ -24,7 +24,10 @@ def ensure_profiles_have_orgs(apps, schema_editor):
             slug = f"vendor-{uid}"
             org, _ = VendorOrg.objects.get_or_create(
                 slug=slug,
-                defaults={"name": (user.username or user.email or f"Vendor {uid}")[:120], "owner_id": uid},
+                defaults={
+                    "name": (user.username or user.email or f"Vendor {uid}")[:120],
+                    "owner_id": uid,
+                },
             )
             VendorProfile.objects.filter(id=vpid).update(org_id=org.id)
 
@@ -47,4 +50,3 @@ class Migration(migrations.Migration):
             ),
         ),
     ]
-

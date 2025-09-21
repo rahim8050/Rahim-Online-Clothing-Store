@@ -24,4 +24,3 @@ class VendorOrgScopedRateThrottle(ScopedRateThrottle):
         if org_id is None and hasattr(request, "query_params"):
             org_id = request.query_params.get("org_id") or request.query_params.get("org")
         return f"{base}:org:{org_id}" if org_id else base
-

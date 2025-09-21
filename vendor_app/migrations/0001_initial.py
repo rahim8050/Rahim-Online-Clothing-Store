@@ -15,70 +15,137 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.CreateModel(
-            name='VendorOrg',
+            name="VendorOrg",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('name', models.CharField(max_length=120)),
-                ('slug', models.SlugField(max_length=140, unique=True)),
-                ('is_active', models.BooleanField(default=True)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('owner', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='owned_vendor_orgs', to=settings.AUTH_USER_MODEL)),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True, primary_key=True, serialize=False, verbose_name="ID"
+                    ),
+                ),
+                ("name", models.CharField(max_length=120)),
+                ("slug", models.SlugField(max_length=140, unique=True)),
+                ("is_active", models.BooleanField(default=True)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                (
+                    "owner",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="owned_vendor_orgs",
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
             ],
         ),
         migrations.CreateModel(
-            name='VendorMember',
+            name="VendorMember",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('role', models.CharField(choices=[('OWNER', 'Owner'), ('MANAGER', 'Manager'), ('STAFF', 'Staff')], db_index=True, max_length=16)),
-                ('is_active', models.BooleanField(default=True)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('user', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='vendor_memberships', to=settings.AUTH_USER_MODEL)),
-                ('org', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='members', to='vendor_app.vendororg')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True, primary_key=True, serialize=False, verbose_name="ID"
+                    ),
+                ),
+                (
+                    "role",
+                    models.CharField(
+                        choices=[("OWNER", "Owner"), ("MANAGER", "Manager"), ("STAFF", "Staff")],
+                        db_index=True,
+                        max_length=16,
+                    ),
+                ),
+                ("is_active", models.BooleanField(default=True)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                (
+                    "user",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="vendor_memberships",
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
+                (
+                    "org",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="members",
+                        to="vendor_app.vendororg",
+                    ),
+                ),
             ],
         ),
         migrations.CreateModel(
-            name='VendorProfile',
+            name="VendorProfile",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('is_active', models.BooleanField(default=True)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('org', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='profiles', to='vendor_app.vendororg')),
-                ('user', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, related_name='vendor_profile', to=settings.AUTH_USER_MODEL)),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True, primary_key=True, serialize=False, verbose_name="ID"
+                    ),
+                ),
+                ("is_active", models.BooleanField(default=True)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                (
+                    "org",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        related_name="profiles",
+                        to="vendor_app.vendororg",
+                    ),
+                ),
+                (
+                    "user",
+                    models.OneToOneField(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="vendor_profile",
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
             ],
         ),
         migrations.AddIndex(
-            model_name='vendororg',
-            index=models.Index(fields=['owner'], name='vendororg_owner_idx'),
+            model_name="vendororg",
+            index=models.Index(fields=["owner"], name="vendororg_owner_idx"),
         ),
         migrations.AddConstraint(
-            model_name='vendororg',
-            constraint=models.CheckConstraint(condition=models.Q(('slug', ''), _negated=True), name='vendororg_slug_not_empty'),
+            model_name="vendororg",
+            constraint=models.CheckConstraint(
+                condition=models.Q(("slug", ""), _negated=True), name="vendororg_slug_not_empty"
+            ),
         ),
         migrations.AddIndex(
-            model_name='vendormember',
-            index=models.Index(fields=['role'], name='vendormember_role_idx'),
+            model_name="vendormember",
+            index=models.Index(fields=["role"], name="vendormember_role_idx"),
         ),
         migrations.AddConstraint(
-            model_name='vendormember',
-            constraint=models.UniqueConstraint(fields=('org', 'user'), name='uniq_vendormember_org_user'),
+            model_name="vendormember",
+            constraint=models.UniqueConstraint(
+                fields=("org", "user"), name="uniq_vendormember_org_user"
+            ),
         ),
         migrations.AddConstraint(
-            model_name='vendormember',
-            constraint=models.UniqueConstraint(condition=models.Q(('role', 'OWNER')), fields=('org',), name='uniq_owner_per_org'),
+            model_name="vendormember",
+            constraint=models.UniqueConstraint(
+                condition=models.Q(("role", "OWNER")), fields=("org",), name="uniq_owner_per_org"
+            ),
         ),
         migrations.AddConstraint(
-            model_name='vendormember',
-            constraint=models.CheckConstraint(condition=models.Q(('role', ''), _negated=True), name='vendormember_role_not_empty'),
+            model_name="vendormember",
+            constraint=models.CheckConstraint(
+                condition=models.Q(("role", ""), _negated=True), name="vendormember_role_not_empty"
+            ),
         ),
         migrations.AddIndex(
-            model_name='vendorprofile',
-            index=models.Index(fields=['user'], name='vendorprofile_user_idx'),
+            model_name="vendorprofile",
+            index=models.Index(fields=["user"], name="vendorprofile_user_idx"),
         ),
         migrations.AddIndex(
-            model_name='vendorprofile',
-            index=models.Index(fields=['org'], name='vendorprofile_org_idx'),
+            model_name="vendorprofile",
+            index=models.Index(fields=["org"], name="vendorprofile_org_idx"),
         ),
     ]

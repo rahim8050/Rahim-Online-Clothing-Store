@@ -22,9 +22,9 @@
                 {% for item in cart_items %}
                 <div class="flex flex-col md:flex-row items-start md:items-center p-4 border rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200 product-item">
                     <div class="flex items-center mr-4 mb-4 md:mb-0">
-                        <input type="checkbox" 
-                                name="selected_items" 
-                                value="{{ item.product.id }}" 
+                        <input type="checkbox"
+                                name="selected_items"
+                                value="{{ item.product.id }}"
                                 class="product-checkbox h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
                                 data-price="{{ item.product.price }}"
                                 data-quantity="{{ item.quantity }}"
@@ -75,11 +75,11 @@
                                             -
                                         </button>
                                     </form>
-                                    
+
                                     <span class="px-3 py-1 text-gray-800 border-x">
                                         {{ item.quantity }}
                                     </span>
-                                    
+
                                     <form action="{% url 'cart:cart_increment' product_id=item.product.id %}" method="post" class="flex">
                                         {% csrf_token %}
                                         <button type="submit" class="px-3 py-1 bg-green-500 text-white hover:bg-green-600 rounded-md transition-colors duration-200">

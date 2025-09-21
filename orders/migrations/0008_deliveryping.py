@@ -7,21 +7,38 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('orders', '0007_remove_delivery_delivery_dest_lat_range_and_more'),
+        ("orders", "0007_remove_delivery_delivery_dest_lat_range_and_more"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='DeliveryPing',
+            name="DeliveryPing",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('lat', models.DecimalField(decimal_places=6, max_digits=9)),
-                ('lng', models.DecimalField(decimal_places=6, max_digits=9)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('delivery', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='pings', to='orders.delivery')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True, primary_key=True, serialize=False, verbose_name="ID"
+                    ),
+                ),
+                ("lat", models.DecimalField(decimal_places=6, max_digits=9)),
+                ("lng", models.DecimalField(decimal_places=6, max_digits=9)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                (
+                    "delivery",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="pings",
+                        to="orders.delivery",
+                    ),
+                ),
             ],
             options={
-                'indexes': [models.Index(fields=['delivery', 'created_at'], name='orders_deli_deliver_2162d2_idx'), models.Index(fields=['created_at'], name='orders_deli_created_a4b160_idx')],
+                "indexes": [
+                    models.Index(
+                        fields=["delivery", "created_at"], name="orders_deli_deliver_2162d2_idx"
+                    ),
+                    models.Index(fields=["created_at"], name="orders_deli_created_a4b160_idx"),
+                ],
             },
         ),
     ]

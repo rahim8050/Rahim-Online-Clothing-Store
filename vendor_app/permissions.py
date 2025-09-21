@@ -1,13 +1,10 @@
 from __future__ import annotations
 
-from typing import Optional
-
-from django.http import HttpRequest
 from rest_framework.permissions import BasePermission
 from rest_framework.request import Request
 
 from .models import VendorOrg
-from .services import resolve_org_from_request, has_min_role
+from .services import has_min_role, resolve_org_from_request
 
 
 class _BaseOrgPermission(BasePermission):
@@ -18,7 +15,7 @@ class _BaseOrgPermission(BasePermission):
     - or query/body parameter: `org_id` / `org_slug` / `org`
     """
 
-    required_min_role: Optional[str] = None  # 'STAFF' | 'MANAGER' | 'OWNER' | None
+    required_min_role: str | None = None  # 'STAFF' | 'MANAGER' | 'OWNER' | None
 
     def has_permission(self, request: Request, view) -> bool:  # type: ignore[override]
         # Allow schema generation without requiring org context
@@ -28,7 +25,7 @@ class _BaseOrgPermission(BasePermission):
             return False
         if getattr(request.user, "is_staff", False) or getattr(request.user, "is_superuser", False):
             return True
-        org: Optional[VendorOrg] = resolve_org_from_request(request, view)
+        org: VendorOrg | None = resolve_org_from_request(request, view)
         if org is None:
             return False
         if self.required_min_role is None:

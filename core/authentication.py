@@ -1,7 +1,7 @@
 import base64
 import hashlib
 import hmac
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
 
 from django.conf import settings
 from django.core.cache import cache
@@ -52,13 +52,13 @@ class HMACAuthentication(authentication.BaseAuthentication):
         # parse timestamp
         try:
             if ts_raw.isdigit():
-                ts = datetime.fromtimestamp(int(ts_raw), tz=timezone.utc)
+                ts = datetime.fromtimestamp(int(ts_raw), tz=UTC)
             else:
                 ts = datetime.fromisoformat(ts_raw.replace("Z", "+00:00"))
         except Exception:
             raise exceptions.AuthenticationFailed("Invalid timestamp format")
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         if abs(now - ts) > self.skew:
             raise exceptions.AuthenticationFailed("Timestamp outside allowed window")
 
@@ -93,4 +93,3 @@ def _coerce_secret_bytes(secret: str) -> bytes:
     except Exception:
         pass
     return s.encode("utf-8")
-

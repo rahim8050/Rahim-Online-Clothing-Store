@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-from typing import Optional
-
 from django.db.models import QuerySet
 
 from .models import Invoice
 
 
-def get_invoice_for_order(order_id: int) -> Optional[Invoice]:
+def get_invoice_for_order(order_id: int) -> Invoice | None:
     return Invoice.objects.filter(order_id=order_id).first()
 
 
@@ -17,4 +15,3 @@ def list_org_invoices(org_id: int, **filters) -> QuerySet[Invoice]:
     if status:
         qs = qs.filter(status=status)
     return qs.order_by("-issued_at")
-

@@ -1,9 +1,8 @@
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
 
-from product_app.models import Category, Product, Warehouse, ProductStock
 from orders.models import Order, OrderItem
-
+from product_app.models import Category, Product, ProductStock, Warehouse
 
 User = get_user_model()
 
@@ -104,4 +103,3 @@ class OrderSerializer(serializers.ModelSerializer):
             "payment_intent_id",
             "stripe_receipt_url",
         ]
-

@@ -85,4 +85,3 @@ Expected JSON (healthy):
 - `ETIMS disabled` – enable flag and retry.
 - `ORG_NOT_VERIFIED` – set valid KRA PIN and `tax_status=VERIFIED` on the org.
 - KPI job skipped – enable `KPIS_ENABLED`.
-

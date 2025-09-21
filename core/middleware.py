@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import uuid
+
 from django.conf import settings
 
 # Allowed origins for local development (both HTTP and HTTPS)

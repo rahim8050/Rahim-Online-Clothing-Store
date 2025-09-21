@@ -1,28 +1,28 @@
 # utils_payments_geo.py
 from __future__ import annotations
 
-from decimal import Decimal, ROUND_HALF_UP
-from typing import Optional, Union, Any, Dict
+from decimal import ROUND_HALF_UP, Decimal
+from typing import Any
 
 import requests
 from django.conf import settings
 
 # ------------ Quantization constants ------------
 Q6 = Decimal("0.000001")  # 6 dp (geo)
-Q2 = Decimal("0.01")      # 2 dp (money)
+Q2 = Decimal("0.01")  # 2 dp (money)
 
 # Cache once; safe if missing
-api_key: Optional[str] = getattr(settings, "GEOAPIFY_API_KEY", None)
+api_key: str | None = getattr(settings, "GEOAPIFY_API_KEY", None)
 
 
 # -------------------- Geo --------------------
 def reverse_geocode(
-    lat: Union[float, str, Decimal],
-    lon: Union[float, str, Decimal],
+    lat: float | str | Decimal,
+    lon: float | str | Decimal,
     *,
     timeout: int = 6,
-    session: Optional[requests.Session] = None,
-) -> Dict[str, Any]:
+    session: requests.Session | None = None,
+) -> dict[str, Any]:
     """
     Reverse geocode via Geoapify.
 
@@ -84,7 +84,7 @@ def to_minor_units(amount: Any) -> int:
 
 
 # -------------------- UI Status Normalizer --------------------
-def derive_ui_payment_status(order: Any, last_tx: Optional[Any] = None) -> str:
+def derive_ui_payment_status(order: Any, last_tx: Any | None = None) -> str:
     """
     Return a simple UI status:
       'PAID', 'PENDING', 'FAILED', 'CANCELLED', 'REFUNDED', 'NOT_PAID'.

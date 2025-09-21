@@ -1,16 +1,15 @@
 import logging
+
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 
 from .assignment import pick_warehouse
+from .models import Delivery, Order, OrderItem
 from .services.destinations import ensure_order_coords
-from .models import Order, OrderItem
-from .models import Delivery
-from asgiref.sync import async_to_sync
-from channels.layers import get_channel_layer
 
 logger = logging.getLogger(__name__)
-
 
 
 @receiver(post_save, sender=OrderItem)

@@ -9,4 +9,3 @@ class VendorAppConfig(AppConfig):
         """Hook for signals in the future (none for now)."""
         # from . import signals  # noqa: F401
         return super().ready()
-

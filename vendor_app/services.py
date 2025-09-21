@@ -1,13 +1,9 @@
 from __future__ import annotations
 
-from typing import Optional, Tuple
-
 from django.core.exceptions import ObjectDoesNotExist
-from django.db.models import Q
 from rest_framework.exceptions import PermissionDenied
 
 from .models import VendorMember, VendorOrg
-
 
 # Role ranking for minimum checks
 ROLE_RANK = {"STAFF": 1, "MANAGER": 2, "OWNER": 3}
@@ -17,11 +13,10 @@ def rank(role: str) -> int:
     return ROLE_RANK.get((role or "").upper(), 0)
 
 
-def get_active_membership(user, org: VendorOrg) -> Optional[VendorMember]:
+def get_active_membership(user, org: VendorOrg) -> VendorMember | None:
     try:
-        return (
-            VendorMember.objects.select_related("org", "user")
-            .get(org=org, user=user, is_active=True)
+        return VendorMember.objects.select_related("org", "user").get(
+            org=org, user=user, is_active=True
         )
     except VendorMember.DoesNotExist:
         return None
@@ -50,7 +45,7 @@ def require_min_role(user, org: VendorOrg, min_role: str) -> VendorMember:
     return m
 
 
-def resolve_org_from_request(request, view=None) -> Optional[VendorOrg]:
+def resolve_org_from_request(request, view=None) -> VendorOrg | None:
     """Best-effort resolver for an org from request/view.
 
     Tries, in order:
