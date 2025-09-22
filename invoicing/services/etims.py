@@ -1,27 +1,27 @@
 from __future__ import annotations
 
-import uuid
-from dataclasses import dataclass
 import logging
 import time
-from django.utils.module_loading import import_string
-from typing import Any, Dict
+import uuid
+from dataclasses import dataclass
+from typing import Any
 
 from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
+from django.utils.module_loading import import_string
 
-from payments.idempotency import idempotent
-from invoicing.models import Invoice
-from vendor_app.models import VendorOrg
 from core import metrics
+from invoicing.models import Invoice
+from payments.idempotency import idempotent
+from vendor_app.models import VendorOrg
 
 
 @dataclass
 class EtimsResult:
     status: str
     irn: str | None = None
-    errors: Dict[str, Any] | None = None
+    errors: dict[str, Any] | None = None
 
 
 class EtimsClient:
@@ -105,7 +105,7 @@ def submit_invoice(*, invoice: Invoice, idempotency_key: str | None = None) -> E
     """Submit an invoice to eTIMS (sandbox adapter). Idempotent per invoice.
 
     - If invoice is already ACCEPTED, return immediately.
-    - Transition DRAFT/REJECTED -> SUBMITTED -> ACCEPTED/REJECTED
+    - Transition DRAFT/REJECTED/SUBMITTED -> SUBMITTED -> ACCEPTED/REJECTED
     - Persist IRN on acceptance; set timestamps accordingly
     """
     # Feature flag gate
@@ -130,8 +130,12 @@ def submit_invoice(*, invoice: Invoice, idempotency_key: str | None = None) -> E
         if invoice.status == Invoice.Status.ACCEPTED:
             return EtimsResult(status="accepted", irn=invoice.irn or None)
 
-        # Move to SUBMITTED if still draft/rejected
-        if invoice.status in {Invoice.Status.DRAFT, Invoice.Status.REJECTED, Invoice.Status.SUBMITTED}:
+        # Move to SUBMITTED if still draft/rejected/submitted (normalize to submitted)
+        if invoice.status in {
+            Invoice.Status.DRAFT,
+            Invoice.Status.REJECTED,
+            Invoice.Status.SUBMITTED,
+        }:
             invoice.status = Invoice.Status.SUBMITTED
             invoice.submitted_at = invoice.submitted_at or timezone.now()
             invoice.save(update_fields=["status", "submitted_at", "updated_at"])

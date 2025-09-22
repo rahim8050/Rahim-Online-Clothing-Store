@@ -3,18 +3,12 @@ from django import forms
 from django.conf import settings
 from django.contrib import admin, messages
 from django.contrib.admin.helpers import ActionForm
+from django.contrib.admin.sites import AlreadyRegistered, NotRegistered
 from django.contrib.auth.admin import UserAdmin
 from django.core.mail import send_mail
-from django.contrib.admin.sites import AlreadyRegistered, NotRegistered
 
 from .models import CustomUser, VendorApplication, VendorStaff
 from users.services import deactivate_staff as deactivate_vendor_staff
-
-
-
-
-admin.site.register(CustomUser, UserAdmin)
-
 
 # -- Register CustomUser exactly once (and make ours the one in use) --
 try:
@@ -25,7 +19,6 @@ try:
     admin.site.register(CustomUser, UserAdmin)
 except AlreadyRegistered:
     pass
-
 
 
 class VendorApplicationActionForm(ActionForm):
@@ -41,8 +34,13 @@ class VendorApplicationActionForm(ActionForm):
 @admin.register(VendorApplication)
 class VendorApplicationAdmin(admin.ModelAdmin):
     list_display = (
-        "id", "user", "company_name", "status",
-        "created_at", "decided_by", "decided_at",
+        "id",
+        "user",
+        "company_name",
+        "status",
+        "created_at",
+        "decided_by",
+        "decided_at",
     )
     list_filter = ("status", "created_at")
     search_fields = ("user__username", "user__email", "company_name")
@@ -70,7 +68,9 @@ class VendorApplicationAdmin(admin.ModelAdmin):
         if approved:
             self.message_user(request, f"Approved {approved} application(s).", level=messages.SUCCESS)
         if skipped:
-            self.message_user(request, f"Skipped {skipped} non-pending application(s).", level=messages.WARNING)
+            self.message_user(
+                request, f"Skipped {skipped} non-pending application(s).", level=messages.WARNING
+            )
 
     @admin.action(description="Reject selected applications")
     def reject_selected(self, request, queryset):
@@ -91,7 +91,9 @@ class VendorApplicationAdmin(admin.ModelAdmin):
         if rejected:
             self.message_user(request, f"Rejected {rejected} application(s).", level=messages.WARNING)
         if skipped:
-            self.message_user(request, f"Skipped {skipped} non-pending application(s).", level=messages.INFO)
+            self.message_user(
+                request, f"Skipped {skipped} non-pending application(s).", level=messages.INFO
+            )
 
 
 @admin.register(VendorStaff)

@@ -21,4 +21,3 @@ test('assistant stays closed on page load', async ({ page }) => {
     await expect(legacyPanel).toHaveClass(/hidden/)
   }
 })
-

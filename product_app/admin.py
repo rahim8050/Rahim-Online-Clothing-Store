@@ -1,6 +1,7 @@
 from django.contrib import admin
 from django.db.models import Sum
-from .models import Category, Product, Warehouse, ProductStock
+
+from .models import Category, Product, ProductStock, Warehouse
 
 
 @admin.register(Category)

@@ -103,4 +103,3 @@ PAYSTACK_SECRET_KEY:  …
 3) Admin: register Delivery with list_display, filters, search.
 4) Enforce allowed status transitions (assigned→picked_up→en_route→delivered/cancelled).
 5) Frontend: reconnect & wsUrl fallback; handle `assign/status/position`.
-

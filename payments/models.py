@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-import uuid
 from django.conf import settings
 from django.db import models
 from django.db.models import Q
 from django.utils import timezone
 
-from .enums import Gateway, TxnStatus, PaymentMethod
 from vendor_app.models import VendorOrg
+from .enums import Gateway, PaymentMethod, TxnStatus
 
 
 class IdempotencyKey(models.Model):
@@ -16,7 +15,6 @@ class IdempotencyKey(models.Model):
     Use to dedupe side-effecting operations across retries (e.g., payouts).
     Keys are unique per scope to allow reuse in different domains.
     """
-
     scope = models.CharField(max_length=64, db_index=True)
     key = models.CharField(max_length=128)
     response_hash = models.CharField(max_length=64, blank=True, default="")
@@ -36,13 +34,19 @@ class IdempotencyKey(models.Model):
 
 class Transaction(models.Model):
     order = models.ForeignKey("orders.Order", on_delete=models.CASCADE, related_name="transactions")
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="transactions")
-    vendor_org = models.ForeignKey(VendorOrg, null=True, blank=True, on_delete=models.SET_NULL, related_name="transactions")
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="transactions"
+    )
+    vendor_org = models.ForeignKey(
+        VendorOrg, null=True, blank=True, on_delete=models.SET_NULL, related_name="transactions"
+    )
+
     method = models.CharField(max_length=20, choices=PaymentMethod.choices)
     gateway = models.CharField(max_length=20, choices=Gateway.choices)
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     currency = models.CharField(max_length=10)
     status = models.CharField(max_length=30, choices=TxnStatus.choices, default=TxnStatus.PENDING)
+
     idempotency_key = models.CharField(max_length=64, unique=True)
     reference = models.CharField(max_length=64, unique=True)
     gateway_reference = models.CharField(max_length=128, unique=True, null=True, blank=True)
@@ -73,6 +77,7 @@ class Transaction(models.Model):
             models.Index(fields=["created_at"]),
         ]
         constraints = [
+            # Only one SUCCESS per order (duplicates must refund or be marked duplicate)
             models.UniqueConstraint(
                 fields=["order"],
                 condition=Q(status=TxnStatus.SUCCESS),
@@ -114,7 +119,16 @@ class AuditLog(models.Model):
         indexes = [models.Index(fields=["event", "created_at"])]
 
     @classmethod
-    def log(cls, *, event: str, transaction: Transaction | None = None, order=None, request_id: str = "", message: str = "", meta: dict | None = None):
+    def log(
+        cls,
+        *,
+        event: str,
+        transaction: Transaction | None = None,
+        order=None,
+        request_id: str = "",
+        message: str = "",
+        meta: dict | None = None,
+    ):
         return cls.objects.create(
             event=event,
             transaction=transaction,
@@ -127,7 +141,13 @@ class AuditLog(models.Model):
 
 class NotificationEvent(models.Model):
     event_key = models.CharField(max_length=128, unique=True, db_index=True)
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="payment_notifications")
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="payment_notifications",
+    )
     channel = models.CharField(max_length=24, default="email")  # e.g. email | sms | both
     payload = models.JSONField(null=True, blank=True)
     sent_at = models.DateTimeField(auto_now_add=True)
@@ -139,36 +159,39 @@ class NotificationEvent(models.Model):
 
     def __str__(self):
         return self.event_key
-    
 
 
 class Refund(models.Model):
     class Status(models.TextChoices):
-        PENDING   = "pending",   "Pending"
+        PENDING = "pending", "Pending"
         SUCCEEDED = "succeeded", "Succeeded"
-        FAILED    = "failed",    "Failed"
+        FAILED = "failed", "Failed"
 
-    transaction       = models.ForeignKey("payments.Transaction", on_delete=models.CASCADE, related_name="refunds")
-    amount            = models.DecimalField(max_digits=12, decimal_places=2)
-    gateway           = models.CharField(max_length=32)                  # "paystack" | "stripe" | "mpesa"
-    reason            = models.CharField(max_length=64, default="duplicate")
-    refund_reference  = models.CharField(max_length=128, null=True, blank=True)  # provider refund id
-    raw_response      = models.JSONField(null=True, blank=True)
-    status            = models.CharField(max_length=16, choices=Status.choices, default=Status.PENDING)
-    created_at        = models.DateTimeField(auto_now_add=True)
-    updated_at        = models.DateTimeField(auto_now=True)
+    transaction = models.ForeignKey(
+        "payments.Transaction", on_delete=models.CASCADE, related_name="refunds"
+    )
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    gateway = models.CharField(max_length=32)  # "paystack" | "stripe" | "mpesa"
+    reason = models.CharField(max_length=64, default="duplicate")
+    refund_reference = models.CharField(max_length=128, null=True, blank=True)  # provider refund id
+    raw_response = models.JSONField(null=True, blank=True)
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.PENDING)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         db_table = "payments_refund"
 
     def __str__(self):
         return f"{self.transaction.reference} -> {self.status}"
-    
+
 
 class PaymentEvent(models.Model):
     provider = models.CharField(max_length=24)
     reference = models.CharField(max_length=128, db_index=True)
-    vendor_org = models.ForeignKey(VendorOrg, null=True, blank=True, on_delete=models.SET_NULL, related_name="payment_events")
+    vendor_org = models.ForeignKey(
+        VendorOrg, null=True, blank=True, on_delete=models.SET_NULL, related_name="payment_events"
+    )
     body_sha256 = models.CharField(max_length=64, unique=True)
     body = models.JSONField(null=True, blank=True)
     gross_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)

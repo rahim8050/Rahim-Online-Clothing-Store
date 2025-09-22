@@ -1,22 +1,24 @@
-import pytest
 from decimal import Decimal
-from django.contrib.auth import get_user_model
 from uuid import uuid4
+
+import pytest
+from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.db import transaction
 
-from product_app.models import Category, Product, ProductStock, Warehouse
 from orders.models import Order, OrderItem
-from payments.services import process_payout
 from payments.selectors import safe_decrement_stock
-
+from payments.services import process_payout
+from product_app.models import Category, Product, ProductStock, Warehouse
 
 pytestmark = pytest.mark.django_db
 
 
 def make_catalog(qty=5):
     cat = Category.objects.create(name="Tees", slug="tees")
-    p = Product.objects.create(category=cat, name="Test Tee", slug="test-tee", price=Decimal("100.00"))
+    p = Product.objects.create(
+        category=cat, name="Test Tee", slug="test-tee", price=Decimal("100.00")
+    )
     wh = Warehouse.objects.create(name="Main WH", latitude=0.02, longitude=36.8, address="Nairobi")
     stock = ProductStock.objects.create(product=p, warehouse=wh, quantity=qty)
     return p, stock, wh
@@ -25,12 +27,21 @@ def make_catalog(qty=5):
 def make_order(product, wh, qty=1):
     User = get_user_model()
     suffix = uuid4().hex[:6]
-    u = User.objects.create_user(username=f"u{qty}-{suffix}", email=f"u{qty}-{suffix}@ex.com", password="x")
-    o = Order.objects.create(
-        full_name="Rahim", email="r@example.com", address="Nairobi",
-        dest_address_text="Somewhere", dest_lat=0.1, dest_lng=36.9, user=u,
+    u = User.objects.create_user(
+        username=f"u{qty}-{suffix}", email=f"u{qty}-{suffix}@ex.com", password="x"
     )
-    OrderItem.objects.create(order=o, product=product, quantity=qty, price=product.price, warehouse=wh)
+    o = Order.objects.create(
+        full_name="Rahim",
+        email="r@example.com",
+        address="Nairobi",
+        dest_address_text="Somewhere",
+        dest_lat=0.1,
+        dest_lng=36.9,
+        user=u,
+    )
+    OrderItem.objects.create(
+        order=o, product=product, quantity=qty, price=product.price, warehouse=wh
+    )
     return o
 
 

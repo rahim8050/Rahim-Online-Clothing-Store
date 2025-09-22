@@ -1,5 +1,5 @@
 # assistant/context_processors.py
-from django.contrib.auth.models import Group
+
 
 def _has(u, name: str) -> bool:
     """Robust role detector: supports user.role, boolean flags, and Django groups."""
@@ -9,6 +9,7 @@ def _has(u, name: str) -> bool:
         or bool(getattr(u, f"is_{name_l}", False))
         or u.groups.filter(name__iexact=name_l).exists()
     )
+
 
 def assistant_role(request):
     u = request.user

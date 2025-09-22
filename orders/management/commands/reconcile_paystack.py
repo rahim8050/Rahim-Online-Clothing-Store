@@ -1,18 +1,17 @@
 # orders/management/commands/reconcile_paystack.py
 
-import json
-import hmac
-import hashlib
 import logging
-import requests
+from datetime import timedelta
 
+import requests
+from django.conf import settings
 from django.core.management.base import BaseCommand
 from django.utils import timezone
-from django.conf import settings
-from datetime import timedelta
-from orders.models import Transaction, EmailDispatchLog, Order
+
+from orders.models import EmailDispatchLog, Transaction
 
 logger = logging.getLogger(__name__)
+
 
 class Command(BaseCommand):
     help = "Reconcile stale Paystack transactions via the verify API."
@@ -66,9 +65,7 @@ class Command(BaseCommand):
 
             tx.save(update_fields=["status", "callback_received", "verified"])
 
-            self.stdout.write(
-                self.style.SUCCESS(f"{tx.reference}: reconciled → {tx.status}")
-            )
+            self.stdout.write(self.style.SUCCESS(f"{tx.reference}: reconciled → {tx.status}"))
 
             # If it succeeded, update order + queue email
             if tx.status == "success" and tx.verified:
@@ -78,9 +75,7 @@ class Command(BaseCommand):
                 order.save(update_fields=["paid", "payment_status"])
 
                 EmailDispatchLog.objects.create(
-                    transaction=tx,
-                    status="queued",
-                    note="Reconciled via verify API"
+                    transaction=tx, status="queued", note="Reconciled via verify API"
                 )
 
         self.stdout.write(self.style.SUCCESS("Reconciliation run complete."))

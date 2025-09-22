@@ -1,20 +1,21 @@
+from django.conf import settings
+from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import include, path
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
-from django.conf import settings
-from django.conf.urls.static import static
 
-from users.views import debug_ws_push
+from core.views import healthz
+from payments.views import CheckoutView, MPesaWebhookView, PaystackWebhookView, StripeWebhookView
 from product_app import views as product_views
 from users import views as user_views
-from payments.views import (
-    CheckoutView,
-    StripeWebhookView,
-    PaystackWebhookView,
-    MPesaWebhookView,
-)
-from core.views import healthz
+from users.views import debug_ws_push
+
+# Optional: import readyz if present; otherwise fall back to healthz
+try:
+    from core.views import readyz
+except Exception:  # pragma: no cover
+    readyz = healthz
 
 urlpatterns = [
     path("admin/", admin.site.urls),
@@ -43,7 +44,7 @@ urlpatterns = [
     path("apis/", include("apis.urls")),
     path("api/assistant/", include("assistant.urls")),
 
-    # New versioned API (DRF-only), per-app mounts
+    # New versioned API (DRF-only)
     path("apis/v1/schema/", SpectacularAPIView.as_view(), name="v1-schema"),
     path("apis/v1/docs/", SpectacularSwaggerView.as_view(url_name="v1-schema"), name="v1-docs"),
 
@@ -52,20 +53,13 @@ urlpatterns = [
     path("apis/v1/auth/jwt/refresh/", TokenRefreshView.as_view(), name="v1-jwt-refresh"),
 
     # Per-app v1 routers
-
     path("apis/v1/catalog/", include("product_app.urls_v1")),
     path("apis/v1/cart/", include("cart.urls_v1")),
     path("apis/v1/orders/", include("orders.urls_v1")),
     path("apis/v1/payments/", include("payments.urls_v1")),
     path("apis/v1/users/", include("users.urls_v1")),
-
-    path('apis/v1/catalog/', include('product_app.urls_v1')),
-    path('apis/v1/cart/', include('cart.urls_v1')),
-    path('apis/v1/orders/', include('orders.urls_v1')),
-    path('apis/v1/payments/', include('payments.urls_v1')),
-    path('apis/v1/users/', include('users.urls_v1')),
-    path('apis/v1/invoicing/', include('invoicing.urls_v1')),
-    path('apis/v1/vendor/', include('vendor_app.urls_v1')),
+    path("apis/v1/invoicing/", include("invoicing.urls_v1")),
+    path("apis/v1/vendor/", include("vendor_app.urls_v1")),
 
     # v2 mounts (keep v1 intact)
     path("apis/v2/cart/", include("cart.urls_v2")),
@@ -77,25 +71,13 @@ urlpatterns = [
     path("webhook/paystack/", PaystackWebhookView.as_view(), name="paystack_webhook"),
     path("webhook/mpesa/", MPesaWebhookView.as_view(), name="mpesa_webhook"),
 
-
     # Health
     path("healthz", healthz, name="healthz"),  # keep path stable if already used
-                                                 # (optionally change to "healthz/" and update probes)
-
-    path('payments/checkout/', CheckoutView.as_view(), name='payments_checkout'),
-    path('webhook/stripe/', StripeWebhookView.as_view(), name='stripe_webhook'),
-    path('webhook/paystack/', PaystackWebhookView.as_view(), name='paystack_webhook'),
-    path('webhook/mpesa/', MPesaWebhookView.as_view(), name='mpesa_webhook'),
-    path('healthz', healthz, name='healthz'),
-    path('readyz', __import__('core.views', fromlist=['readyz']).readyz, name='readyz'),
-
+    path("readyz", readyz, name="readyz"),
 
     # Product routes — keep AFTER dashboards so they don't shadow them
     path("products/search/", product_views.SearchProduct, name="product_search"),
-    path(
-        "products/",
-        include(("product_app.urls", "product_app"), namespace="product_app"),
-    ),
+    path("products/", include(("product_app.urls", "product_app"), namespace="product_app")),
     path("category/<slug:category_slug>/", product_views.product_list, name="product_list_by_category"),
 
     # Profile

@@ -1,17 +1,18 @@
 # orders/admin.py
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import ROUND_HALF_UP, Decimal
 
 from django import forms
 from django.contrib import admin, messages
-from django.core.validators import MinValueValidator, MaxValueValidator
+from django.core.validators import MaxValueValidator, MinValueValidator
 
-from .models import Order, Delivery, DeliveryPing, DeliveryEvent
+from .models import Delivery, DeliveryEvent, DeliveryPing, Order
 from .services import assign_warehouses_and_update_stock
 
 Q6 = Decimal("0.000001")
 
 
 # ------------ PINGS / EVENTS ------------
+
 
 @admin.register(DeliveryPing)
 class DeliveryPingAdmin(admin.ModelAdmin):
@@ -29,23 +30,32 @@ class DeliveryEventAdmin(admin.ModelAdmin):
 
 # ------------ ORDER ------------
 
+
 class OrderAdminForm(forms.ModelForm):
     # Allow very long inputs; we round to 6 dp in clean()
     latitude = forms.DecimalField(
-        max_digits=30, decimal_places=24, required=False,
-        validators=[MinValueValidator(-90), MaxValueValidator(90)]
+        max_digits=30,
+        decimal_places=24,
+        required=False,
+        validators=[MinValueValidator(-90), MaxValueValidator(90)],
     )
     longitude = forms.DecimalField(
-        max_digits=30, decimal_places=24, required=False,
-        validators=[MinValueValidator(-180), MaxValueValidator(180)]
+        max_digits=30,
+        decimal_places=24,
+        required=False,
+        validators=[MinValueValidator(-180), MaxValueValidator(180)],
     )
     dest_lat = forms.DecimalField(
-        max_digits=30, decimal_places=24, required=False,
-        validators=[MinValueValidator(-90), MaxValueValidator(90)]
+        max_digits=30,
+        decimal_places=24,
+        required=False,
+        validators=[MinValueValidator(-90), MaxValueValidator(90)],
     )
     dest_lng = forms.DecimalField(
-        max_digits=30, decimal_places=24, required=False,
-        validators=[MinValueValidator(-180), MaxValueValidator(180)]
+        max_digits=30,
+        decimal_places=24,
+        required=False,
+        validators=[MinValueValidator(-180), MaxValueValidator(180)],
     )
 
     class Meta:
@@ -63,30 +73,43 @@ class OrderAdminForm(forms.ModelForm):
 
 # ------------ DELIVERY ------------
 
+
 class DeliveryAdminForm(forms.ModelForm):
     origin_lat = forms.DecimalField(
-        max_digits=30, decimal_places=24, required=False,
-        validators=[MinValueValidator(-90), MaxValueValidator(90)]
+        max_digits=30,
+        decimal_places=24,
+        required=False,
+        validators=[MinValueValidator(-90), MaxValueValidator(90)],
     )
     origin_lng = forms.DecimalField(
-        max_digits=30, decimal_places=24, required=False,
-        validators=[MinValueValidator(-180), MaxValueValidator(180)]
+        max_digits=30,
+        decimal_places=24,
+        required=False,
+        validators=[MinValueValidator(-180), MaxValueValidator(180)],
     )
     dest_lat = forms.DecimalField(
-        max_digits=30, decimal_places=24, required=False,
-        validators=[MinValueValidator(-90), MaxValueValidator(90)]
+        max_digits=30,
+        decimal_places=24,
+        required=False,
+        validators=[MinValueValidator(-90), MaxValueValidator(90)],
     )
     dest_lng = forms.DecimalField(
-        max_digits=30, decimal_places=24, required=False,
-        validators=[MinValueValidator(-180), MaxValueValidator(180)]
+        max_digits=30,
+        decimal_places=24,
+        required=False,
+        validators=[MinValueValidator(-180), MaxValueValidator(180)],
     )
     last_lat = forms.DecimalField(
-        max_digits=30, decimal_places=24, required=False,
-        validators=[MinValueValidator(-90), MaxValueValidator(90)]
+        max_digits=30,
+        decimal_places=24,
+        required=False,
+        validators=[MinValueValidator(-90), MaxValueValidator(90)],
     )
     last_lng = forms.DecimalField(
-        max_digits=30, decimal_places=24, required=False,
-        validators=[MinValueValidator(-180), MaxValueValidator(180)]
+        max_digits=30,
+        decimal_places=24,
+        required=False,
+        validators=[MinValueValidator(-180), MaxValueValidator(180)],
     )
 
     class Meta:
@@ -103,6 +126,7 @@ class DeliveryAdminForm(forms.ModelForm):
 
 
 # ------------ ADMINS ------------
+
 
 @admin.register(Order)
 class OrderAdmin(admin.ModelAdmin):
@@ -123,7 +147,7 @@ class OrderAdmin(admin.ModelAdmin):
             try:
                 assign_warehouses_and_update_stock(order)
                 success += 1
-            except Exception as e:
+            except Exception:
                 errors += 1
         if success:
             messages.success(request, f"Assigned + reserved stock for {success} order(s).")
@@ -137,9 +161,17 @@ class OrderAdmin(admin.ModelAdmin):
 class DeliveryAdmin(admin.ModelAdmin):
     form = DeliveryAdminForm
     list_display = (
-        "id", "order", "driver", "status",
-        "assigned_at", "picked_up_at", "delivered_at",
-        "last_lat", "last_lng", "last_ping_at", "updated_at",
+        "id",
+        "order",
+        "driver",
+        "status",
+        "assigned_at",
+        "picked_up_at",
+        "delivered_at",
+        "last_lat",
+        "last_lng",
+        "last_ping_at",
+        "updated_at",
     )
     list_filter = ("status", "assigned_at", "picked_up_at", "delivered_at", "last_ping_at")
     search_fields = ("=id", "=order__id", "order__full_name", "driver__username", "driver__email")

@@ -1,26 +1,26 @@
-from django.urls import path, reverse_lazy
 from django.contrib.auth import views as auth_views
+from django.urls import path, reverse_lazy
 
-from .views import ResendActivationEmailView
 from users.views import (
     CustomLoginView,
     Logout,
     RegisterUser,
-    activate,
-    profile_view,
-    profile_settings_view,
-    change_password_view,
-    my_orders,
-    geoapify_test,
-    vendor_dashboard,
-    driver_dashboard,
-    after_login,
-    VendorApplyAPI,
     VendorApplicationApproveAPI,
-    driver_sim,
+    activate,
+    after_login,
+    change_password_view,
+    driver_dashboard,
     driver_live,
+    driver_sim,
+    geoapify_test,
+    my_orders,
+    profile_settings_view,
+    profile_view,
     vendor_apply_deprecated,
+    vendor_dashboard,
 )
+
+from .views import ResendActivationEmailView
 
 app_name = "users"
 
@@ -31,18 +31,15 @@ urlpatterns = [
     path("logout/", Logout.as_view(), name="logout"),
     path("activate/<uidb64>/<token>/", activate, name="activate"),
     path("resend-activation/", ResendActivationEmailView.as_view(), name="resend_activation"),
-
     # Profile / account
     path("profile/", profile_view, name="profile"),
     path("profile/settings/", profile_settings_view, name="profile_settings"),
     path("profile/password/", change_password_view, name="change_password"),
     path("my-orders/", my_orders, name="my_orders"),
     path("after-login/", after_login, name="after_login"),
-
     # Dashboards
     path("vendor-dashboard/", vendor_dashboard, name="vendor_dashboard"),
     path("driver-dashboard/", driver_dashboard, name="driver_dashboard"),
-
     # Vendor applications (legacy + admin action)
     # Deprecated: kept for compatibility (new flow under /apis/vendor/apply/)
     path("vendor-applications/", vendor_apply_deprecated, name="vendor-apply"),
@@ -51,14 +48,11 @@ urlpatterns = [
         VendorApplicationApproveAPI.as_view(),
         name="vendor-application-approve",
     ),
-
     # Driver tools / live tracking
     path("driver/sim/", driver_sim, name="driver-sim"),
     path("driver/live/<int:delivery_id>/", driver_live, name="driver-live"),
-
     # Dev utilities
     path("dev/geoapify/", geoapify_test, name="geoapify-test"),
-
     # Password reset flow
     path(
         "reset_password/",

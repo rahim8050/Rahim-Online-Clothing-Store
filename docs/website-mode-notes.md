@@ -28,4 +28,3 @@ Testing
 - Hard refresh the app and verify there are no red errors in DevTools.
 - Visit /orders/create/ and confirm it resolves (200/302 depending on view).
 - Click the mobile menu and Add to Cart buttons; errors should not break interaction.
-

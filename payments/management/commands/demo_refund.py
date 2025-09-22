@@ -1,14 +1,16 @@
 # payments/management/commands/demo_refund.py
-from django.core.management.base import BaseCommand, CommandError
-from django.utils import timezone
-from django.db.models import ForeignKey, IntegerField, CharField
-from django.core.exceptions import FieldDoesNotExist
-from django.contrib.auth import get_user_model
 from uuid import uuid4
 
-from payments.notify import emit_once, send_refund_email
-from payments.models import Transaction
+from django.contrib.auth import get_user_model
+from django.core.exceptions import FieldDoesNotExist
+from django.core.management.base import BaseCommand, CommandError
+from django.db.models import CharField, ForeignKey, IntegerField
+from django.utils import timezone
+
 from payments.gateways import maybe_refund_duplicate_success
+from payments.models import Transaction
+from payments.notify import emit_once, send_refund_email
+
 
 # ---- status helpers (schema-agnostic) ----
 def _status_choices():
@@ -18,6 +20,7 @@ def _status_choices():
     except Exception:
         return []
 
+
 def _pick_status(preferred):
     choices = _status_choices()
     lut = {c.upper(): c for c in choices}
@@ -26,8 +29,10 @@ def _pick_status(preferred):
             return lut[cand.upper()]
     return preferred[0]
 
+
 STATUS_SUCCEEDED = _pick_status(["SUCCEEDED", "SUCCESS", "PAID", "COMPLETED"])
 STATUS_REFUNDED_DUPLICATE = _pick_status(["REFUNDED_DUPLICATE", "REFUNDED"])
+
 
 # ---- order schema inference ----
 def _infer_order_binding():
@@ -47,11 +52,16 @@ def _infer_order_binding():
         pass
     raise CommandError("Could not find 'order' FK or 'order_id' field on Transaction model.")
 
+
 class Command(BaseCommand):
-    help = "Demo: create 2 successes for one order; auto-refund the later one and email the customer."
+    help = (
+        "Demo: create 2 successes for one order; auto-refund the later one and email the customer."
+    )
 
     def add_arguments(self, parser):
-        parser.add_argument("--order", required=True, help="Order PK (int) or code (str), depending on schema")
+        parser.add_argument(
+            "--order", required=True, help="Order PK (int) or code (str), depending on schema"
+        )
         parser.add_argument("--user-pk", type=int, help="Required if Transaction.user is NOT NULL")
         parser.add_argument("--amount", default="1500.00")
         parser.add_argument("--gateway", default="paystack")
@@ -59,7 +69,9 @@ class Command(BaseCommand):
 
     def handle(self, *args, **opts):
         mode, field_name = _infer_order_binding()
-        amount = opts["amount"]; gateway = opts["gateway"]; method = opts["method"]
+        amount = opts["amount"]
+        gateway = opts["gateway"]
+        method = opts["method"]
         User = get_user_model()
 
         # Resolve order filter from --order
@@ -87,14 +99,19 @@ class Command(BaseCommand):
                 if not user_obj:
                     raise CommandError(f"No user found with pk={opts['user_pk']}")
             else:
-                user_obj = (User.objects.filter(is_superuser=True).first()
-                            or User.objects.first())
+                user_obj = User.objects.filter(is_superuser=True).first() or User.objects.first()
                 if not user_obj:
-                    raise CommandError("Transaction.user is NOT NULL. Provide --user-pk pointing to an existing user.")
+                    raise CommandError(
+                        "Transaction.user is NOT NULL. Provide --user-pk pointing to an existing user."
+                    )
 
         self.stdout.write(self.style.WARNING(f"Schema detected: {mode} on '{field_name}'"))
-        self.stdout.write(self.style.WARNING(f"Creating two SUCCEEDED tx for {field_name}={order_val}..."))
-        self.stdout.write(f"Resolved statuses -> SUCCEEDED='{STATUS_SUCCEEDED}', DUP_REFUND='{STATUS_REFUNDED_DUPLICATE}'")
+        self.stdout.write(
+            self.style.WARNING(f"Creating two SUCCEEDED tx for {field_name}={order_val}...")
+        )
+        self.stdout.write(
+            f"Resolved statuses -> SUCCEEDED='{STATUS_SUCCEEDED}', DUP_REFUND='{STATUS_REFUNDED_DUPLICATE}'"
+        )
 
         # Create two success transactions
         def new_tx():
@@ -116,7 +133,8 @@ class Command(BaseCommand):
                 payload["user_id"] = user_obj.id
             return Transaction.objects.create(**payload)
 
-        tx1 = new_tx(); tx2 = new_tx()
+        tx1 = new_tx()
+        tx2 = new_tx()
         self.stdout.write(f"  1) {tx1.reference} -> {tx1.status}")
         self.stdout.write(f"  2) {tx2.reference} -> {tx2.status}")
 
@@ -128,24 +146,29 @@ class Command(BaseCommand):
 
         # Normalize results to [{'tx_ref': str, 'refund_id': Optional[str], 'ok': bool}]
         norm = []
-        for r in (results or []):
+        for r in results or []:
             if isinstance(r, dict):
-                norm.append({
-                    "tx_ref": r.get("tx_ref"),
-                    "refund_id": r.get("refund_id"),
-                    "ok": bool(r.get("ok")),
-                })
+                norm.append(
+                    {
+                        "tx_ref": r.get("tx_ref"),
+                        "refund_id": r.get("refund_id"),
+                        "ok": bool(r.get("ok")),
+                    }
+                )
             else:
                 norm.append({"tx_ref": str(r), "refund_id": None, "ok": True})
 
         refunded_refs = [r["tx_ref"] for r in norm if r["ok"]]
 
         # Report
-        kept = (Transaction.objects
-                .filter(**order_filter, status=STATUS_SUCCEEDED)
-                .order_by("processed_at", "id")
-                .first())
-        self.stdout.write(self.style.SUCCESS(f"Kept earliest: {kept.reference if kept else 'None'}"))
+        kept = (
+            Transaction.objects.filter(**order_filter, status=STATUS_SUCCEEDED)
+            .order_by("processed_at", "id")
+            .first()
+        )
+        self.stdout.write(
+            self.style.SUCCESS(f"Kept earliest: {kept.reference if kept else 'None'}")
+        )
         self.stdout.write(self.style.SUCCESS(f"Refunded dups: {refunded_refs}"))
 
         # Email the customer for successful refunds
@@ -157,8 +180,14 @@ class Command(BaseCommand):
                         event_key=f"refund_completed:{r['tx_ref']}",
                         user=user_obj,
                         channel="email",
-                        payload={"order_id": order_val, "amount": str(amount), "refund_id": r["refund_id"]},
-                        send_fn=lambda r=r: send_refund_email(to_email, order_val, amount, r["tx_ref"], "completed"),
+                        payload={
+                            "order_id": order_val,
+                            "amount": str(amount),
+                            "refund_id": r["refund_id"],
+                        },
+                        send_fn=lambda r=r: send_refund_email(
+                            to_email, order_val, amount, r["tx_ref"], "completed"
+                        ),
                     )
 
         # Print final state

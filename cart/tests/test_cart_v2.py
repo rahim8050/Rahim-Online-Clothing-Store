@@ -1,9 +1,9 @@
 import pytest
 from django.contrib.auth import get_user_model
 from rest_framework.test import APIClient
-from product_app.models import Category, Product
-from cart.models import Cart, CartItem
 
+from cart.models import Cart, CartItem
+from product_app.models import Category, Product
 
 User = get_user_model()
 
@@ -73,9 +73,13 @@ def test_retrieve_forbidden_for_other_users_cart(api, user, other_user):
 def test_add_item_creates_or_increments_uniquely(api, user, product):
     auth(api, user)
     cart_id = api.get(v2("/carts/my/active/")).data["id"]
-    r1 = api.post(v2(f"/carts/{cart_id}/add_item/"), {"product": product.id, "quantity": 1}, format="json")
+    r1 = api.post(
+        v2(f"/carts/{cart_id}/add_item/"), {"product": product.id, "quantity": 1}, format="json"
+    )
     assert r1.status_code == 200
-    r2 = api.post(v2(f"/carts/{cart_id}/add_item/"), {"product": product.id, "quantity": 2}, format="json")
+    r2 = api.post(
+        v2(f"/carts/{cart_id}/add_item/"), {"product": product.id, "quantity": 2}, format="json"
+    )
     assert r2.status_code == 200
     item = CartItem.objects.get(cart_id=cart_id, product=product)
     assert item.quantity == 3
@@ -86,7 +90,9 @@ def test_update_item_sets_exact_quantity(api, user, product):
     auth(api, user)
     cart = Cart.objects.create(user=user)
     item = CartItem.objects.create(cart=cart, product=product, quantity=1)
-    r = api.post(v2(f"/carts/{cart.id}/update_item/"), {"item_id": item.id, "quantity": 5}, format="json")
+    r = api.post(
+        v2(f"/carts/{cart.id}/update_item/"), {"item_id": item.id, "quantity": 5}, format="json"
+    )
     assert r.status_code == 200
     item.refresh_from_db()
     assert item.quantity == 5
@@ -119,4 +125,3 @@ def test_clear_deletes_all_items(api, user, product):
     assert r.status_code == 200
     assert r.data["cleared"] is True
     assert CartItem.objects.filter(cart=cart).count() == 0
-

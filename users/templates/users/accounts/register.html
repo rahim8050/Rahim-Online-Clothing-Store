@@ -23,7 +23,7 @@
         {% if form.non_field_errors %}
           <p class="text-red-500 text-sm">{{ form.non_field_errors }}</p>
         {% endif %}
-        
+
 
        {% for field in form %}
   <div>
@@ -33,7 +33,7 @@
         <p class="text-red-500 text-sm">{{ field.errors|striptags }}</p>
       {% endif %}
     </label>
-    
+
     {{ field|add_class:"w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" }}
   </div>
 {% endfor %}
@@ -48,9 +48,9 @@
           Already have an account?
         </a>
       </div>
-      
 
-      
+
+
     </div>
   </div>
 </div>

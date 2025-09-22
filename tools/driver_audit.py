@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-import os, sys, re, json, inspect
+import os
+import re
+import sys
 from pathlib import Path
 
 # --- Django bootstrap (no DB use) ---
@@ -9,16 +11,19 @@ if str(BASE_DIR) not in sys.path:
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "Rahim_Online_ClothesStore.settings")
 os.environ.setdefault("SECRET_KEY", "dummy")
 import django
+
 django.setup()
 
 from django.apps import apps
-from django.urls import URLResolver, URLPattern, get_resolver
 from django.contrib.admin.sites import site as admin_site
+from django.urls import URLPattern, URLResolver, get_resolver
+
 
 # --------------- helpers ---------------
 def read_text(rel):
     p = BASE_DIR / rel
     return p.read_text(encoding="utf-8", errors="ignore") if p.exists() else ""
+
 
 def grep_lines(rel, pattern):
     out = []
@@ -32,19 +37,24 @@ def grep_lines(rel, pattern):
                 out.append((rel, i, line.rstrip()))
     return out
 
+
 def find_def_line(rel, name):
     hits = grep_lines(rel, rf"^\s*(class|def)\s+{re.escape(name)}\b")
     return hits[0][:2] if hits else (rel, None)
+
 
 def iter_patterns(patterns, prefix=""):
     for p in patterns:
         if isinstance(p, URLPattern):
             path = prefix + str(p.pattern)
             cb = p.callback
-            view_name = f"{cb.__module__}.{getattr(cb, '__qualname__', getattr(cb, '__name__', repr(cb)))}"
+            view_name = (
+                f"{cb.__module__}.{getattr(cb, '__qualname__', getattr(cb, '__name__', repr(cb)))}"
+            )
             yield path, view_name
         elif isinstance(p, URLResolver):
             yield from iter_patterns(p.url_patterns, prefix + str(p.pattern))
+
 
 def model_fields_sheet(model):
     rows = []
@@ -63,6 +73,7 @@ def model_fields_sheet(model):
         rows.append(entry)
     return rows
 
+
 def model_constraints(model):
     out = []
     for c in model._meta.constraints:
@@ -71,8 +82,13 @@ def model_constraints(model):
         out.append({"kind": kind, "name": c.name, "expr": str(expr)})
     return out
 
+
 def model_indexes(model):
-    return [{"name": getattr(ix, "name", None), "fields": getattr(ix, "fields", None)} for ix in model._meta.indexes]
+    return [
+        {"name": getattr(ix, "name", None), "fields": getattr(ix, "fields", None)}
+        for ix in model._meta.indexes
+    ]
+
 
 # --------------- inputs / scanning ---------------
 Delivery = apps.get_model("orders", "Delivery")
@@ -112,27 +128,48 @@ filtered_urls = [(u, v) for (u, v) in all_urls if url_filter.search(u)]
 # consumers: methods & events
 consumer_methods = {
     "delivery_event": grep_lines(files_to_scan["consumers"], r"^\s*async\s+def\s+delivery_event\b"),
-    "position_update": grep_lines(files_to_scan["consumers"], r"^\s*async\s+def\s+position_update\b"),
+    "position_update": grep_lines(
+        files_to_scan["consumers"], r"^\s*async\s+def\s+position_update\b"
+    ),
     "status_update": grep_lines(files_to_scan["consumers"], r"^\s*async\s+def\s+status_update\b"),
     "receive_json": grep_lines(files_to_scan["consumers"], r"^\s*async\s+def\s+receive_json\b"),
 }
 event_sends = {
-    "group_send_delivery_event": grep_lines(files_to_scan["views"], r"group_send\(.+?delivery\.event"),
-    "group_send_position_update": grep_lines(files_to_scan["consumers"], r'"type":\s*"position\.update"'),
-    "group_send_status_update": grep_lines(files_to_scan["consumers"], r'"type":\s*"status\.update"'),
+    "group_send_delivery_event": grep_lines(
+        files_to_scan["views"], r"group_send\(.+?delivery\.event"
+    ),
+    "group_send_position_update": grep_lines(
+        files_to_scan["consumers"], r'"type":\s*"position\.update"'
+    ),
+    "group_send_status_update": grep_lines(
+        files_to_scan["consumers"], r'"type":\s*"status\.update"'
+    ),
 }
 
 # views: API classes (assign/unassign/accept/status/location)
 view_classes = {}
-for name in ["DriverDeliveriesAPI","DeliveryAssignAPI","DeliveryUnassignAPI","DeliveryAcceptAPI","DeliveryStatusAPI","DriverLocationAPI"]:
+for name in [
+    "DriverDeliveriesAPI",
+    "DeliveryAssignAPI",
+    "DeliveryUnassignAPI",
+    "DeliveryAcceptAPI",
+    "DeliveryStatusAPI",
+    "DriverLocationAPI",
+]:
     view_classes[name] = find_def_line(files_to_scan["views"], name)
 
 # serializers present?
 serializer_hits = {
     "DeliverySerializer": grep_lines(files_to_scan["serializers"], r"class\s+DeliverySerializer\b"),
-    "DeliveryAssignSerializer": grep_lines(files_to_scan["serializers"], r"class\s+DeliveryAssignSerializer\b"),
-    "DeliveryUnassignSerializer": grep_lines(files_to_scan["serializers"], r"class\s+DeliveryUnassignSerializer\b"),
-    "DeliveryStatusSerializer": grep_lines(files_to_scan["serializers"], r"class\s+DeliveryStatusSerializer\b"),
+    "DeliveryAssignSerializer": grep_lines(
+        files_to_scan["serializers"], r"class\s+DeliveryAssignSerializer\b"
+    ),
+    "DeliveryUnassignSerializer": grep_lines(
+        files_to_scan["serializers"], r"class\s+DeliveryUnassignSerializer\b"
+    ),
+    "DeliveryStatusSerializer": grep_lines(
+        files_to_scan["serializers"], r"class\s+DeliveryStatusSerializer\b"
+    ),
 }
 
 # WS routing path
@@ -154,7 +191,7 @@ if apis_tests_dir.exists():
     api_tests = [str(p.relative_to(BASE_DIR)) for p in apis_tests_dir.glob("test_*.py")]
 
 # invariants & statuses
-status_choices = [c[0] for c in getattr(Delivery, "Status").choices]
+status_choices = [c[0] for c in Delivery.Status.choices]
 constraints = model_constraints(Delivery)
 indexes = model_indexes(Delivery)
 fields = model_fields_sheet(Delivery)
@@ -168,7 +205,9 @@ md.append(f"- Model: `orders.models.Delivery`  *(defined at {mdl_file}:{mdl_line
 md.append(f"- Status choices: `{', '.join(status_choices)}`\n")
 md.append("### Fields\n")
 for f in fields:
-    md.append(f"- `{f['name']}`: {f['type']}  null={f['null']} blank={f['blank']} index={f['db_index']} related_name={f['related_name']}\n")
+    md.append(
+        f"- `{f['name']}`: {f['type']}  null={f['null']} blank={f['blank']} index={f['db_index']} related_name={f['related_name']}\n"
+    )
 md.append("\n### Indexes\n")
 for ix in indexes:
     md.append(f"- {ix['name']}: fields={ix['fields']}\n")
@@ -179,13 +218,48 @@ for c in constraints:
 md.append("\n## Read/Write Matrix\n")
 md.append("| Component | Reads | Writes | File:Line |\n|---|---|---|---|\n")
 matrix_rows = [
-    ("DriverDeliveriesAPI.get", "Delivery by driver", "-", f"{view_classes['DriverDeliveriesAPI'][0]}:{view_classes['DriverDeliveriesAPI'][1]}"),
-    ("DeliveryAssignAPI.post", "Delivery", "driver,status,assigned_at + WS assign", f"{view_classes['DeliveryAssignAPI'][0]}:{view_classes['DeliveryAssignAPI'][1]}"),
-    ("DeliveryUnassignAPI.post", "Delivery", "driver=None,status=pending,assigned_at=None + WS assign", f"{view_classes['DeliveryUnassignAPI'][0]}:{view_classes['DeliveryUnassignAPI'][1]}"),
-    ("DeliveryAcceptAPI.post", "Delivery", "driver=self,status=assigned,assigned_at + WS assign", f"{view_classes['DeliveryAcceptAPI'][0]}:{view_classes['DeliveryAcceptAPI'][1]}"),
-    ("DeliveryStatusAPI.post", "Delivery", "status(+picked_up_at/delivered_at) + WS status", f"{view_classes['DeliveryStatusAPI'][0]}:{view_classes['DeliveryStatusAPI'][1]}"),
-    ("DriverLocationAPI.post", "-", "last_lat/last_lng/last_ping_at + WS position", f"{view_classes['DriverLocationAPI'][0]}:{view_classes['DriverLocationAPI'][1]}"),
-    ("DeliveryConsumer.receive_json", "Delivery id from URL", "position.update/status.update", f"{defline_consumer[0]}:{defline_consumer[1]}"),
+    (
+        "DriverDeliveriesAPI.get",
+        "Delivery by driver",
+        "-",
+        f"{view_classes['DriverDeliveriesAPI'][0]}:{view_classes['DriverDeliveriesAPI'][1]}",
+    ),
+    (
+        "DeliveryAssignAPI.post",
+        "Delivery",
+        "driver,status,assigned_at + WS assign",
+        f"{view_classes['DeliveryAssignAPI'][0]}:{view_classes['DeliveryAssignAPI'][1]}",
+    ),
+    (
+        "DeliveryUnassignAPI.post",
+        "Delivery",
+        "driver=None,status=pending,assigned_at=None + WS assign",
+        f"{view_classes['DeliveryUnassignAPI'][0]}:{view_classes['DeliveryUnassignAPI'][1]}",
+    ),
+    (
+        "DeliveryAcceptAPI.post",
+        "Delivery",
+        "driver=self,status=assigned,assigned_at + WS assign",
+        f"{view_classes['DeliveryAcceptAPI'][0]}:{view_classes['DeliveryAcceptAPI'][1]}",
+    ),
+    (
+        "DeliveryStatusAPI.post",
+        "Delivery",
+        "status(+picked_up_at/delivered_at) + WS status",
+        f"{view_classes['DeliveryStatusAPI'][0]}:{view_classes['DeliveryStatusAPI'][1]}",
+    ),
+    (
+        "DriverLocationAPI.post",
+        "-",
+        "last_lat/last_lng/last_ping_at + WS position",
+        f"{view_classes['DriverLocationAPI'][0]}:{view_classes['DriverLocationAPI'][1]}",
+    ),
+    (
+        "DeliveryConsumer.receive_json",
+        "Delivery id from URL",
+        "position.update/status.update",
+        f"{defline_consumer[0]}:{defline_consumer[1]}",
+    ),
 ]
 for r in matrix_rows:
     md.append(f"| {r[0]} | {r[1]} | {r[2]} | {r[3]} |\n")
@@ -195,7 +269,9 @@ md.append("### URLs (filtered)\n")
 for u, v in filtered_urls:
     md.append(f"- `{u}` → `{v}`\n")
 md.append("\n### WebSocket\n")
-md.append(f"- Routing file hits: `{files_to_scan['routing']}`, samples: `{'; '.join(ws_paths) or 'n/a'}`\n")
+md.append(
+    f"- Routing file hits: `{files_to_scan['routing']}`, samples: `{'; '.join(ws_paths) or 'n/a'}`\n"
+)
 md.append("- Consumer methods present:\n")
 for k, v in consumer_methods.items():
     md.append(f"  - {k}: {'YES' if v else 'NO'}\n")
@@ -214,14 +290,20 @@ md.append(f"- `{files_to_scan['track_js']}` WebSocket constructors found: {len(w
 md.append(f"- `{files_to_scan['track_tpl']}` wsUrl/route_ctx hits: {len(ws_url_injection)}\n")
 
 md.append("\n## Admin & Tests\n")
-md.append(f"- Delivery registered in admin: **{'YES' if admin_registered else 'NO'}**  ({files_to_scan['admin']})\n")
-md.append(f"- WS tests present: **{'YES' if bool(texts['ws_tests']) else 'NO'}**  ({files_to_scan['ws_tests']})\n")
+md.append(
+    f"- Delivery registered in admin: **{'YES' if admin_registered else 'NO'}**  ({files_to_scan['admin']})\n"
+)
+md.append(
+    f"- WS tests present: **{'YES' if bool(texts['ws_tests']) else 'NO'}**  ({files_to_scan['ws_tests']})\n"
+)
 md.append(f"- API tests under `apis/tests/`: {', '.join(api_tests) or 'none'}\n")
 
 md.append("\n## Invariants / Business Rules (from code)\n")
 md.append("- Driver required once moving (check constraint on status).\n")
 md.append("- Latitude/Longitude range checks on origin/dest/last.\n")
-md.append("- Status timestamps: assigned_at/picked_up_at/delivered_at maintained by APIs/consumer.\n")
+md.append(
+    "- Status timestamps: assigned_at/picked_up_at/delivered_at maintained by APIs/consumer.\n"
+)
 md.append("- WebSocket group name uses `delivery.<id>`.\n")
 
 md.append("\n## Gaps & Risks (detected heuristically)\n")
@@ -235,10 +317,14 @@ if not serializer_hits["DeliverySerializer"]:
     md.append("- DeliverySerializer not found in apis/serializers.py.\n")
 
 md.append("\n## Fix/Enhancement TODOs (ranked)\n")
-md.append("1) Ensure REST→WS bridge: helper `_publish_delivery(...)` and `delivery_event` handler in consumer.\n")
+md.append(
+    "1) Ensure REST→WS bridge: helper `_publish_delivery(...)` and `delivery_event` handler in consumer.\n"
+)
 md.append("2) Add tests for assign/unassign/accept/status/location APIs.\n")
 md.append("3) Admin: register Delivery with list_display, filters, search.\n")
-md.append("4) Enforce allowed status transitions (assigned→picked_up→en_route→delivered/cancelled).\n")
+md.append(
+    "4) Enforce allowed status transitions (assigned→picked_up→en_route→delivered/cancelled).\n"
+)
 md.append("5) Frontend: reconnect & wsUrl fallback; handle `assign/status/position`.\n")
 
 print("".join(md))

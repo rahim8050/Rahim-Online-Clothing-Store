@@ -7,18 +7,18 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('cart', '0005_active_cart_unique_constraint'),
+        ("cart", "0005_active_cart_unique_constraint"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='cart',
-            name='created_at',
+            model_name="cart",
+            name="created_at",
             field=models.DateTimeField(auto_now_add=True),
         ),
         migrations.AlterField(
-            model_name='cartitem',
-            name='created_at',
+            model_name="cartitem",
+            name="created_at",
             field=models.DateTimeField(auto_now_add=True, default=django.utils.timezone.now),
             preserve_default=False,
         ),

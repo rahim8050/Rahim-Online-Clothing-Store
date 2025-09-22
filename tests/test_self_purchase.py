@@ -1,10 +1,11 @@
 import pytest
-from django.contrib.auth.models import Group
 from django.contrib.auth import get_user_model
-from users.constants import VENDOR, VENDOR_STAFF
+from django.contrib.auth.models import Group
+
+from cart.models import Cart, CartItem
 from orders.services import create_order_from_cart
 from product_app.models import Category, Product
-from cart.models import Cart, CartItem
+from users.constants import VENDOR, VENDOR_STAFF
 from users.models import VendorStaff
 
 
@@ -81,7 +82,9 @@ def test_vendor_cannot_buy_own_listing(user_factory, product_factory, cart_facto
 
 
 @pytest.mark.django_db
-def test_vendor_staff_cannot_buy_owner_listing(user_factory, product_factory, cart_factory, vendor_staff_factory):
+def test_vendor_staff_cannot_buy_owner_listing(
+    user_factory, product_factory, cart_factory, vendor_staff_factory
+):
     owner = user_factory()
     staff = user_factory()
     Group.objects.get_or_create(name=VENDOR_STAFF)[0].user_set.add(staff)

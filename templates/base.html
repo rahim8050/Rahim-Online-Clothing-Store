@@ -14,7 +14,7 @@
     <!-- Tailwind CSS -->
     {% comment %} <script src="https://cdn.tailwindcss.com"></script> {% endcomment %}
 <link rel="stylesheet" href="{% static 'css/app.css' %}">
-<link rel="stylesheet" href="{% static 'dist/assets/main.css' %}"> 
+<link rel="stylesheet" href="{% static 'dist/assets/main.css' %}">
 
 
     <!-- Font Awesome -->
@@ -139,7 +139,7 @@
     <!-- Lightweight WS client to surface vendor application updates as toasts -->
     <script>
     (function(){
-      function wsUrl(p){var s=location.protocol==='https:'?'wss':'ws';return s+'://'+location.host+(p.startsWith('/')?p:'/'+p);} 
+      function wsUrl(p){var s=location.protocol==='https:'?'wss':'ws';return s+'://'+location.host+(p.startsWith('/')?p:'/'+p);}
       try{var ws=new WebSocket(wsUrl('/ws/notifications/'));}catch(e){return;}
       ws.onmessage=function(ev){
         var d; try{ d=JSON.parse(ev.data);}catch(_){ d=null; }

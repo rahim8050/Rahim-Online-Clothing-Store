@@ -17,8 +17,6 @@ apps/models gracefully.
 
 from __future__ import annotations
 
-from typing import Dict, Optional, Set
-
 from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand
 from django.db import DatabaseError, transaction
@@ -32,7 +30,7 @@ except Exception:  # pragma: no cover - very old Django
 
 
 # Default set of valid roles if User.role choices are not discoverable.
-DEFAULT_VALID_ROLES: Set[str] = {
+DEFAULT_VALID_ROLES: set[str] = {
     "customer",
     "vendor",
     "vendor_staff",
@@ -50,14 +48,16 @@ _VENDOR_STAFF_MODEL_TRIED = False
 
 # Prefer project group names if available
 try:
-    from users.constants import VENDOR as _VENDOR_GROUP_NAME, VENDOR_STAFF as _VENDOR_STAFF_GROUP_NAME, DRIVER as _DRIVER_GROUP_NAME  # type: ignore
+    from users.constants import DRIVER as _DRIVER_GROUP_NAME
+    from users.constants import VENDOR as _VENDOR_GROUP_NAME  # type: ignore
+    from users.constants import VENDOR_STAFF as _VENDOR_STAFF_GROUP_NAME
 except Exception:
     _VENDOR_GROUP_NAME = "Vendor"
     _VENDOR_STAFF_GROUP_NAME = "Vendor Staff"
     _DRIVER_GROUP_NAME = "Driver"
 
 
-def _get_valid_roles(User) -> Set[str]:
+def _get_valid_roles(User) -> set[str]:
     """Try to read valid choices from the User.role field; fall back to defaults."""
     try:
         field = User._meta.get_field("role")
@@ -164,7 +164,10 @@ def compute_effective_role(u) -> str:
 
     # Try group membership for 'Vendor Staff'
     try:
-        if getattr(u, "id", None) is not None and u.groups.filter(name=_VENDOR_STAFF_GROUP_NAME).exists():
+        if (
+            getattr(u, "id", None) is not None
+            and u.groups.filter(name=_VENDOR_STAFF_GROUP_NAME).exists()
+        ):
             return "vendor_staff"
     except Exception:
         pass
@@ -180,7 +183,7 @@ def compute_effective_role(u) -> str:
     return "customer"
 
 
-def log_change(u, old: Optional[str], new: Optional[str], verbose: bool) -> None:
+def log_change(u, old: str | None, new: str | None, verbose: bool) -> None:
     """Print a per-user decision line when verbose is requested."""
     if not verbose:
         return
@@ -195,7 +198,7 @@ def log_change(u, old: Optional[str], new: Optional[str], verbose: bool) -> None
         print(f"[OK]     user={uid} username={uname} role: '{old_s}'")
 
 
-def _should_consider_user(u, valid_roles: Set[str]) -> bool:
+def _should_consider_user(u, valid_roles: set[str]) -> bool:
     """Helper used only when --only-missing is applied at Python level (rare)."""
     r = getattr(u, "role", None)
     if r is None:
@@ -205,14 +208,14 @@ def _should_consider_user(u, valid_roles: Set[str]) -> bool:
     return False
 
 
-def process_batch(qs, opts: Dict) -> Dict[str, int]:
+def process_batch(qs, opts: dict) -> dict[str, int]:
     """Process a queryset slice within a DB transaction.
 
     Returns counters: scanned, changed, unchanged, errors, skipped.
     """
     dry_run: bool = bool(opts.get("dry_run", False))
     verbose: bool = bool(opts.get("verbose", False))
-    valid_roles: Set[str] = opts["valid_roles"]
+    valid_roles: set[str] = opts["valid_roles"]
     only_missing: bool = bool(opts.get("only_missing", False))
 
     stats = {"scanned": 0, "changed": 0, "unchanged": 0, "errors": 0, "skipped": 0}
@@ -237,7 +240,7 @@ def process_batch(qs, opts: Dict) -> Dict[str, int]:
             processed_any = True
             try:
                 # Attach valid roles cache for compute_effective_role fallback path.
-                setattr(u, "_valid_roles_cache", valid_roles)
+                u._valid_roles_cache = valid_roles
 
                 if only_missing and not _should_consider_user(u, valid_roles):
                     stats["skipped"] += 1
@@ -255,9 +258,7 @@ def process_batch(qs, opts: Dict) -> Dict[str, int]:
                             u.save(update_fields=["role"])
                         except Exception as save_exc:  # capture and continue
                             stats["errors"] += 1
-                            print(
-                                f"[ERROR] user={getattr(u,'id',None)} save failed: {save_exc}"
-                            )
+                            print(f"[ERROR] user={getattr(u,'id',None)} save failed: {save_exc}")
                             continue
                     stats["changed"] += 1
                 else:
@@ -277,12 +278,15 @@ def process_batch(qs, opts: Dict) -> Dict[str, int]:
 
 
 class Command(BaseCommand):
-    help = (
-        "Normalize user.role based on effective role. Safe, idempotent, and supports batching."
-    )
+    help = "Normalize user.role based on effective role. Safe, idempotent, and supports batching."
 
     def add_arguments(self, parser):
-        parser.add_argument("--dry-run", action="store_true", default=False, help="Do not write changes; only report.")
+        parser.add_argument(
+            "--dry-run",
+            action="store_true",
+            default=False,
+            help="Do not write changes; only report.",
+        )
         parser.add_argument("--limit", type=int, default=None, help="Process at most N users.")
         parser.add_argument("--offset", type=int, default=None, help="Skip first N users.")
         parser.add_argument(
@@ -291,7 +295,9 @@ class Command(BaseCommand):
             default=False,
             help="Process only users whose role is NULL/empty/invalid.",
         )
-        parser.add_argument("--verbose", action="store_true", default=False, help="Print per-user decisions.")
+        parser.add_argument(
+            "--verbose", action="store_true", default=False, help="Print per-user decisions."
+        )
         parser.add_argument(
             "--batch-size",
             type=int,
@@ -301,8 +307,8 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         dry_run: bool = bool(options.get("dry_run", False))
-        limit: Optional[int] = options.get("limit")
-        offset: Optional[int] = options.get("offset")
+        limit: int | None = options.get("limit")
+        offset: int | None = options.get("offset")
         only_missing: bool = bool(options.get("only_missing", False))
         verbose: bool = bool(options.get("verbose", False))
         batch_size: int = int(options.get("batch_size") or 1000)
@@ -311,11 +317,7 @@ class Command(BaseCommand):
         valid_roles = _get_valid_roles(User)
 
         # Build base queryset
-        base_qs = (
-            User.objects.all()
-            .only("id", "role", "is_staff", "is_superuser")
-            .order_by("id")
-        )
+        base_qs = User.objects.all().only("id", "role", "is_staff", "is_superuser").order_by("id")
 
         # Filter only missing/invalid roles if requested.
         if only_missing:

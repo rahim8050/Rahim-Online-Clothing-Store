@@ -15,4 +15,3 @@ Notes
 - Content scripts are configured in manifest.json to match the local dev origins.
 - Any extension-bundled assets should be placed under assets/ and accessed via chrome.runtime.getURL('assets/...').
 - The site runs normally without the extension enabled; no templates include these scripts directly.
-

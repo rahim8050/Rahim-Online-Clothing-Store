@@ -1,7 +1,7 @@
-from django.contrib.auth.decorators import login_required
-from django.shortcuts import render
 from django.apps import apps
+from django.contrib.auth.decorators import login_required
 from django.http import HttpResponseForbidden
+from django.shortcuts import render
 
 from users.constants import VENDOR
 from users.utils import is_vendor_or_staff, resolve_vendor_owner_for
@@ -38,8 +38,7 @@ def _vendor_id_for(user):
     try:
         VendorStaff = apps.get_model("users", "VendorStaff")
         return (
-            VendorStaff.objects
-            .filter(staff=user, is_active=True)
+            VendorStaff.objects.filter(staff=user, is_active=True)
             .values_list("owner_id", flat=True)
             .first()
         )
@@ -79,21 +78,14 @@ def vendor_dashboard(request):
     stats = {
         "products_total": products_qs.count(),
         "active_products": products_qs.filter(available=True).count(),
-        "order_items_total": OrderItem.objects.filter(
-            product__owner_id=vendor_id
-        ).count(),
+        "order_items_total": OrderItem.objects.filter(product__owner_id=vendor_id).count(),
     }
 
     # Lists (limited + narrow field selection)
-    products = (
-        products_qs
-        .only("id", "name", "price", "available")
-        .order_by("-id")[:25]
-    )
+    products = products_qs.only("id", "name", "price", "available").order_by("-id")[:25]
 
     order_items = (
-        OrderItem.objects
-        .filter(product__owner_id=vendor_id)
+        OrderItem.objects.filter(product__owner_id=vendor_id)
         .select_related("order", "product")
         .only("id", "quantity", "price", "order__id", "product__name")
         .order_by("-id")[:25]

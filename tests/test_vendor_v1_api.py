@@ -1,10 +1,8 @@
 import pytest
 from django.contrib.auth import get_user_model
-from django.urls import reverse
 from rest_framework.test import APIClient
 
-from vendor_app.models import VendorMember, VendorOrg
-
+from vendor_app.models import VendorMember
 
 pytestmark = pytest.mark.django_db
 
@@ -31,10 +29,18 @@ def test_org_crud_and_invite_flow():
     # List my orgs
     resp = client.get("/apis/v1/vendor/orgs/")
     assert resp.status_code == 200
-    assert any(o["id"] == org_id for o in resp.data["results"]) if isinstance(resp.data, dict) else True
+    assert (
+        any(o["id"] == org_id for o in resp.data["results"])
+        if isinstance(resp.data, dict)
+        else True
+    )
 
     # Invite user2 as STAFF
-    resp = client.post(f"/apis/v1/vendor/orgs/{org_id}/invite/", {"user_id": user2.id, "role": "STAFF"}, format="json")
+    resp = client.post(
+        f"/apis/v1/vendor/orgs/{org_id}/invite/",
+        {"user_id": user2.id, "role": "STAFF"},
+        format="json",
+    )
     assert resp.status_code == 201
     assert VendorMember.objects.filter(org_id=org_id, user=user2, role="STAFF").exists()
 
@@ -48,6 +54,7 @@ def test_openapi_schema_contains_vendor_endpoints():
     resp = client.get("/apis/v1/schema/?format=json")
     assert resp.status_code == 200
     import json
+
     content = json.loads(resp.content.decode("utf-8"))
     # paths keys can vary by spectacular version; assert 'vendor' + 'orgs' path exists
     paths = content.get("paths") or {}

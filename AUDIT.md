@@ -31,4 +31,3 @@ Known Limitations / Future Work
 - The markdown parser is intentionally small; advanced markdown features or syntax highlighting are not included.
 - The virtualization strategy is height-estimate windowing. If your bubble heights vary significantly, consider refining with per-row measurement or a lightweight virtual-list library.
 - JS unit/e2e tests require adding a test runner (e.g., Vitest/Playwright) to execute. Files are provided but not wired into package.json.
-

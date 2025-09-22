@@ -22,4 +22,3 @@ describe('markdownToHtml', () => {
     expect(html).toContain('<thead>');
   });
 });
-

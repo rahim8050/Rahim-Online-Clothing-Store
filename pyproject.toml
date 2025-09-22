@@ -1,0 +1,22 @@
+[tool.mypy]
+python_version = "3.12"
+plugins = ["mypy_django_plugin.main"]
+ignore_missing_imports = true
+explicit_package_bases = true
+# limit checks to your packages
+files = [
+  "Rahim_Online_ClothesStore",
+  "apis","cart","orders","payments","users",
+  "product_app","inventory","vendor_app",
+  "Mpesa","assistant","utilities"
+]
+exclude = '''(?x)(
+  ^venv/|
+  ^node_modules/|
+  ^staticfiles/|
+  ^static/|
+  ^frontend/
+)'''
+
+[tool.django-stubs]
+django_settings_module = "Rahim_Online_ClothesStore.settings_typecheck"

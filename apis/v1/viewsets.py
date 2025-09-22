@@ -2,16 +2,16 @@ from django.db.models import Q
 from rest_framework import permissions, viewsets
 from rest_framework.exceptions import PermissionDenied
 
-from product_app.models import Category, Product, Warehouse, ProductStock
 from orders.models import Order, OrderItem
+from product_app.models import Category, Product, ProductStock, Warehouse
 
 from .serializers import (
     CategorySerializer,
-    ProductSerializer,
-    WarehouseSerializer,
-    ProductStockSerializer,
-    OrderSerializer,
     OrderItemSerializer,
+    OrderSerializer,
+    ProductSerializer,
+    ProductStockSerializer,
+    WarehouseSerializer,
 )
 
 
@@ -93,9 +93,7 @@ class OrderItemViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         u = self.request.user
-        qs = (OrderItem.objects
-              .select_related("order", "product", "warehouse")
-              .order_by("-id"))
+        qs = OrderItem.objects.select_related("order", "product", "warehouse").order_by("-id")
         if u and (u.is_staff or u.is_superuser):
             return qs
         if u and u.is_authenticated:

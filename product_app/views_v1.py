@@ -1,4 +1,3 @@
-from django.db.models import Q
 from rest_framework import permissions, viewsets
 
 from .models import Category, Product
@@ -29,4 +28,3 @@ class ProductV1ViewSet(viewsets.ModelViewSet):
     filterset_fields = ["category__id", "available"]
     search_fields = ["name", "slug", "description"]
     ordering_fields = ["created", "price", "name"]
-

@@ -1,8 +1,9 @@
-from django.db import transaction as dbtx, models
 from django.core.exceptions import ValidationError
+from django.db import models
+
+from product_app.models import ProductStock
 
 from .models import AuditLog
-from product_app.models import ProductStock
 
 
 def safe_decrement_stock(order, request_id: str = ""):

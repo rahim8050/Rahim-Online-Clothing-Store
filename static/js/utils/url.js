@@ -10,4 +10,3 @@ export function resolveAssetUrl(path) {
     return path;
   }
 }
-
