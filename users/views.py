@@ -1,6 +1,8 @@
 # users/views.py
 from __future__ import annotations
 
+from rest_framework import generics, permissions
+
 import logging
 import re
 from typing import Any
@@ -164,8 +166,8 @@ def debug_ws_push(request, delivery_id: int):
         async_to_sync(layer.group_send)(
             f"delivery.track.{int(delivery_id)}", {"type": "broadcast", "payload": payload_legacy}
         )
-    except Exception:
-        pass
+    except Exception as e:
+          logger.debug("non-critical operation failed: %s", e, exc_info=True)
 
     payload_new = (
         {"type": "delivery.event", "kind": "position_update", "lat": lat, "lng": lng}
@@ -174,8 +176,8 @@ def debug_ws_push(request, delivery_id: int):
     )
     try:
         async_to_sync(layer.group_send)(f"delivery.{int(delivery_id)}", payload_new)
-    except Exception:
-        pass
+    except Exception as e :
+          logger.debug("non-critical operation failed: %s", e, exc_info=True)
 
     return JsonResponse({"ok": True, "delivery": int(delivery_id), "type": msg_type})
 
@@ -529,6 +531,7 @@ class VendorApplyAPI(generics.CreateAPIView):
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
+
 
 
 class VendorApplicationApproveAPI(generics.UpdateAPIView):

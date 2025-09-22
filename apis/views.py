@@ -290,8 +290,9 @@ class DeliveryAssignAPI(APIView):
                 type="assign",
                 note={"driver_id": driver.id},
             )
-        except Exception:
-            pass
+        except Exception as e:
+            logger.exception("Non-critical side-effect failed in %s: %s", __name__, e)
+
 
         try:
             owner_id = getattr(
@@ -307,8 +308,9 @@ class DeliveryAssignAPI(APIView):
             )
             if owner_id:
                 _publish_vendor(owner_id, "delivery.assigned", {"rid": delivery.id})
-        except Exception:
-            pass
+        except Exception as e:
+            logger.exception("Non-critical side-effect failed in %s: %s", __name__, e)
+
 
         _publish_delivery(delivery, "assign", {"driver_id": driver.id})
         return Response(DeliverySerializer(delivery, context={"request": request}).data)
@@ -329,8 +331,9 @@ class DeliveryUnassignAPI(APIView):
 
         try:
             DeliveryEvent.objects.create(delivery=delivery, actor=request.user, type="unassign")
-        except Exception:
-            pass
+        except Exception as e:
+            logger.exception("Non-critical side-effect failed in %s: %s", __name__, e)
+
 
         try:
             owner_id = getattr(
@@ -339,8 +342,9 @@ class DeliveryUnassignAPI(APIView):
             log_action(request.user, owner_id, "delivery.unassign", "delivery", delivery.id)
             if owner_id:
                 _publish_vendor(owner_id, "delivery.unassigned", {"rid": delivery.id})
-        except Exception:
-            pass
+        except Exception as e:
+            logger.exception("Non-critical side-effect failed in %s: %s", __name__, e)
+
 
         _publish_delivery(delivery, "unassign", {"driver_id": None})
         return Response(DeliverySerializer(delivery, context={"request": request}).data)
@@ -377,16 +381,18 @@ class DeliveryStatusAPI(APIView):
             delivery.picked_up_at = timezone.now()
             try:
                 DeliveryEvent.objects.create(delivery=delivery, actor=request.user, type="picked")
-            except Exception:
-                pass
+            except Exception as e:
+               logger.exception("Non-critical side-effect failed in %s: %s", __name__, e)
+
         elif new_status == Delivery.Status.DELIVERED:
             delivery.delivered_at = timezone.now()
             try:
                 DeliveryEvent.objects.create(
                     delivery=delivery, actor=request.user, type="delivered"
                 )
-            except Exception:
-                pass
+            except Exception as e:
+               logger.exception("Non-critical side-effect failed in %s: %s", __name__, e)
+
 
         delivery.save(update_fields=["status", "picked_up_at", "delivered_at"])
         _publish_delivery(delivery, "status", {"status": new_status})
@@ -469,8 +475,9 @@ class VendorProductCreateAPI(CreateAPIView):
             owner_id = getattr(product, get_vendor_field(Product) + "_id", None)
             log_action(request.user, owner_id, "product.create", "product", product.id)
             check_low_stock_and_notify(product)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.exception("Non-critical side-effect failed in %s: %s", __name__, e)
+
         return Response(out_ser.data, status=status.HTTP_201_CREATED, headers=headers)
 
 
@@ -633,8 +640,9 @@ class VendorStaffInviteAPI(APIView):
 
         try:
             log_action(request.user, owner_id, "staff.invite", "user", staff.id)
-        except Exception:
-            pass
+        except Exception as e:
+           logger.exception("Non-critical side-effect failed in %s: %s", __name__, e)
+
 
         return Response(
             {
@@ -694,12 +702,14 @@ class VendorStaffAcceptAPI(APIView):
 
         try:
             activate_vendor_staff(request.user, vs.owner_id)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.exception("Non-critical side-effect failed in %s: %s", __name__, e)
+
         try:
             log_action(request.user, vs.owner_id, "staff.accept", "vendorstaff", vs.id)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.exception("Non-critical side-effect failed in %s: %s", __name__, e)
+
         return Response({"ok": True, "message": "Invite accepted."}, status=200)
 
 
@@ -733,8 +743,9 @@ class VendorStaffListCreateView(APIView):
         row = ser.save()
         try:
             log_action(request.user, owner_id, "staff.create", "vendorstaff", row.id)
-        except Exception:
-            pass
+        except Exception as e:
+           logger.exception("Non-critical side-effect failed in %s: %s", __name__, e)
+
         return Response(VendorStaffOutSerializer(row).data, status=status.HTTP_201_CREATED)
 
 
@@ -761,8 +772,9 @@ class VendorStaffRemoveAPI(APIView):
             log_action(
                 request.user, owner_id, "staff.remove", "user", ser.validated_data.get("staff_id")
             )
-        except Exception:
-            pass
+        except Exception as e:
+            logger.exception("Non-critical side-effect failed in %s: %s", __name__, e)
+
         return Response(data)
 
 

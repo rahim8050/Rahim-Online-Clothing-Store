@@ -896,8 +896,8 @@ def Stripe_payment_success(request, order_id):
     order.payment_intent_id = payment_intent.id
     try:
         order.stripe_receipt_url = payment_intent.charges.data[0].receipt_url
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("stripe receipt url not available: %s", e, exc_info=True)
     order.save()
 
     return render(

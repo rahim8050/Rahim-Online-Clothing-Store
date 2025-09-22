@@ -1,5 +1,6 @@
 import json
 import traceback
+from json import JSONDecodeError
 
 from django.conf import settings
 from django.contrib import messages
@@ -7,7 +8,8 @@ from django.db.models import Sum
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
-
+import logging
+logger = logging.getLogger(__name__)
 from orders.forms import OrderForm
 from product_app.models import Product, ProductStock
 from users.permissions import NotBuyingOwnListing
@@ -60,8 +62,8 @@ def cart_add(request, product_id):
         if request.body:
             try:
                 qty = int(json.loads(request.body).get("quantity", 1))
-            except Exception:
-                pass
+            except (ValueError, TypeError, JSONDecodeError) as e:
+                 logger.debug("Invalid quantity payload: %s", e, exc_info=True)
         else:
             try:
                 qty = int(request.POST.get("quantity", 1))

@@ -85,3 +85,5 @@ dist/
 # ===== Celery / processes =====
 celerybeat-schedule
 *.pid
+
+*.bak

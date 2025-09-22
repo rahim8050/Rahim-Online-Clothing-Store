@@ -13,7 +13,7 @@ from django.contrib import messages
 from django.core.management.utils import get_random_secret_key
 from django.db import models
 from django.db.models.functions import Length
-
+SECRET_KEY = os.environ.get("DJANGO_TYPECHECK_SECRET_KEY", "typecheck")  # nosec B105
 # at top of Rahim_Online_ClothesStore/settings.py
 try:
     from csp.constants import NONCE, SELF  # noqa: F401
