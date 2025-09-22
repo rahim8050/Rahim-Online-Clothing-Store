@@ -2,20 +2,20 @@
 from __future__ import annotations
 
 import logging
-from typing import Optional, Set
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.mail import EmailMultiAlternatives
-from django.urls import reverse
 from django.template.loader import render_to_string
+from django.urls import reverse
 from django.utils.encoding import force_bytes
 from django.utils.html import strip_tags
 from django.utils.http import urlsafe_base64_encode
 from rest_framework.exceptions import PermissionDenied
 
-from .constants import VENDOR, VENDOR_STAFF
 from core.siteutils import absolute_url
+
+from .constants import VENDOR, VENDOR_STAFF
 from .tokens import account_activation_token
 
 logger = logging.getLogger(__name__)
@@ -38,19 +38,20 @@ def is_vendor_or_staff(user) -> bool:
 def get_active_vendor_staff(user):
     """Return active VendorStaff rows where this user is staff."""
     from .models import VendorStaff
+
     return VendorStaff.objects.filter(staff=user, is_active=True)
 
 
 # ----------------------------
 # Owner resolution (fixed)
 # ----------------------------
-def vendor_owner_ids_for(user) -> Set[int]:
+def vendor_owner_ids_for(user) -> set[int]:
     """
     Return a *set* of owner User IDs that this user can act for:
       - the user's own id if they are in the Vendor group
       - any owners where the user is active staff (VendorStaff.is_active=True)
     """
-    owner_ids: Set[int] = set()
+    owner_ids: set[int] = set()
 
     # If the user is a Vendor owner, they can act as themselves.
     if user.groups.filter(name=VENDOR).exists() or user.is_superuser:
@@ -58,9 +59,10 @@ def vendor_owner_ids_for(user) -> Set[int]:
 
     # If the user is active staff, include those owners.
     from .models import VendorStaff
-    staff_owner_ids = VendorStaff.objects.filter(
-        staff=user, is_active=True
-    ).values_list("owner_id", flat=True)
+
+    staff_owner_ids = VendorStaff.objects.filter(staff=user, is_active=True).values_list(
+        "owner_id", flat=True
+    )
 
     owner_ids.update(staff_owner_ids)
     return owner_ids
@@ -68,7 +70,7 @@ def vendor_owner_ids_for(user) -> Set[int]:
 
 def resolve_vendor_owner_for(
     user,
-    owner_id: Optional[int] = None,
+    owner_id: int | None = None,
     *,
     require_explicit_if_multiple: bool = True,
 ) -> int:

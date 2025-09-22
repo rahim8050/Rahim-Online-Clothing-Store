@@ -1,10 +1,13 @@
 from decimal import Decimal
+
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 from drf_spectacular.utils import extend_schema_field
 
-from .models import Cart, CartItem
-from product_app.serializers_v1 import ProductV1Serializer
 from product_app.models import Product
+from product_app.serializers_v1 import ProductV1Serializer
+
+from .models import Cart, CartItem
 
 
 class CartItemReadSerializer(serializers.ModelSerializer):
@@ -47,4 +50,3 @@ class CartSerializer(serializers.ModelSerializer):
         for item in getattr(obj, "_prefetched_items", obj.items.select_related("product").all()):
             total += Decimal(item.product.price) * item.quantity
         return str(total)
-

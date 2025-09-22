@@ -2,8 +2,7 @@ import pytest
 from django.contrib.auth import get_user_model
 from django.db import IntegrityError
 
-from vendor_app.models import VendorOrg, VendorMember, VendorProfile
-
+from vendor_app.models import VendorMember, VendorOrg
 
 pytestmark = pytest.mark.django_db
 
@@ -66,4 +65,3 @@ def test_org_soft_activation_flags():
     org.add_member(staff, "STAFF")
     m.refresh_from_db()
     assert m.is_active is True
-

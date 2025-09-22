@@ -1,9 +1,11 @@
-from django.http import JsonResponse
 from django.conf import settings
+from django.http import JsonResponse
+
 
 def _redis_ping():
     try:
         import redis  # type: ignore
+
         url = getattr(settings, "REDIS_URL", "")
         if not url:
             return {"ok": False, "error": "no_redis_config"}
@@ -27,7 +29,10 @@ def healthz(request):
 def readyz(request):
     r = _redis_ping()
     # Celery reachability: if Redis ping ok, we assume broker reachable
-    return JsonResponse({
-        "status": "ok" if r.get("ok") else "degraded",
-        "redis": r,
-    }, status=200 if r.get("ok") else 503)
+    return JsonResponse(
+        {
+            "status": "ok" if r.get("ok") else "degraded",
+            "redis": r,
+        },
+        status=200 if r.get("ok") else 503,
+    )

@@ -1,20 +1,15 @@
 from django.db import transaction
 from django.db.models import F
-from django.shortcuts import get_object_or_404
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
 from product_app.models import Product
+
+from .guest import get_or_create_guest_cart, get_signed_cookie, set_signed_cookie
 from .models import Cart, CartItem
-from .guest import (
-    get_signed_cookie,
-    get_or_create_guest_cart,
-    set_signed_cookie,
-    clear_cookie,
-)
-from .serializers_v2 import CartSerializer, CartItemWriteSerializer
+from .serializers_v2 import CartItemWriteSerializer, CartSerializer
 
 
 class GuestCartViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet):
@@ -35,9 +30,8 @@ class GuestCartViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewset
         if not cid:
             return None
         try:
-            return (
-                Cart.objects.prefetch_related("items__product")
-                .get(pk=cid, user__isnull=True, status=Cart.Status.ACTIVE)
+            return Cart.objects.prefetch_related("items__product").get(
+                pk=cid, user__isnull=True, status=Cart.Status.ACTIVE
             )
         except Cart.DoesNotExist:
             return None
@@ -117,4 +111,3 @@ class GuestCartViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewset
             return Response({"detail": "Guest cart not found"}, status=404)
         CartItem.objects.filter(cart=cart).delete()
         return Response({"cleared": True})
-

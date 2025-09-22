@@ -36,4 +36,3 @@ def sync_roles():
         else:
             perms = Permission.objects.filter(codename__in=opts.get("perms", []))
         group.permissions.set(perms)
-

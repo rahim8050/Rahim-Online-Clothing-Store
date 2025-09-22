@@ -1,15 +1,15 @@
 import pytest
 from django.contrib.auth import get_user_model
-from django.urls import reverse
 from django.utils import timezone
 
-from orders.models import Order, Delivery
+from orders.models import Delivery, Order
 
 
 @pytest.fixture
 def driver(django_user_model):
     u = django_user_model.objects.create_user(username="driver", password="pw")
     from django.contrib.auth.models import Group
+
     g, _ = Group.objects.get_or_create(name="driver")
     u.groups.add(g)
     return u
@@ -64,5 +64,8 @@ def test_driver_viewset_permissions(client, order, driver):
     assert r.status_code == 200
     payload = r.json()
     assert payload["id"] == d.id
-    assert payload["status"] in (Delivery.Status.PICKED_UP, Delivery.Status.ASSIGNED, Delivery.Status.EN_ROUTE)
-
+    assert payload["status"] in (
+        Delivery.Status.PICKED_UP,
+        Delivery.Status.ASSIGNED,
+        Delivery.Status.EN_ROUTE,
+    )

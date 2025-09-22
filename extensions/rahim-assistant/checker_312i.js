@@ -29,4 +29,3 @@
     console.warn('[Rahim Assistant] checker init failed', e);
   }
 })();
-

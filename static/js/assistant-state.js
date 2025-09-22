@@ -15,4 +15,3 @@
   function clear(){ save({ messages: [], draft: '' }) }
   global.AssistantState = { load, save, getMessages, setMessages, getDraft, setDraft, clear }
 })(window);
-

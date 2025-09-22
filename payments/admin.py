@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Transaction, AuditLog
+from .models import AuditLog, Transaction
 
 
 @admin.register(Transaction)

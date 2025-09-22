@@ -6,13 +6,13 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('cart', '0001_initial'),
+        ("cart", "0001_initial"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='cartitem',
-            name='is_selected',
+            model_name="cartitem",
+            name="is_selected",
             field=models.BooleanField(default=True),
         ),
     ]

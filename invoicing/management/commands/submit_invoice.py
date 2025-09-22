@@ -1,10 +1,10 @@
 from __future__ import annotations
 
+from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 
 from invoicing.models import Invoice
 from invoicing.services.etims import submit_invoice
-from django.conf import settings
 
 
 class Command(BaseCommand):
@@ -23,4 +23,6 @@ class Command(BaseCommand):
             self.stdout.write(self.style.WARNING("ETIMS disabled; aborting."))
             return
         res = submit_invoice(invoice=inv, idempotency_key=f"invoice:submit:{inv.id}")
-        self.stdout.write(self.style.SUCCESS(f"Submitted invoice {inv.id}: {res.status} {res.irn or ''}"))
+        self.stdout.write(
+            self.style.SUCCESS(f"Submitted invoice {inv.id}: {res.status} {res.irn or ''}")
+        )

@@ -1,7 +1,8 @@
 from .models import Cart
 
+
 def cart_counter(request):
-    cart_id = request.session.get('cart_id')
+    cart_id = request.session.get("cart_id")
     count = 0
 
     if cart_id:
@@ -11,4 +12,4 @@ def cart_counter(request):
         except Cart.DoesNotExist:
             count = 0
 
-    return {'cart_total_items': count}
+    return {"cart_total_items": count}

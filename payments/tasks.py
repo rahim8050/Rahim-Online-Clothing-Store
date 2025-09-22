@@ -4,8 +4,8 @@ from celery import shared_task
 from django.utils import timezone
 
 from .enums import TxnStatus
-from .models import Transaction, AuditLog
-from .services import process_success, process_failure
+from .models import AuditLog, Transaction
+from .services import process_failure
 
 
 @shared_task

@@ -1,14 +1,14 @@
 # payments/tests/test_stock_decrement.py
+from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.test import TestCase
-from django.core.exceptions import ValidationError
 from django.utils import timezone
-from django.db.models import F
 
 from orders.models import Order, OrderItem
-from product_app.models import Product, ProductStock, Warehouse
-from payments.services import process_success
 from payments.selectors import safe_decrement_stock
+from payments.services import process_success
+from product_app.models import Product, ProductStock, Warehouse
+
 
 def make_product_with_stock(qty=8):
     p = Product.objects.create(name="Test Tee", sku="TEE-001", price=100)
@@ -16,13 +16,17 @@ def make_product_with_stock(qty=8):
     s = ProductStock.objects.create(product=p, warehouse=w, quantity=qty)
     return p, s, w
 
+
 def make_order(product, qty=1):
     o = Order.objects.create(
-        full_name="Rahim", email="r@example.com", address="Nairobi",
+        full_name="Rahim",
+        email="r@example.com",
+        address="Nairobi",
         # optional coords fields omitted
     )
     OrderItem.objects.create(order=o, product=product, quantity=qty, unit_price=product.price)
     return o
+
 
 class TestStockDecrement(TestCase):
     def test_single_purchase_from_eight_leaves_seven(self):

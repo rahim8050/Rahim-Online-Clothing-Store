@@ -1,14 +1,14 @@
-import json
-import hmac
 import hashlib
+import hmac
+import json
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
-from product_app.models import Category, Product, Warehouse, ProductStock
-from orders.models import Order, OrderItem, Transaction, PaymentEvent
+from orders.models import Order, OrderItem, PaymentEvent, Transaction
+from product_app.models import Category, Product, ProductStock, Warehouse
 
 
 @override_settings(PAYSTACK_SECRET_KEY="secret")
@@ -70,4 +70,3 @@ class PaystackWebhookTests(TestCase):
         self.assertEqual(order.payment_status, "success")
         self.assertTrue(PaymentEvent.objects.filter(reference=tx.reference).exists())
         mock_assign.assert_called_once_with(order)
-

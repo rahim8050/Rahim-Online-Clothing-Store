@@ -6,13 +6,20 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('orders', '0011_orderitem_product_version'),
+        ("orders", "0011_orderitem_product_version"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='transaction',
-            name='body_sha256',
-            field=models.CharField(blank=True, db_index=True, help_text='SHA256 of the raw webhook body for idempotency', max_length=64, null=True, unique=True),
+            model_name="transaction",
+            name="body_sha256",
+            field=models.CharField(
+                blank=True,
+                db_index=True,
+                help_text="SHA256 of the raw webhook body for idempotency",
+                max_length=64,
+                null=True,
+                unique=True,
+            ),
         ),
     ]

@@ -13,4 +13,3 @@ test('chat panel open -> send', async ({ page }) => {
   // Message should appear in log
   await expect(page.getByRole('log')).toBeVisible();
 });
-

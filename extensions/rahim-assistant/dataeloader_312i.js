@@ -26,4 +26,3 @@
     console.warn('[Rahim Assistant] data loader init failed', e);
   }
 })();
-

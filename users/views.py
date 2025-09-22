@@ -5,8 +5,10 @@ from rest_framework import generics, permissions
 
 import logging
 import re
-from typing import Any, Dict
+from typing import Any
 
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
 from django.apps import apps
 from django.conf import settings
 from django.contrib import messages
@@ -18,24 +20,19 @@ from django.core.cache import cache
 from django.core.exceptions import FieldError, ImproperlyConfigured
 from django.db import transaction
 from django.db.models import Count, OuterRef, Prefetch, Q, Subquery
-from django.http import (
-    HttpResponse,
-    HttpResponseForbidden,
-    HttpResponseRedirect,
-    JsonResponse,
-)
+from django.http import HttpResponse, HttpResponseForbidden, HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
-from django.urls import reverse, reverse_lazy
+from django.urls import reverse_lazy
 from django.utils.encoding import force_str
 from django.utils.http import urlsafe_base64_decode
 from django.utils.timezone import now
 from django.views import View
 from django.views.generic import FormView
-
-from asgiref.sync import async_to_sync
-from channels.layers import get_channel_layer
 from rest_framework import generics, permissions
 from rest_framework.exceptions import ValidationError
+
+from orders.models import Delivery, Order, OrderItem, Transaction
+from product_app.utils import get_vendor_field
 
 from .constants import DRIVER, VENDOR
 from .forms import (
@@ -48,9 +45,6 @@ from .forms import (
 from .models import VendorApplication, VendorStaff
 from .tokens import account_activation_token
 from .utils import in_groups, is_vendor_or_staff, send_activation_email
-
-from orders.models import Order, OrderItem, Delivery, Transaction
-from product_app.utils import get_vendor_field
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -169,7 +163,9 @@ def debug_ws_push(request, delivery_id: int):
         else {"type": "status", "status": status_val}
     )
     try:
-        async_to_sync(layer.group_send)(f"delivery.track.{int(delivery_id)}", {"type": "broadcast", "payload": payload_legacy})
+        async_to_sync(layer.group_send)(
+            f"delivery.track.{int(delivery_id)}", {"type": "broadcast", "payload": payload_legacy}
+        )
     except Exception:
         pass
 
@@ -212,9 +208,8 @@ class CustomLoginView(LoginView):
 
         return super().form_valid(form)
 
-
     def form_invalid(self, form):
-        logger.warning("Login failed for %s: %s", self.request.POST.get('username'), form.errors)
+        logger.warning("Login failed for %s: %s", self.request.POST.get("username"), form.errors)
         return super().form_invalid(form)
 
     def get_success_url(self):
@@ -278,8 +273,10 @@ def activate(request, uidb64: str, token: str):
         user.is_active = True
         user.save(update_fields=["is_active"])
 
-    backend = (getattr(settings, "AUTHENTICATION_BACKENDS", None) or
-               ["django.contrib.auth.backends.ModelBackend"])[0]
+    backend = (
+        getattr(settings, "AUTHENTICATION_BACKENDS", None)
+        or ["django.contrib.auth.backends.ModelBackend"]
+    )[0]
     login(request, user, backend=backend)
     messages.success(request, "Your account has been activated. Welcome!")
     return redirect("dashboard")
@@ -320,7 +317,9 @@ class ResendActivationEmailView(View):
         try:
             send_activation_email(request, user)
         except Exception:
-            messages.error(request, "We couldn’t send the email right now. Please try again shortly.")
+            messages.error(
+                request, "We couldn’t send the email right now. Please try again shortly."
+            )
             return redirect("users:resend_activation")
 
         cache.set(cache_key, True, timeout=self.COOLDOWN_SECONDS)
@@ -449,7 +448,12 @@ def vendor_dashboard(request):
     return render(
         request,
         "dash/vendor.html",
-        {"products": products, "deliveries": deliveries, "status": request.GET.get("status", "all"), "totals": totals},
+        {
+            "products": products,
+            "deliveries": deliveries,
+            "status": request.GET.get("status", "all"),
+            "totals": totals,
+        },
     )
 
 
@@ -460,9 +464,7 @@ def driver_dashboard(request):
 
     DeliveryModel = apps.get_model("orders", "Delivery")
     deliveries = (
-        DeliveryModel.objects.filter(driver=request.user)
-        .select_related("order")
-        .order_by("-id")
+        DeliveryModel.objects.filter(driver=request.user).select_related("order").order_by("-id")
     )
     return render(request, "dash/driver.html", {"deliveries": deliveries})
 
@@ -473,7 +475,7 @@ def driver_sim(request):
     Simple page to simulate driver movement.
     If ?delivery=<id> is provided, prefill from DB.
     """
-    ctx: Dict[str, Any] = {}
+    ctx: dict[str, Any] = {}
     delivery_id = request.GET.get("delivery")
     if delivery_id:
         d = get_object_or_404(Delivery, pk=delivery_id)
@@ -513,7 +515,7 @@ def vendor_apply_deprecated(request):
         resp = HttpResponseRedirect(url)
         resp.status_code = 307
     resp["Deprecation"] = "true"
-    resp["Link"] = f"<{url}>; rel=\"successor-version\""
+    resp["Link"] = f'<{url}>; rel="successor-version"'
     return resp
 
 
@@ -524,6 +526,7 @@ class VendorApplyAPI(generics.CreateAPIView):
     def get_serializer_class(self):
         # Lazy import avoids circular import at app load
         from .serializers import VendorApplicationCreateSerializer
+
         return VendorApplicationCreateSerializer
 
     def perform_create(self, serializer):
@@ -536,11 +539,13 @@ class VendorApplicationApproveAPI(generics.UpdateAPIView):
     PATCH /users/vendor-applications/{id}/approve/
     body: {"status": "approved" | "rejected"}
     """
+
     permission_classes = [permissions.IsAdminUser]
     queryset = VendorApplication.objects.all()
 
     def get_serializer_class(self):
         from .serializers import VendorApplicationSerializer
+
         return VendorApplicationSerializer
 
     def perform_update(self, serializer):
@@ -551,6 +556,9 @@ class VendorApplicationApproveAPI(generics.UpdateAPIView):
         if status_new == VendorApplication.APPROVED:
             # add vendor group & self-staff link
             from django.contrib.auth.models import Group
+
             g_vendor, _ = Group.objects.get_or_create(name=VENDOR)
             app.user.groups.add(g_vendor)
-            VendorStaff.objects.get_or_create(owner=app.user, staff=app.user, defaults={"is_active": True})
+            VendorStaff.objects.get_or_create(
+                owner=app.user, staff=app.user, defaults={"is_active": True}
+            )

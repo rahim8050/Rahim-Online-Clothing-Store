@@ -8,7 +8,7 @@
     <link rel="stylesheet" href="{% static 'dist/styles.css' %}">
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
+
 </head>
 <body class="font-sans">
     <!-- Hero Section -->
@@ -22,19 +22,19 @@
                 <p class="text-lg md:text-xl text-white/90 mb-8 max-w-2xl">
                     Shop the latest fashion trends at Rahim Online Clothing Store
                 </p>
-                
+
                 <!-- Search Form -->
                 <div class="w-full max-w-xl">
                     <form class="flex" action="{% url 'product_search' %}" method="GET">
-                        <input 
-                            type="text" 
+                        <input
+                            type="text"
                             class="flex-grow py-4 px-6 rounded-l-full focus:outline-none focus:ring-2 focus:ring-primary"
-                            placeholder="Search for jeans, shirts, dresses..." 
+                            placeholder="Search for jeans, shirts, dresses..."
                             name="search"
                             value="{{ request.GET.search }}"
                             aria-label="Search"
                         >
-                        <button 
+                        <button
                             class="bg-secondary hover:bg-[#ff5252] transition-colors duration-300 text-white py-4 px-8 rounded-r-full font-medium flex items-center justify-center"
                             type="submit"
                         >
@@ -42,7 +42,7 @@
                         </button>
                     </form>
                 </div>
-                
+
                 {% comment %} <div class="mt-10 flex flex-col sm:flex-row gap-4">
                     <a href="#featured" class="px-8 py-3 bg-transparent border-2 border-white text-white rounded-full hover:bg-white/10 transition-colors duration-300 text-lg font-medium">
                         Shop Now
@@ -55,11 +55,11 @@
         </div>
     </section>
 
- 
-   
 
-   
 
-    
+
+
+
+
 </body>
 </html>

@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-from typing import Optional
-
 from django.contrib.auth import get_user_model
-from rest_framework import serializers
 from drf_spectacular.utils import extend_schema_field
+from rest_framework import serializers
 
 from .models import VendorMember, VendorOrg, VendorOrgAuditLog
 from .services import has_min_role
@@ -55,25 +53,25 @@ class OrgSerializer(serializers.ModelSerializer):
         if not v:
             return v
         import re
-        if not re.match(r"^[A-Z]{1}[0-9]{9}[A-Z]{1}$", v):
+
+        if not re.match(r"^[A-Z][0-9]{9}[A-Z]$", v):
             raise serializers.ValidationError("KRA PIN must look like A123456789B.")
         return v
 
     def update(self, instance: VendorOrg, validated_data):
         request = self.context.get("request")
         user = getattr(request, "user", None)
+
         # Enforce role for sensitive fields
-        sensitive = {}
-        for f in ("kra_pin", "tax_status", "tax_registered_at"):
-            if f in validated_data:
-                sensitive[f] = validated_data[f]
+        sensitive = {f: validated_data[f] for f in ("kra_pin", "tax_status", "tax_registered_at") if f in validated_data}
         if sensitive and not self._can_see_sensitive(user, instance):
             raise serializers.ValidationError({"detail": "Not allowed to modify tax fields."})
 
         # Track old values for audit
-        old_vals = {k: getattr(instance, k, None) for k in sensitive.keys()}
+        old_vals = {k: getattr(instance, k, None) for k in sensitive}
+
         obj = super().update(instance, validated_data)
-        # Validate at model level for KRA PIN format & normalize
+        # Model-level normalization/validation (slug/KRA)
         obj.full_clean()
         obj.save()
 
@@ -90,6 +88,7 @@ class OrgSerializer(serializers.ModelSerializer):
                         new_value=str(new_val or ""),
                     )
                 except Exception:
+                    # Don't block updates if audit write fails
                     pass
         return obj
 
