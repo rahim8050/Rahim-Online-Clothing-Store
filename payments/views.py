@@ -1,6 +1,4 @@
 # payments/views.py
-from __future__ import annotations
-
 import hashlib
 import json
 import uuid
@@ -146,7 +144,9 @@ class StripeWebhookView(View):
             )
 
             if event_type in ("payment_intent.succeeded", "checkout.session.completed"):
-                txn = process_success(txn=txn, gateway_reference=payment_intent, request_id=request_id)
+                txn = process_success(
+                    txn=txn, gateway_reference=payment_intent, request_id=request_id
+                )
                 apply_org_settlement(txn, provider="stripe", raw_body=request.body, payload=event)
                 to_email = getattr(getattr(txn, "user", None), "email", None)
                 if to_email:

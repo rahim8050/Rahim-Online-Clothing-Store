@@ -1,4 +1,6 @@
 from django.apps import AppConfig
+import logging
+logger = logging.getLogger(__name__)
 
 
 class CartConfig(AppConfig):
@@ -9,5 +11,5 @@ class CartConfig(AppConfig):
         # Register signal handlers (login merge)
         try:  # pragma: no cover
             import cart.signals  # noqa: F401
-        except Exception:
-            pass
+        except ModuleNotFoundError as e:
+           logger.debug("cart.signals not available: %s", e)

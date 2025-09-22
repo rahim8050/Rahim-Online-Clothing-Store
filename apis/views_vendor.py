@@ -18,23 +18,23 @@ from users.utils import resolve_vendor_owner_for
 
 
 # --------- Doc helper serializers (module-level) ---------
-class VendorKPIsProductsSerializer(serializers.Serializer):
+class VendorKPIsProductsSerializer(serializers.Serializer):  # guessed; refine as needed
     total = serializers.IntegerField()
     live = serializers.IntegerField()
 
 
-class VendorKPIsSeriesEntrySerializer(serializers.Serializer):
+class VendorKPIsSeriesEntrySerializer(serializers.Serializer):  # guessed; refine as needed
     date = serializers.DateField()
     orders = serializers.IntegerField()
     revenue = serializers.FloatField()
 
 
-class VendorKPIsLastPayoutSerializer(serializers.Serializer):
+class VendorKPIsLastPayoutSerializer(serializers.Serializer):  # guessed; refine as needed
     amount = serializers.FloatField()
     created_at = serializers.DateTimeField()
 
 
-class VendorKPIsResponseSerializer(serializers.Serializer):
+class VendorKPIsResponseSerializer(serializers.Serializer):  # guessed; refine as needed
     products = VendorKPIsProductsSerializer()
     orders_30d = serializers.IntegerField()
     revenue_30d = serializers.FloatField()
@@ -43,21 +43,21 @@ class VendorKPIsResponseSerializer(serializers.Serializer):
 
 
 class VendorKPIAPI(APIView):
-    """
-    GET /apis/vendor/kpis/?owner_id=<id>
-
+    """GET /apis/vendor/kpis/?owner_id=<id>
     Returns vendor KPIs for dashboard: products totals, last 30d orders & revenue,
     and a 14-day series of daily orders and revenue.
     """
 
     permission_classes = [IsAuthenticated, IsVendorOrVendorStaff]
-    serializer_class = VendorKPIsResponseSerializer  # for schema/docs
+    # no request body on GET
+    serializer_class = VendorKPIsResponseSerializer
 
     @extend_schema(request=None, responses=VendorKPIsResponseSerializer)
     def get(self, request):
         Product = apps.get_model("product_app", "Product")
         Order = apps.get_model("orders", "Order")
-        Transaction = apps.get_model("payments", "Transaction")  # correct app
+        OrderItem = apps.get_model("orders", "OrderItem")
+        Transaction = apps.get_model("orders", "Transaction")
 
         try:
             owner_id = resolve_vendor_owner_for(request.user, request.query_params.get("owner_id"))
@@ -69,7 +69,7 @@ class VendorKPIAPI(APIView):
         since_14 = now() - timedelta(days=14)
 
         # Products totals
-        field = get_vendor_field(Product)  # e.g., "owner" or "vendor"
+        field = get_vendor_field(Product)
         vendor_filter = {f"{field}_id": owner_id}
         total_products = Product.objects.filter(**vendor_filter).count()
         live_products = Product.objects.filter(**vendor_filter, available=True).count()
@@ -80,14 +80,17 @@ class VendorKPIAPI(APIView):
         orders_30d = orders_30_qs.count()
 
         # Revenue in last 30 days: sum successful transactions for those orders
-        tx_amounts = (
-            Transaction.objects.filter(
-                order__in=orders_30_qs, status="success", created_at__gte=since_30
+        rev_map = {
+            t["order_id"]: t["amount"]
+            for t in (
+                Transaction.objects.filter(
+                    order__in=orders_30_qs, status="success", created_at__gte=since_30
+                )
+                .values("order_id")
+                .annotate(amount=Sum("amount"))
             )
-            .values("order_id")
-            .annotate(amount=Sum("amount"))
-        )
-        revenue_30d = float(sum((row["amount"] or 0) for row in tx_amounts)) if tx_amounts else 0.0
+        }
+        revenue_30d = float(sum(rev_map.values())) if rev_map else 0.0
 
         # 14d series by order created date
         series_orders = (
@@ -118,12 +121,12 @@ class VendorKPIAPI(APIView):
                 {"date": k, "orders": orders_by_day.get(k, 0), "revenue": rev_by_day.get(k, 0.0)}
             )
 
-        # Last payout (from payments.Payout via VendorOrg.owner)
+        # Optional: last payout (if a payouts app/model exists)
         last_payout = None
         try:
-            Payout = apps.get_model("payments", "Payout")
+            Payout = apps.get_model("payouts", "Payout")
             last = (
-                Payout.objects.filter(vendor_org__owner_id=owner_id)
+                Payout.objects.filter(vendor_id=owner_id)
                 .only("id", "amount", "created_at")
                 .order_by("-created_at")
                 .first()

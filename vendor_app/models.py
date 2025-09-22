@@ -55,8 +55,7 @@ class VendorOrg(models.Model):
         db_index=True,
     )
     is_active: bool = models.BooleanField(default=True)
-
-    # Org-level commission (e.g., 0.0200 for 2%) and payout channel for KE
+    # Org-level commission (e.g., 0.02 for 2%) and payout channel for KE
     org_commission_rate = models.DecimalField(max_digits=5, decimal_places=4, default=0)
     org_payout_channel = models.CharField(
         max_length=16,
@@ -71,8 +70,9 @@ class VendorOrg(models.Model):
         BLOCKED = "blocked", "Blocked"
 
     kra_pin = models.CharField(max_length=12, blank=True, default="")
-    tax_status = models.CharField(max_length=16, choices=TaxStatus.choices, default=TaxStatus.UNKNOWN)
-
+    tax_status = models.CharField(
+        max_length=16, choices=TaxStatus.choices, default=TaxStatus.UNKNOWN
+    )
     tax_registered_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -93,14 +93,14 @@ class VendorOrg(models.Model):
         return f"{self.name} ({self.slug})"
 
     # --------------------- helpers / RBAC ---------------------
-    def add_member(self, user, role: str) -> "VendorMember":
+    def add_member(self, user, role: str) -> VendorMember:
         """Add or update a member with a role in this org.
 
         - Ensures only one OWNER per org (via partial unique constraint).
         - Reactivates soft-deactivated memberships.
         """
         role = (role or "").upper()
-        if role not in VendorMember.Role.values():
+        if role not in VendorMember.Role.values:
             raise ValueError(f"Invalid role: {role}")
 
         member, created = VendorMember.objects.get_or_create(
@@ -119,7 +119,7 @@ class VendorOrg(models.Model):
 
     def has_role(self, user, role: str) -> bool:
         role = (role or "").upper()
-        if role not in VendorMember.Role.values():
+        if role not in VendorMember.Role.values:
             return False
         return VendorMember.objects.filter(org=self, user=user, role=role, is_active=True).exists()
 
@@ -135,12 +135,13 @@ class VendorOrg(models.Model):
 
     def clean(self):
         from django.core.exceptions import ValidationError
+
         super().clean()
         if getattr(self, "kra_pin", ""):
             import re
 
             pin = (self.kra_pin or "").strip().upper()
-            if not re.match(r"^[A-Z][0-9]{9}[A-Z]$", pin):
+            if not re.match(r"^[A-Z]{1}[0-9]{9}[A-Z]{1}$", pin):
                 raise ValidationError({"kra_pin": "KRA PIN must look like A123456789B."})
 
 
@@ -158,9 +159,9 @@ class VendorMember(models.Model):
         MANAGER = "MANAGER", "Manager"
         STAFF = "STAFF", "Staff"
 
-        @classmethod
-        def values(cls):
-            return [c for c, _ in cls.choices]
+        @property
+        def values(self):  # type: ignore[override]
+            return [c for c, _ in self.choices]
 
     org = models.ForeignKey(
         VendorOrg, related_name="members", on_delete=models.CASCADE, db_index=True
@@ -222,7 +223,7 @@ class VendorProfile(models.Model):
 
     user = models.OneToOneField(UserRef, on_delete=models.CASCADE, related_name="vendor_profile")
     org = models.ForeignKey(
-        VendorOrg, on_delete=models.PROTECT, null=True, blank=True, related_name="profiles"
+        VendorOrg, on_delete=models.PROTECT, null=False, blank=False, related_name="profiles"
     )
     is_active: bool = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)

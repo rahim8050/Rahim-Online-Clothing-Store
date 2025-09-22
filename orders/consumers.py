@@ -1,6 +1,8 @@
 # orders/consumers.py
 import math
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
+import logging
+logger = logging.getLogger(__name__)
 
 from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
@@ -42,8 +44,8 @@ class DeliveryTrackerConsumer(AsyncJsonWebsocketConsumer):
         try:
             if hasattr(self, "group_name"):
                 await self.channel_layer.group_discard(self.group_name, self.channel_name)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("channels discard failed: %s", e, exc_info=True)
 
     # ---- Incoming messages ----
     async def receive_json(self, content, **kwargs):
@@ -169,9 +171,9 @@ class DeliveryTrackerConsumer(AsyncJsonWebsocketConsumer):
             if d.status == Delivery.Status.ASSIGNED:
                 d.status = Delivery.Status.EN_ROUTE
                 new_status = d.status
-        except Exception:
+        except Exception as e:
             # Enum/choices not available? ignore gracefully
-            pass
+            logger.debug("channels discard failed: %s", e, exc_info=True)
 
         fields = ["last_lat", "last_lng", "last_ping_at", "updated_at"]
         if new_status is not None:
@@ -182,8 +184,8 @@ class DeliveryTrackerConsumer(AsyncJsonWebsocketConsumer):
             # History + audit (best-effort)
             try:
                 DeliveryPing.objects.create(delivery=d, lat=lat, lng=lng)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("channels discard failed: %s", e, exc_info=True)
             try:
                 DeliveryEvent = apps.get_model("orders", "DeliveryEvent")
                 DeliveryEvent.objects.create(
@@ -192,8 +194,8 @@ class DeliveryTrackerConsumer(AsyncJsonWebsocketConsumer):
                     type="position",
                     note={"lat": float(lat), "lng": float(lng)},
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("channels discard failed: %s", e, exc_info=True)
 
         return changed, new_status
 

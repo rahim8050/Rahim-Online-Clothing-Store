@@ -55,17 +55,10 @@ staticfiles/
 
 # ===== Frontend / Tailwind / Node =====
 node_modules/
-
-package-lock.json
-pnpm-lock.yaml
-yarn.lock
-postcss.config.js
-
 # Prefer committing ONE lockfile; uncomment the one you use:
 # package-lock.json
 # yarn.lock
 # pnpm-lock.yaml
-
 
 # Build outputs
 static/dist/
@@ -93,45 +86,4 @@ dist/
 celerybeat-schedule
 *.pid
 
-
-# ===== Pytest =====
-.pytest_cache/# Python bytecode
-__pycache__/
-*.py[cod]
-*.pyo
-# Python bytecode
-__pycache__/
-*.py[cod]
-*.pyo
-node_modules/
-tailwindcss
-tailwindcss.exe
-static/dist/*
-static/dist/*
-!static/dist/.gitkeep
-
-
-
-dev.crt
-dev.key
-dev.key
-dev.key.local
-dev.crt
-dev.crt.local
-*.key
-*.crt
-*.pem
-dev.key
-dev.key.local
-dev.crt
-dev.crt.local
-*.key
-*.crt
-*.pem
-dev.key
-dev.key.local
-dev.crt
-dev.crt.local
-*.key
-*.crt
-*.pem
+*.bak

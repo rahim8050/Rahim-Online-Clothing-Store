@@ -6,6 +6,7 @@ from celery import shared_task
 from django.conf import settings
 
 from core import metrics
+
 from .kpi import aggregate_kpis_daily
 from .models import VendorOrg
 

@@ -26,7 +26,9 @@ class EtimsResult:
 
 class EtimsClient:
     def __init__(self, base_url: str | None = None, api_key: str | None = None) -> None:
-        self.base_url = base_url or getattr(settings, "ETIMS_BASE_URL", "https://sandbox.etims.local")
+        self.base_url = base_url or getattr(
+            settings, "ETIMS_BASE_URL", "https://sandbox.etims.local"
+        )
         self.api_key = api_key or getattr(settings, "ETIMS_API_KEY", None)
 
     def submit_invoice(self, invoice: Invoice) -> EtimsResult:  # pragma: no cover - abstract
@@ -45,7 +47,9 @@ class SandboxEtimsClient(EtimsClient):
 
 def get_client() -> EtimsClient:
     # For now always sandbox; wire toggle via settings if needed later
-    cls_path = getattr(settings, "ETIMS_CLIENT_CLASS", "invoicing.services.etims.SandboxEtimsClient")
+    cls_path = getattr(
+        settings, "ETIMS_CLIENT_CLASS", "invoicing.services.etims.SandboxEtimsClient"
+    )
     try:
         cls = import_string(cls_path)
         return cls()
@@ -105,7 +109,7 @@ def submit_invoice(*, invoice: Invoice, idempotency_key: str | None = None) -> E
     """Submit an invoice to eTIMS (sandbox adapter). Idempotent per invoice.
 
     - If invoice is already ACCEPTED, return immediately.
-    - Transition DRAFT/REJECTED/SUBMITTED -> SUBMITTED -> ACCEPTED/REJECTED
+    - Transition DRAFT/REJECTED -> SUBMITTED -> ACCEPTED/REJECTED
     - Persist IRN on acceptance; set timestamps accordingly
     """
     # Feature flag gate
@@ -130,7 +134,7 @@ def submit_invoice(*, invoice: Invoice, idempotency_key: str | None = None) -> E
         if invoice.status == Invoice.Status.ACCEPTED:
             return EtimsResult(status="accepted", irn=invoice.irn or None)
 
-        # Move to SUBMITTED if still draft/rejected/submitted (normalize to submitted)
+        # Move to SUBMITTED if still draft/rejected
         if invoice.status in {
             Invoice.Status.DRAFT,
             Invoice.Status.REJECTED,
