@@ -4,13 +4,14 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
 import requests
 from django.conf import settings
 from django.core.exceptions import ValidationError
-from django.db import IntegrityError, transaction as dbtx
+from django.db import IntegrityError
+from django.db import transaction as dbtx
 from django.utils import timezone
 
 from vendor_app.models import VendorOrg
@@ -19,7 +20,8 @@ from .enums import Gateway, TxnStatus
 from .idempotency import idempotent
 from .models import AuditLog, PaymentEvent, Payout, Transaction
 from .selectors import safe_decrement_stock, set_order_paid
-
+import logging
+logger = logging.getLogger(__name__)
 
 # =========================================================
 #                           Helpers
@@ -121,7 +123,9 @@ def _eligible_for_auto_refund(txn: Transaction) -> bool:
 
 
 @dbtx.atomic
-def process_success(*, txn: Transaction, gateway_reference: str | None, request_id: str) -> Transaction:
+def process_success(
+    *, txn: Transaction, gateway_reference: str | None, request_id: str
+) -> Transaction:
     """
     Mark a transaction as successful, handle duplicates & auto-refund, update stock,
     and flip the order to paid (single source of truth).
@@ -133,7 +137,9 @@ def process_success(*, txn: Transaction, gateway_reference: str | None, request_
         TxnStatus.CANCELLED,
         TxnStatus.REFUNDED,
     }:
-        AuditLog.log(event="WEBHOOK_REPLAY_BLOCKED", transaction=txn, order=txn.order, request_id=request_id)
+        AuditLog.log(
+            event="WEBHOOK_REPLAY_BLOCKED", transaction=txn, order=txn.order, request_id=request_id
+        )
         return txn
 
     # Has another success already been recorded for the same order?
@@ -146,7 +152,9 @@ def process_success(*, txn: Transaction, gateway_reference: str | None, request_
 
     if already_paid:
         txn.mark_duplicate_success()
-        AuditLog.log(event="DUPLICATE_SUCCESS", transaction=txn, order=txn.order, request_id=request_id)
+        AuditLog.log(
+            event="DUPLICATE_SUCCESS", transaction=txn, order=txn.order, request_id=request_id
+        )
 
         # Auto-refund only if supported and amounts match
         if _eligible_for_auto_refund(txn) and txn.amount == txn.order.get_total_cost():
@@ -161,7 +169,12 @@ def process_success(*, txn: Transaction, gateway_reference: str | None, request_
                 )
                 txn.refunded_at = timezone.now()
                 txn.save(update_fields=["status", "refund_reference", "refunded_at", "updated_at"])
-                AuditLog.log(event="DUPLICATE_REFUND_ISSUED", transaction=txn, order=txn.order, request_id=request_id)
+                AuditLog.log(
+                    event="DUPLICATE_REFUND_ISSUED",
+                    transaction=txn,
+                    order=txn.order,
+                    request_id=request_id,
+                )
             except Exception as e:  # best effort
                 AuditLog.log(
                     event="REFUND_FAILED",
@@ -197,7 +210,9 @@ def process_failure(*, txn: Transaction, request_id: str) -> Transaction:
         TxnStatus.CANCELLED,
         TxnStatus.REFUNDED,
     }:
-        AuditLog.log(event="WEBHOOK_REPLAY_BLOCKED", transaction=txn, order=txn.order, request_id=request_id)
+        AuditLog.log(
+            event="WEBHOOK_REPLAY_BLOCKED", transaction=txn, order=txn.order, request_id=request_id
+        )
         return txn
     txn.mark_failed()
     AuditLog.log(event="PAYMENT_FAILED", transaction=txn, order=txn.order, request_id=request_id)
@@ -214,7 +229,9 @@ def issue_refund(txn: Transaction, request_id: str = "") -> None:
     if txn.gateway == Gateway.STRIPE:
         import stripe
 
-        r = stripe.Refund.create(payment_intent=txn.gateway_reference, reason="requested_by_customer")
+        r = stripe.Refund.create(
+            payment_intent=txn.gateway_reference, reason="requested_by_customer"
+        )
         txn.refund_reference = getattr(r, "id", None)
         txn.save(update_fields=["refund_reference", "updated_at"])
         AuditLog.log(event="REFUND_ISSUED", transaction=txn, order=txn.order, request_id=request_id)
@@ -228,13 +245,16 @@ def issue_refund(txn: Transaction, request_id: str = "") -> None:
 
         payload = {
             # prefer gateway_reference; fallback to init reference
-            "transaction": txn.gateway_reference or txn.reference,
+            "transaction": txn.gateway_reference
+            or txn.reference,
         }
         headers = {
             "Authorization": f"Bearer {secret}",
             "Content-Type": "application/json",
         }
-        resp = requests.post("https://api.paystack.co/refund", json=payload, headers=headers, timeout=30)
+        resp = requests.post(
+            "https://api.paystack.co/refund", json=payload, headers=headers, timeout=30
+        )
         try:
             data = resp.json()
         except Exception:
@@ -253,7 +273,9 @@ def issue_refund(txn: Transaction, request_id: str = "") -> None:
         return
 
     # M-Pesa or others: usually manual reversal — record for ops
-    AuditLog.log(event="REFUND_ISSUE_MANUAL", transaction=txn, order=txn.order, request_id=request_id)
+    AuditLog.log(
+        event="REFUND_ISSUE_MANUAL", transaction=txn, order=txn.order, request_id=request_id
+    )
 
 
 # -------------------- Payouts (idempotent) --------------------
@@ -271,7 +293,11 @@ def process_payout(
     For demo/testing, we just log and return a deterministic reference based on the key.
     """
     ref = f"PAYOUT-{(idempotency_key or '')[-12:]}" if idempotency_key else "PAYOUT"
-    AuditLog.log(event="PAYOUT_SUCCESS", request_id=idempotency_key or "", message=f"{ref}:{amount}:{currency}")
+    AuditLog.log(
+        event="PAYOUT_SUCCESS",
+        request_id=idempotency_key or "",
+        message=f"{ref}:{amount}:{currency}",
+    )
     return {"reference": ref, "amount": str(amount), "currency": currency}
 
 
@@ -286,7 +312,9 @@ def _resolve_org_for_order(order) -> VendorOrg | None:
     return None
 
 
-def apply_org_settlement(txn: Transaction, provider: str, raw_body: bytes, payload: dict | None = None) -> PaymentEvent:
+def apply_org_settlement(
+    txn: Transaction, provider: str, raw_body: bytes, payload: dict | None = None
+) -> PaymentEvent:
     """
     Bind transaction to VendorOrg, compute commission + net, persist PaymentEvent & Payout.
 
@@ -305,7 +333,7 @@ def apply_org_settlement(txn: Transaction, provider: str, raw_body: bytes, paylo
     net = (gross - fees - commission).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
     # Persist to txn
-    update_fields: list[str] = []
+    update_fields = []
     if txn.vendor_org_id is None and org is not None:
         txn.vendor_org = org
         update_fields.append("vendor_org")
@@ -313,7 +341,13 @@ def apply_org_settlement(txn: Transaction, provider: str, raw_body: bytes, paylo
     txn.fees_amount = fees
     txn.commission_amount = commission
     txn.net_to_vendor = net
-    update_fields += ["gross_amount", "fees_amount", "commission_amount", "net_to_vendor", "updated_at"]
+    update_fields += [
+        "gross_amount",
+        "fees_amount",
+        "commission_amount",
+        "net_to_vendor",
+        "updated_at",
+    ]
     txn.save(update_fields=update_fields)
 
     body_sha256 = hashlib.sha256(raw_body or b"").hexdigest()
@@ -337,7 +371,7 @@ def apply_org_settlement(txn: Transaction, provider: str, raw_body: bytes, paylo
                 transaction=txn,
                 defaults={"vendor_org": org, "amount": net, "currency": txn.currency},
             )
-    except Exception:
-        pass
+    except Exception as e:
+          logger.debug("idempotency side-effect failed: %s", e, exc_info=True)
 
     return evt

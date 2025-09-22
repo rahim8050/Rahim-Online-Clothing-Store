@@ -1,14 +1,8 @@
 from __future__ import annotations
 
-
-from typing import Optional
-
 from django.db.models import QuerySet
 
 from .models import Invoice
-
-
-
 
 
 def get_invoice_for_order(order_id: int) -> Invoice | None:

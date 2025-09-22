@@ -1,6 +1,5 @@
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
-from drf_spectacular.utils import extend_schema_field
 
 from product_app.models import Product
 from product_app.serializers_v1 import ProductV1Serializer

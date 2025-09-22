@@ -2,29 +2,12 @@ from __future__ import annotations
 
 from django.db import transaction
 from django.db.models import QuerySet
+from drf_spectacular.utils import OpenApiExample, extend_schema, extend_schema_view
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-
-# Optional: enrich OpenAPI; provide no-op fallbacks if spectacular isn't installed
-try:
-    from drf_spectacular.utils import OpenApiExample, extend_schema, extend_schema_view
-except Exception:  # pragma: no cover
-    def extend_schema(*args, **kwargs):  # type: ignore
-        def deco(func):
-            return func
-        return deco
-
-    def extend_schema_view(**kwargs):  # type: ignore
-        def deco(cls):
-            return cls
-        return deco
-
-    class OpenApiExample:  # minimal stub
-        def __init__(self, *args, **kwargs):
-            pass
 
 from orders.models import Order, OrderItem
 from orders.serializers_v1 import OrderV1Serializer
@@ -36,6 +19,23 @@ from .permissions import IsInOrg, IsOrgManager, IsOrgStaff
 from .selectors import get_kpis, get_realtime, org_scoped_queryset
 from .serializers_v1 import InviteSerializer, MemberSerializer, OrgSerializer
 from .throttling import VendorOrgScopedRateThrottle
+
+try:
+    # Optional: enrich OpenAPI with tags/operation summaries
+    from drf_spectacular.utils import extend_schema, extend_schema_view
+except Exception:  # pragma: no cover - spectacular may be absent in some envs
+
+    def extend_schema(*args, **kwargs):  # type: ignore
+        def deco(func):
+            return func
+
+        return deco
+
+    def extend_schema_view(**kwargs):  # type: ignore
+        def deco(cls):
+            return cls
+
+        return deco
 
 
 class DefaultPage(PageNumberPagination):
@@ -102,11 +102,8 @@ class OrgViewSet(viewsets.ModelViewSet):
         org = self.get_object()
         qs = VendorMember.objects.filter(org=org).select_related("user").order_by("id")
         page = self.paginate_queryset(qs)
-        if page is not None:
-            ser = MemberSerializer(page, many=True)
-            return self.get_paginated_response(ser.data)
-        ser = MemberSerializer(qs, many=True)
-        return Response(ser.data)
+        ser = MemberSerializer(page, many=True)
+        return self.get_paginated_response(ser.data)
 
     @extend_schema(tags=["Vendor Orgs"], summary="List org orders")
     @action(detail=True, methods=["get"], url_path="orders")
@@ -120,22 +117,16 @@ class OrgViewSet(viewsets.ModelViewSet):
         )
         qs = Order.objects.filter(id__in=order_ids).order_by("-created_at")
         page = self.paginate_queryset(qs)
-        if page is not None:
-            ser = OrderV1Serializer(page, many=True)
-            return self.get_paginated_response(ser.data)
-        ser = OrderV1Serializer(qs, many=True)
-        return Response(ser.data)
+        ser = OrderV1Serializer(page, many=True)
+        return self.get_paginated_response(ser.data)
 
     @extend_schema(tags=["Vendor Orgs"], summary="List org products")
     @action(detail=True, methods=["get"], url_path="products")
     def products(self, request, pk=None):
         qs = org_scoped_queryset(Product.objects.all(), org_id=int(pk)).order_by("id")
         page = self.paginate_queryset(qs)
-        if page is not None:
-            ser = ProductV1Serializer(page, many=True)
-            return self.get_paginated_response(ser.data)
-        ser = ProductV1Serializer(qs, many=True)
-        return Response(ser.data)
+        ser = ProductV1Serializer(page, many=True)
+        return self.get_paginated_response(ser.data)
 
     @extend_schema(
         tags=["Vendor KPIs"],

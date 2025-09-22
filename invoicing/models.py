@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import ROUND_HALF_UP, Decimal
 
 from django.core.validators import MinValueValidator
 from django.db import models
@@ -21,7 +21,6 @@ class Invoice(models.Model):
     order = models.OneToOneField("orders.Order", on_delete=models.PROTECT, related_name="invoice")
     buyer_name = models.CharField(max_length=255)
     buyer_pin = models.CharField(max_length=12, blank=True, default="")
-
     subtotal = models.DecimalField(
         max_digits=14,
         decimal_places=2,
@@ -42,12 +41,8 @@ class Invoice(models.Model):
     )
     currency = models.CharField(max_length=10, default="KES")
     status = models.CharField(
-        max_length=16,
-        choices=Status.choices,
-        default=Status.DRAFT,
-        db_index=True,
+        max_length=16, choices=Status.choices, default=Status.DRAFT, db_index=True
     )
-
     irn = models.CharField(max_length=64, blank=True, default="")
     issued_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -80,7 +75,6 @@ class Invoice(models.Model):
         self.subtotal = Decimal(self.subtotal or 0).quantize(Q2, rounding=ROUND_HALF_UP)
         self.tax_amount = Decimal(self.tax_amount or 0).quantize(Q2, rounding=ROUND_HALF_UP)
         self.total = Decimal(self.total or 0).quantize(Q2, rounding=ROUND_HALF_UP)
-        # If updating an existing invoice, recompute from lines
         if self.pk:
             sub, tax, tot = self.compute_totals()
             self.subtotal, self.tax_amount, self.total = sub, tax, tot
@@ -92,14 +86,10 @@ class InvoiceLine(models.Model):
     sku = models.CharField(max_length=64, blank=True, default="")
     name = models.CharField(max_length=255)
     qty = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        validators=[MinValueValidator(Decimal("0.00"))],
+        max_digits=10, decimal_places=2, validators=[MinValueValidator(Decimal("0.00"))]
     )
     unit_price = models.DecimalField(
-        max_digits=12,
-        decimal_places=2,
-        validators=[MinValueValidator(Decimal("0.00"))],
+        max_digits=12, decimal_places=2, validators=[MinValueValidator(Decimal("0.00"))]
     )
     tax_rate = models.DecimalField(
         max_digits=5,

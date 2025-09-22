@@ -13,7 +13,7 @@ from django.contrib import messages
 from django.core.management.utils import get_random_secret_key
 from django.db import models
 from django.db.models.functions import Length
-
+SECRET_KEY = os.environ.get("DJANGO_TYPECHECK_SECRET_KEY", "typecheck")  # nosec B105
 # at top of Rahim_Online_ClothesStore/settings.py
 try:
     from csp.constants import NONCE, SELF  # noqa: F401
@@ -108,7 +108,7 @@ INSTALLED_APPS = [
     "django_extensions",
     "widget_tweaks",
     "django_daraja",  # M-Pesa SDK
-    "corsheaders",
+    # "corsheaders",  # <- auto-added below if importable
     # First-party apps
     "users.apps.UsersConfig",
     "core",
@@ -198,27 +198,13 @@ if SENTRY_DSN:
 # ---------------------------------------------------------------------
 # Database
 # ---------------------------------------------------------------------
-# settings.py (production)
-from environ import Env
-
-env = Env()
-
 DATABASES = {
-    "default": dj_database_url.parse(
-        env("DATABASE_URL"),
-        conn_max_age=600,     # ok for direct
-        ssl_require=True,
+    "default": dj_database_url.config(
+        default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
+        conn_max_age=600,
+        ssl_require=IS_PROD,
     )
 }
-
-
-DATABASES["default"].setdefault("OPTIONS", {})
-DATABASES["default"]["OPTIONS"].update({
-    "sslmode": "require",
-})
-DATABASES["default"]["DISABLE_SERVER_SIDE_CURSORS"] = False
-
-print("==== DATABASE_URL ====", os.environ.get("DATABASE_URL"))
 
 # MySQL options (if used)
 if DATABASES["default"].get("ENGINE") == "django.db.backends.mysql":
@@ -231,7 +217,6 @@ if DATABASES["default"].get("ENGINE") == "django.db.backends.mysql":
         }
     )
     DATABASES["default"]["CONN_HEALTH_CHECKS"] = True
-
 
 # In-tests: in-memory sqlite
 if os.environ.get("PYTEST_CURRENT_TEST"):
@@ -311,8 +296,6 @@ KPIS_ENABLED = env.bool("KPIS_ENABLED", default=bool(DEBUG))
 # Schedule daily Vendor KPI aggregation at 00:30 Africa/Nairobi
 try:
     from celery.schedules import crontab  # type: ignore
-
-
 
     _kpi_schedule = crontab(minute=30, hour=0)
 except Exception:  # pragma: no cover
@@ -513,8 +496,7 @@ if IS_PROD and EMAIL_BACKEND.endswith("smtp.EmailBackend"):
 # CSP (django-csp)
 # ---------------------------------------------------------------------
 # settings.py
-
-from csp.constants import SELF, NONCE  # plus NONE/STRICT_DYNAMIC if you need them
+from csp.constants import NONCE, SELF  # plus NONE/STRICT_DYNAMIC if you need them
 
 CONTENT_SECURITY_POLICY = {
     "DIRECTIVES": {
@@ -523,22 +505,40 @@ CONTENT_SECURITY_POLICY = {
         "font-src": [SELF, "https://fonts.gstatic.com", "https://cdnjs.cloudflare.com", "data:"],
         "frame-ancestors": [SELF],
         "frame-src": [
-            "https://js.stripe.com", "https://*.stripe.com",
-            "https://js.paystack.co", "https://*.paystack.co", "https://*.paystack.com",
+            "https://js.stripe.com",
+            "https://*.stripe.com",
+            "https://js.paystack.co",
+            "https://*.paystack.co",
+            "https://*.paystack.com",
         ],
         "img-src": [
-            SELF, "data:", "blob:",
+            SELF,
+            "data:",
+            "blob:",
             "https://res.cloudinary.com",
-            "https://tile.openstreetmap.org", "https://*.tile.openstreetmap.org",
+            "https://tile.openstreetmap.org",
+            "https://*.tile.openstreetmap.org",
         ],
         "script-src": [
-            SELF, NONCE,
-            "https://cdn.tailwindcss.com", "https://cdn.jsdelivr.net", "https://unpkg.com",
+            SELF,
+            NONCE,
+            "https://cdn.tailwindcss.com",
+            "https://cdn.jsdelivr.net",
+            "https://unpkg.com",
             "https://widget.cloudinary.com",
-            "https://js.stripe.com", "https://*.stripe.com",
-            "https://js.paystack.co", "https://*.paystack.co", "https://*.paystack.com",
+            "https://js.stripe.com",
+            "https://*.stripe.com",
+            "https://js.paystack.co",
+            "https://*.paystack.co",
+            "https://*.paystack.com",
         ],
-        "style-src": [SELF, NONCE, "https://cdnjs.cloudflare.com", "https://unpkg.com", "https://fonts.googleapis.com"],
+        "style-src": [
+            SELF,
+            NONCE,
+            "https://cdnjs.cloudflare.com",
+            "https://unpkg.com",
+            "https://fonts.googleapis.com",
+        ],
         # keep this only if you truly need inline style attributes:
         "style-src-attr": ["'unsafe-inline'"],
         "worker-src": [SELF, "blob:"],
@@ -593,18 +593,6 @@ SPECTACULAR_SETTINGS = {
         # Serializer field uses the same choices as Delivery.status, keep same name
         "apis.serializers.DeliveryStatusSerializer.status": "DeliveryStatusEnum",
     },
-
-}
-
-# DRF: schema + throttle scopes (view-specific throttles)
-REST_FRAMEWORK = {
-    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
-    "DEFAULT_THROTTLE_RATES": {
-        # used by vendor_app.throttling.VendorOrgScopedRateThrottle
-        "vendor.org": "60/min",
-    },
-
-
 }
 
 # DRF: schema + throttle scopes (view-specific throttles)

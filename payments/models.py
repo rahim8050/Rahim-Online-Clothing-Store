@@ -6,6 +6,7 @@ from django.db.models import Q
 from django.utils import timezone
 
 from vendor_app.models import VendorOrg
+
 from .enums import Gateway, PaymentMethod, TxnStatus
 
 
@@ -15,6 +16,7 @@ class IdempotencyKey(models.Model):
     Use to dedupe side-effecting operations across retries (e.g., payouts).
     Keys are unique per scope to allow reuse in different domains.
     """
+
     scope = models.CharField(max_length=64, db_index=True)
     key = models.CharField(max_length=128)
     response_hash = models.CharField(max_length=64, blank=True, default="")
@@ -40,13 +42,11 @@ class Transaction(models.Model):
     vendor_org = models.ForeignKey(
         VendorOrg, null=True, blank=True, on_delete=models.SET_NULL, related_name="transactions"
     )
-
     method = models.CharField(max_length=20, choices=PaymentMethod.choices)
     gateway = models.CharField(max_length=20, choices=Gateway.choices)
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     currency = models.CharField(max_length=10)
     status = models.CharField(max_length=30, choices=TxnStatus.choices, default=TxnStatus.PENDING)
-
     idempotency_key = models.CharField(max_length=64, unique=True)
     reference = models.CharField(max_length=64, unique=True)
     gateway_reference = models.CharField(max_length=128, unique=True, null=True, blank=True)
@@ -77,7 +77,6 @@ class Transaction(models.Model):
             models.Index(fields=["created_at"]),
         ]
         constraints = [
-            # Only one SUCCESS per order (duplicates must refund or be marked duplicate)
             models.UniqueConstraint(
                 fields=["order"],
                 condition=Q(status=TxnStatus.SUCCESS),

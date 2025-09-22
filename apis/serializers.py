@@ -1,3 +1,4 @@
+# apis/serializers.py
 from __future__ import annotations
 
 import re
@@ -12,9 +13,13 @@ from rest_framework import serializers
 from orders.models import OrderItem
 from product_app.models import Product, ProductStock, Warehouse
 from product_app.utils import get_vendor_field
-from users import services  # add_or_activate_staff(...), deactivate_vendor_staff(...)
+from users import (
+    services,  # provide: add_or_activate_staff(owner, staff, role), deactivate_vendor_staff(...)
+)
 from users.models import VendorApplication, VendorStaff
 from users.utils import resolve_vendor_owner_for
+import logging
+logger = logging.getLogger(__name__)
 
 User = get_user_model()
 
@@ -53,6 +58,7 @@ class WhoAmISerializer(serializers.Serializer):
     @extend_schema_field(serializers.CharField())
     def get_role_label(self, obj) -> str:
         # Map code -> label using User.Role choices if available
+
         code = self.get_role(obj)
         try:
             choices = dict(User.Role.choices)
@@ -153,6 +159,7 @@ if DeliveryModel is not None:
             fields = "__all__"
             # Avoid component name collision with orders.serializers.DeliverySerializer
             ref_name = "APIsDelivery"
+
 else:
     DeliverySerializer = _EmptySerializer
 
@@ -177,8 +184,8 @@ class DeliveryStatusSerializer(serializers.Serializer):
                 field = DeliveryModel._meta.get_field("status")
                 if getattr(field, "choices", None):
                     choices = [c[0] for c in field.choices]
-            except Exception:
-                pass
+            except (AttributeError, TypeError, ValueError) as e:
+                logger.debug("Could not derive choices from field %r: %s", field, e, exc_info=True)
             if (
                 not choices
                 and hasattr(DeliveryModel, "Status")
@@ -202,11 +209,11 @@ class _StockAllocationInput(serializers.Serializer):
 
 class VendorProductCreateSerializer(serializers.ModelSerializer):
     owner_id = serializers.IntegerField(required=False, write_only=True)
-    slug = serializers.SlugField(required=False, allow_blank=True)
     sku = serializers.CharField(required=False, write_only=True, allow_blank=True)
     stock = serializers.IntegerField(required=False, write_only=True, min_value=0)
     warehouse_id = serializers.IntegerField(required=False, write_only=True)
     stock_allocations = _StockAllocationInput(many=True, required=False, write_only=True)
+    slug = serializers.SlugField(required=False, allow_blank=True)
 
     class Meta:
         model = Product

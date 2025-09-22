@@ -54,24 +54,25 @@ class OrgSerializer(serializers.ModelSerializer):
             return v
         import re
 
-        if not re.match(r"^[A-Z][0-9]{9}[A-Z]$", v):
+        if not re.match(r"^[A-Z]{1}[0-9]{9}[A-Z]{1}$", v):
             raise serializers.ValidationError("KRA PIN must look like A123456789B.")
         return v
 
     def update(self, instance: VendorOrg, validated_data):
         request = self.context.get("request")
         user = getattr(request, "user", None)
-
         # Enforce role for sensitive fields
-        sensitive = {f: validated_data[f] for f in ("kra_pin", "tax_status", "tax_registered_at") if f in validated_data}
+        sensitive = {}
+        for f in ("kra_pin", "tax_status", "tax_registered_at"):
+            if f in validated_data:
+                sensitive[f] = validated_data[f]
         if sensitive and not self._can_see_sensitive(user, instance):
             raise serializers.ValidationError({"detail": "Not allowed to modify tax fields."})
 
         # Track old values for audit
         old_vals = {k: getattr(instance, k, None) for k in sensitive}
-
         obj = super().update(instance, validated_data)
-        # Model-level normalization/validation (slug/KRA)
+        # Validate at model level for KRA PIN format & normalize
         obj.full_clean()
         obj.save()
 
@@ -88,7 +89,6 @@ class OrgSerializer(serializers.ModelSerializer):
                         new_value=str(new_val or ""),
                     )
                 except Exception:
-                    # Don't block updates if audit write fails
                     pass
         return obj
 

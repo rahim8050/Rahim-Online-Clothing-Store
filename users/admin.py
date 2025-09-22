@@ -7,8 +7,9 @@ from django.contrib.admin.sites import AlreadyRegistered, NotRegistered
 from django.contrib.auth.admin import UserAdmin
 from django.core.mail import send_mail
 
-from .models import CustomUser, VendorApplication, VendorStaff
 from users.services import deactivate_staff as deactivate_vendor_staff
+
+from .models import CustomUser, VendorApplication, VendorStaff
 
 # -- Register CustomUser exactly once (and make ours the one in use) --
 try:
@@ -23,6 +24,7 @@ except AlreadyRegistered:
 
 class VendorApplicationActionForm(ActionForm):
     """Extra field for the reject action."""
+
     note = forms.CharField(
         required=False,
         label="Rejection note",
@@ -66,7 +68,9 @@ class VendorApplicationAdmin(admin.ModelAdmin):
             approved += 1
         skipped = queryset.count() - approved
         if approved:
-            self.message_user(request, f"Approved {approved} application(s).", level=messages.SUCCESS)
+            self.message_user(
+                request, f"Approved {approved} application(s).", level=messages.SUCCESS
+            )
         if skipped:
             self.message_user(
                 request, f"Skipped {skipped} non-pending application(s).", level=messages.WARNING
@@ -89,7 +93,9 @@ class VendorApplicationAdmin(admin.ModelAdmin):
             rejected += 1
         skipped = queryset.count() - rejected
         if rejected:
-            self.message_user(request, f"Rejected {rejected} application(s).", level=messages.WARNING)
+            self.message_user(
+                request, f"Rejected {rejected} application(s).", level=messages.WARNING
+            )
         if skipped:
             self.message_user(
                 request, f"Skipped {skipped} non-pending application(s).", level=messages.INFO

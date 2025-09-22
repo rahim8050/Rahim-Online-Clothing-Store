@@ -9,8 +9,6 @@ class VendorOrgAdmin(admin.ModelAdmin):
     list_filter = ("is_active", "tax_status")
     search_fields = ("name", "slug", "owner__email", "owner__username", "kra_pin")
     prepopulated_fields = {"slug": ("name",)}
-    autocomplete_fields = ("owner",)
-    date_hierarchy = "created_at"
 
 
 @admin.register(VendorMember)
@@ -18,8 +16,6 @@ class VendorMemberAdmin(admin.ModelAdmin):
     list_display = ("id", "org", "user", "role", "is_active", "created_at")
     list_filter = ("role", "is_active")
     search_fields = ("org__name", "org__slug", "user__email", "user__username")
-    autocomplete_fields = ("org", "user")
-    date_hierarchy = "created_at"
 
 
 @admin.register(VendorProfile)
@@ -27,8 +23,6 @@ class VendorProfileAdmin(admin.ModelAdmin):
     list_display = ("id", "user", "org", "is_active", "created_at")
     list_filter = ("is_active",)
     search_fields = ("user__email", "user__username", "org__slug")
-    autocomplete_fields = ("user", "org")
-    date_hierarchy = "created_at"
 
 
 @admin.register(VendorOrgAuditLog)
@@ -36,8 +30,6 @@ class VendorOrgAuditLogAdmin(admin.ModelAdmin):
     list_display = ("id", "org", "field", "actor", "created_at")
     list_filter = ("field",)
     search_fields = ("org__slug", "actor__email", "actor__username", "field")
-    autocomplete_fields = ("org", "actor")
-    date_hierarchy = "created_at"
 
 
 @admin.register(VendorKPI)
@@ -54,4 +46,3 @@ class VendorKPIAdmin(admin.ModelAdmin):
     )
     list_filter = ("window", "org")
     search_fields = ("org__slug",)
-    autocomplete_fields = ("org",)

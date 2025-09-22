@@ -46,23 +46,20 @@ def require_min_role(user, org: VendorOrg, min_role: str) -> VendorMember:
 
 
 def resolve_org_from_request(request, view=None) -> VendorOrg | None:
-    """
-    Best-effort resolver for an org from request/view.
+    """Best-effort resolver for an org from request/view.
 
     Tries, in order:
-      - view.kwargs: org_id, org_pk, org, pk  (ints)  | org_slug, slug (str)
-      - query params: org_id, org (ints) | org_slug (str)
-      - body data:    org_id, org (ints) | org_slug (str)
-
+    - view.kwargs: org_id, org_pk, org_slug, slug
+    - query params / data: org_id, org, org_slug
     Returns None if not found or invalid.
     """
-    org_id: int | None = None
-    org_slug: str | None = None
+    org_id = None
+    org_slug = None
 
     # From view kwargs
-    if view is not None and hasattr(view, "kwargs"):
+    if view is not None:
         for k in ("org_id", "org_pk", "org", "pk"):
-            if k in view.kwargs:
+            if hasattr(view, "kwargs") and k in getattr(view, "kwargs", {}):
                 try:
                     org_id = int(view.kwargs[k])
                     break
@@ -70,7 +67,7 @@ def resolve_org_from_request(request, view=None) -> VendorOrg | None:
                     pass
         if org_id is None:
             for k in ("org_slug", "slug"):
-                if k in view.kwargs:
+                if hasattr(view, "kwargs") and k in getattr(view, "kwargs", {}):
                     org_slug = str(view.kwargs[k])
                     break
 
@@ -83,8 +80,11 @@ def resolve_org_from_request(request, view=None) -> VendorOrg | None:
                     break
                 except Exception:
                     pass
-        if org_id is None and "org_slug" in getattr(request, "query_params", {}):
-            org_slug = request.query_params.get("org_slug")
+        if org_id is None:
+            for k in ("org_slug",):
+                if k in request.query_params:
+                    org_slug = request.query_params.get(k)
+                    break
 
     # From body
     if org_id is None and hasattr(request, "data"):

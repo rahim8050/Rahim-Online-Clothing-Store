@@ -9,6 +9,8 @@ from orders.models import Order, OrderItem
 from orders.utils import derive_ui_payment_status
 
 from .models import ChatSession, ToolCallLog
+import logging
+logger = logging.getLogger(__name__)
 
 EMAIL_RE = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b", re.I)
 PHONE_RE = re.compile(r"\b(?:\+?\d[\d\s().-]{7,}\d)\b")
@@ -34,8 +36,8 @@ def _fmt_dt(dt) -> str:
 def _normalize_order_token(token: str | int) -> int | None:
     try:
         return int(token)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Non-fatal parse/log failure: %s", e, exc_info=True)
     if not token:
         return None
     s = str(token).strip().upper()
@@ -85,9 +87,9 @@ def _log(session: ChatSession | None, name: str, args: dict) -> None:
             tool_name=name,
             args=_redact_args(args or {}),
         )
-    except Exception:
+    except Exception as e:
         # logging must never fail the chat
-        pass
+        logger.debug("Non-fatal parse/log failure: %s", e, exc_info=True)
 
 
 def _order_number(o) -> str:
