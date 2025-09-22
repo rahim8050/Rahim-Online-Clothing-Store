@@ -14,10 +14,10 @@ class IsVendorOrVendorStaff(BasePermission):
         if getattr(u, "is_superuser", False) or u.groups.filter(name="Admin").exists():
             return True
 
-
         in_vendor_group = u.groups.filter(name="Vendor").exists()
         try:
             from users.models import VendorStaff  # adjust app label
+
             is_active_staff = VendorStaff.objects.filter(staff=u, is_active=True).exists()
         except Exception:
             is_active_staff = False
@@ -27,6 +27,7 @@ class IsVendorOrVendorStaff(BasePermission):
 
 class IsVendorOwner(BasePermission):
     """Owner-only operations (admin bypass allowed)."""
+
     message = "Only vendor owners can perform this action."
 
     def has_permission(self, request, view):
@@ -77,7 +78,12 @@ class HasVendorScope(BasePermission):
         owner_id = None
         try:
             from users.utils import resolve_vendor_owner_for
-            raw_owner = request.data.get("owner_id") if request.method != "GET" else request.query_params.get("owner_id")
+
+            raw_owner = (
+                request.data.get("owner_id")
+                if request.method != "GET"
+                else request.query_params.get("owner_id")
+            )
             owner_id = resolve_vendor_owner_for(u, raw_owner)
         except Exception:
             # If we cannot resolve an owner context, deny
@@ -85,6 +91,7 @@ class HasVendorScope(BasePermission):
 
         try:
             from users.models import VendorStaff
+
             vs = VendorStaff.objects.filter(owner_id=owner_id, staff=u, is_active=True).first()
             if not vs:
                 return False
@@ -94,48 +101,47 @@ class HasVendorScope(BasePermission):
             return False
 
 
-
 class NotBuyingOwnListing(BasePermission):
     """Deny when the requester is the product owner OR active vendor staff for that owner."""
-    message = 'You cannot purchase your own product.'
+
+    message = "You cannot purchase your own product."
 
     def _is_forbidden(self, user, product):
-        if not user or not getattr(user, 'is_authenticated', False):
+        if not user or not getattr(user, "is_authenticated", False):
             return False
         owner_id = (
-            getattr(product, 'owner_id', None)
-            or getattr(product, 'vendor_id', None)
-            or getattr(product, 'user_id', None)
+            getattr(product, "owner_id", None)
+            or getattr(product, "vendor_id", None)
+            or getattr(product, "user_id", None)
         )
         if owner_id is None:
             return False
-        if owner_id == getattr(user, 'id', None):
+        if owner_id == getattr(user, "id", None):
             return True
         try:
             from users.models import VendorStaff
-            return VendorStaff.objects.filter(owner_id=owner_id, staff_id=user.id, is_active=True).exists()
+
+            return VendorStaff.objects.filter(
+                owner_id=owner_id, staff_id=user.id, is_active=True
+            ).exists()
         except Exception:
             return False
 
     def has_object_permission(self, request, view, obj):
-        user = getattr(request, 'user', None)
-        if not user or not getattr(user, 'is_authenticated', False):
-            self.message = 'Authentication required.'
+        user = getattr(request, "user", None)
+        if not user or not getattr(user, "is_authenticated", False):
+            self.message = "Authentication required."
             return False
         if self._is_forbidden(user, obj):
-            if getattr(obj, 'owner_id', None) == user.id:
-                self.message = 'You cannot purchase your own product.'
+            if getattr(obj, "owner_id", None) == user.id:
+                self.message = "You cannot purchase your own product."
             else:
-                self.message = 'You cannot purchase products for a vendor you work for.'
+                self.message = "You cannot purchase products for a vendor you work for."
             return False
         return True
-
 
 
 class IsDriver(BasePermission):
     def has_permission(self, request, view):
         u = getattr(request, "user", None)
         return bool(u and u.is_authenticated and u.groups.filter(name="Driver").exists())
-
-
-

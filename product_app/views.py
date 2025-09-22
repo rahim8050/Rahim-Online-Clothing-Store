@@ -1,15 +1,16 @@
+import json
+
 from django.contrib.auth.decorators import login_required
-from django.views import View
+from django.core.paginator import Paginator
 from django.db.models import Q
-from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
-from django.shortcuts import render, get_object_or_404
+from django.shortcuts import get_object_or_404, render
+from django.utils.safestring import mark_safe
+
 from product_app.models import Product
 from product_app.queries import shopable_products_q
-from django.utils.safestring import mark_safe
-import json
-app_name = 'product_app'
-from .models import Category,Product
 
+app_name = "product_app"
+from .models import Category, Product
 
 
 def product_list(request, category_slug=None):
@@ -30,64 +31,55 @@ def product_list(request, category_slug=None):
     # Serialize products
     product_list = []
     for product in products:
-        product_list.append({
-            'id': product.id,
-            'name': product.name,
-            'description': product.description,
-            'price': str(product.price),
-            'image_url': product.image.url if product.image else '',
-            'category_slug': product.category.slug if product.category else '',
-            'detail_url': product.get_absolute_url()
-        })
+        product_list.append(
+            {
+                "id": product.id,
+                "name": product.name,
+                "description": product.description,
+                "price": str(product.price),
+                "image_url": product.image.url if product.image else "",
+                "category_slug": product.category.slug if product.category else "",
+                "detail_url": product.get_absolute_url(),
+            }
+        )
 
     # Serialize categories
     category_list = []
     for cat in categories:
-        category_list.append({
-            'id': cat.id,
-            'name': cat.name,
-            'slug': cat.slug
-        })
+        category_list.append({"id": cat.id, "name": cat.name, "slug": cat.slug})
 
-    pagination_data = {
-        'current_page': 1,
-        'total_pages': 1
-    }
+    pagination_data = {"current_page": 1, "total_pages": 1}
 
     initial_data = {
-        'products': product_list,
-        'categories': category_list,
-        'pagination': pagination_data,
+        "products": product_list,
+        "categories": category_list,
+        "pagination": pagination_data,
     }
 
-    return render(request, 'products/product/list.html', {
-        'initial_data_json': mark_safe(json.dumps(initial_data)),
-        'category': category,
-    })
+    return render(
+        request,
+        "products/product/list.html",
+        {
+            "initial_data_json": mark_safe(json.dumps(initial_data)),
+            "category": category,
+        },
+    )
 
-
-
-
-    
 
 def product_detail(request, id, slug):
     product = get_object_or_404(Product, id=id, slug=slug, available=True)
 
     product_data = {
-        'name': product.name,
-        'price': float(product.price),
-        'description': product.description
+        "name": product.name,
+        "price": float(product.price),
+        "description": product.description,
     }
 
-    return render(request, 'products/product/detail.html', {
-        'product': product,
-        'product_json': mark_safe(json.dumps(product_data))  
-    })
-   
-    
-    
-
-
+    return render(
+        request,
+        "products/product/detail.html",
+        {"product": product, "product_json": mark_safe(json.dumps(product_data))},
+    )
 
 
 def SearchProduct(request, category_slug=None):
@@ -98,55 +90,57 @@ def SearchProduct(request, category_slug=None):
         category = get_object_or_404(Category, slug=category_slug)
         products = products.filter(category=category)
 
-    if 'search' in request.GET:
-        search_term = request.GET['search']
+    if "search" in request.GET:
+        search_term = request.GET["search"]
         products = products.filter(
-            Q(name__icontains=search_term) |
-            Q(description__icontains=search_term)
+            Q(name__icontains=search_term) | Q(description__icontains=search_term)
         )
 
     paginator = Paginator(products, 12)
-    page_number = request.GET.get('page')
+    page_number = request.GET.get("page")
     page_obj = paginator.get_page(page_number)
 
     # Serialize current page products
     product_list = []
     for product in page_obj.object_list:
-        product_list.append({
-            'id': product.id,
-            'name': product.name,
-            'description': product.description,
-            'price': str(product.price),
-            'image_url': product.image.url if product.image else '',
-            'category_slug': product.category.slug if product.category else '',
-            'detail_url': product.get_absolute_url()
-        })
+        product_list.append(
+            {
+                "id": product.id,
+                "name": product.name,
+                "description": product.description,
+                "price": str(product.price),
+                "image_url": product.image.url if product.image else "",
+                "category_slug": product.category.slug if product.category else "",
+                "detail_url": product.get_absolute_url(),
+            }
+        )
 
     # Serialize categories
     categories = Category.objects.all()
     category_list = []
     for cat in categories:
-        category_list.append({
-            'id': cat.id,
-            'name': cat.name,
-            'slug': cat.slug
-        })
+        category_list.append({"id": cat.id, "name": cat.name, "slug": cat.slug})
 
     pagination_data = {
-        'current_page': page_obj.number,
-        'total_pages': paginator.num_pages,
+        "current_page": page_obj.number,
+        "total_pages": paginator.num_pages,
     }
 
     initial_data = {
-        'products': product_list,
-        'categories': category_list,
-        'pagination': pagination_data,
+        "products": product_list,
+        "categories": category_list,
+        "pagination": pagination_data,
     }
 
-    return render(request, 'products/product/list.html', {
-        'category': category,
-        'initial_data_json': mark_safe(json.dumps(initial_data)),
-    })
+    return render(
+        request,
+        "products/product/list.html",
+        {
+            "category": category,
+            "initial_data_json": mark_safe(json.dumps(initial_data)),
+        },
+    )
+
 
 # def SearchProduct(request):
 #     data = Product.objects.all().order_by('id').values()
@@ -170,4 +164,4 @@ def SearchProduct(request, category_slug=None):
 #     return render(request, 'products/product/list.html', {"data": paginated_data})
 @login_required
 def profile(request):
-    return render(request, 'users/accounts/profile.html')
+    return render(request, "users/accounts/profile.html")

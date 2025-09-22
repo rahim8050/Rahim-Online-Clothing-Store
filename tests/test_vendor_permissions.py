@@ -1,12 +1,13 @@
 import json
+
 import pytest
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.urls import reverse
 
-from users.constants import VENDOR, VENDOR_STAFF
-from users.models import VendorStaff
 from product_app.models import Category
+from users.constants import VENDOR
+from users.models import VendorStaff
 
 
 @pytest.fixture
@@ -29,6 +30,7 @@ def as_login_client(client):
     def _login(u):
         client.force_login(u)
         return client
+
     return _login
 
 
@@ -45,7 +47,11 @@ def test_staff_cannot_remove_staff(user_factory, as_login_client):
 
     c = as_login_client(staff1)
     url = reverse("vendor-staff-remove", kwargs={"staff_id": staff2.id})
-    res = c.post(url, data=json.dumps({"staff_id": staff2.id, "owner_id": owner.id}), content_type="application/json")
+    res = c.post(
+        url,
+        data=json.dumps({"staff_id": staff2.id, "owner_id": owner.id}),
+        content_type="application/json",
+    )
     assert res.status_code in (401, 403)
 
 
@@ -58,7 +64,11 @@ def test_owner_can_remove_staff(user_factory, as_login_client):
 
     c = as_login_client(owner)
     url = reverse("vendor-staff-remove", kwargs={"staff_id": staff.id})
-    res = c.post(url, data=json.dumps({"staff_id": staff.id, "owner_id": owner.id}), content_type="application/json")
+    res = c.post(
+        url,
+        data=json.dumps({"staff_id": staff.id, "owner_id": owner.id}),
+        content_type="application/json",
+    )
     assert res.status_code == 200
     data = res.json()
     assert data.get("ok") is True
@@ -95,7 +105,9 @@ def test_csv_export_import_scope_gating(user_factory, as_login_client):
     staff_ok = user_factory()
     staff_no = user_factory()
     Group.objects.get_or_create(name=VENDOR)[0].user_set.add(owner)
-    VendorStaff.objects.create(owner=owner, staff=staff_ok, is_active=True, scopes=["catalog"])  # has catalog scope
+    VendorStaff.objects.create(
+        owner=owner, staff=staff_ok, is_active=True, scopes=["catalog"]
+    )  # has catalog scope
     VendorStaff.objects.create(owner=owner, staff=staff_no, is_active=True, scopes=[])  # no scope
 
     # Export: owner ok

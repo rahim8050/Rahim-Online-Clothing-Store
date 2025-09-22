@@ -1,11 +1,11 @@
 # payments/services.py
 from __future__ import annotations
 
+import hashlib
 import hmac
 import json
-import hashlib
 from decimal import Decimal, ROUND_HALF_UP
-from typing import Any, Optional
+from typing import Any
 
 import requests
 from django.conf import settings
@@ -13,11 +13,12 @@ from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction as dbtx
 from django.utils import timezone
 
-from .enums import Gateway, TxnStatus
-from .models import Transaction, AuditLog, PaymentEvent, Payout
-from .selectors import safe_decrement_stock, set_order_paid
-from .idempotency import idempotent
 from vendor_app.models import VendorOrg
+
+from .enums import Gateway, TxnStatus
+from .idempotency import idempotent
+from .models import AuditLog, PaymentEvent, Payout, Transaction
+from .selectors import safe_decrement_stock, set_order_paid
 
 
 # =========================================================
@@ -48,21 +49,18 @@ def init_checkout(
     reused keys match the original (order, amount, gateway) tuple.
     """
     try:
-        txn, created = (
-            Transaction.objects.select_for_update()
-            .get_or_create(
-                idempotency_key=idempotency_key,
-                defaults={
-                    "order": order,
-                    "user": user,
-                    "method": method,
-                    "gateway": gateway,
-                    "amount": amount,
-                    "currency": currency,
-                    "status": TxnStatus.PENDING,
-                    "reference": reference,
-                },
-            )
+        txn, created = Transaction.objects.select_for_update().get_or_create(
+            idempotency_key=idempotency_key,
+            defaults={
+                "order": order,
+                "user": user,
+                "method": method,
+                "gateway": gateway,
+                "amount": amount,
+                "currency": currency,
+                "status": TxnStatus.PENDING,
+                "reference": reference,
+            },
         )
     except IntegrityError:
         txn = Transaction.objects.select_for_update().get(idempotency_key=idempotency_key)
@@ -123,12 +121,18 @@ def _eligible_for_auto_refund(txn: Transaction) -> bool:
 
 
 @dbtx.atomic
-def process_success(*, txn: Transaction, gateway_reference: Optional[str], request_id: str) -> Transaction:
+def process_success(*, txn: Transaction, gateway_reference: str | None, request_id: str) -> Transaction:
     """
     Mark a transaction as successful, handle duplicates & auto-refund, update stock,
     and flip the order to paid (single source of truth).
     """
-    if txn.status in {TxnStatus.SUCCESS, TxnStatus.DUPLICATE_SUCCESS, TxnStatus.FAILED, TxnStatus.CANCELLED, TxnStatus.REFUNDED}:
+    if txn.status in {
+        TxnStatus.SUCCESS,
+        TxnStatus.DUPLICATE_SUCCESS,
+        TxnStatus.FAILED,
+        TxnStatus.CANCELLED,
+        TxnStatus.REFUNDED,
+    }:
         AuditLog.log(event="WEBHOOK_REPLAY_BLOCKED", transaction=txn, order=txn.order, request_id=request_id)
         return txn
 
@@ -150,15 +154,29 @@ def process_success(*, txn: Transaction, gateway_reference: Optional[str], reque
                 issue_refund(txn, request_id=request_id)
                 txn.status = TxnStatus.REFUNDED
                 txn.refund_reference = (
-                    txn.refund_reference or gateway_reference or getattr(txn, "gateway_reference", None) or txn.reference
+                    txn.refund_reference
+                    or gateway_reference
+                    or getattr(txn, "gateway_reference", None)
+                    or txn.reference
                 )
                 txn.refunded_at = timezone.now()
                 txn.save(update_fields=["status", "refund_reference", "refunded_at", "updated_at"])
                 AuditLog.log(event="DUPLICATE_REFUND_ISSUED", transaction=txn, order=txn.order, request_id=request_id)
             except Exception as e:  # best effort
-                AuditLog.log(event="REFUND_FAILED", transaction=txn, order=txn.order, request_id=request_id, message=str(e))
+                AuditLog.log(
+                    event="REFUND_FAILED",
+                    transaction=txn,
+                    order=txn.order,
+                    request_id=request_id,
+                    message=str(e),
+                )
         else:
-            AuditLog.log(event="DUPLICATE_MANUAL_REVERSAL_REQUIRED", transaction=txn, order=txn.order, request_id=request_id)
+            AuditLog.log(
+                event="DUPLICATE_MANUAL_REVERSAL_REQUIRED",
+                transaction=txn,
+                order=txn.order,
+                request_id=request_id,
+            )
         return txn
 
     # First success for this order
@@ -172,7 +190,13 @@ def process_success(*, txn: Transaction, gateway_reference: Optional[str], reque
 @dbtx.atomic
 def process_failure(*, txn: Transaction, request_id: str) -> Transaction:
     """Mark a transaction as failed, if not already terminal."""
-    if txn.status in {TxnStatus.SUCCESS, TxnStatus.DUPLICATE_SUCCESS, TxnStatus.FAILED, TxnStatus.CANCELLED, TxnStatus.REFUNDED}:
+    if txn.status in {
+        TxnStatus.SUCCESS,
+        TxnStatus.DUPLICATE_SUCCESS,
+        TxnStatus.FAILED,
+        TxnStatus.CANCELLED,
+        TxnStatus.REFUNDED,
+    }:
         AuditLog.log(event="WEBHOOK_REPLAY_BLOCKED", transaction=txn, order=txn.order, request_id=request_id)
         return txn
     txn.mark_failed()
@@ -189,6 +213,7 @@ def issue_refund(txn: Transaction, request_id: str = "") -> None:
     """
     if txn.gateway == Gateway.STRIPE:
         import stripe
+
         r = stripe.Refund.create(payment_intent=txn.gateway_reference, reason="requested_by_customer")
         txn.refund_reference = getattr(r, "id", None)
         txn.save(update_fields=["refund_reference", "updated_at"])
@@ -280,7 +305,7 @@ def apply_org_settlement(txn: Transaction, provider: str, raw_body: bytes, paylo
     net = (gross - fees - commission).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
     # Persist to txn
-    update_fields = []
+    update_fields: list[str] = []
     if txn.vendor_org_id is None and org is not None:
         txn.vendor_org = org
         update_fields.append("vendor_org")

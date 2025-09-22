@@ -20,5 +20,6 @@ class Command(BaseCommand):
         qs = IdempotencyKey.objects.filter(created_at__lt=cutoff)
         count = qs.count()
         qs.delete()
-        self.stdout.write(self.style.SUCCESS(f"Purged {count} idempotency keys older than {days} days"))
-
+        self.stdout.write(
+            self.style.SUCCESS(f"Purged {count} idempotency keys older than {days} days")
+        )

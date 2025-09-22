@@ -6,28 +6,28 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('invoicing', '0001_initial'),
+        ("invoicing", "0001_initial"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='invoice',
-            name='accepted_at',
+            model_name="invoice",
+            name="accepted_at",
             field=models.DateTimeField(blank=True, null=True),
         ),
         migrations.AddField(
-            model_name='invoice',
-            name='last_error',
-            field=models.TextField(blank=True, default=''),
+            model_name="invoice",
+            name="last_error",
+            field=models.TextField(blank=True, default=""),
         ),
         migrations.AddField(
-            model_name='invoice',
-            name='rejected_at',
+            model_name="invoice",
+            name="rejected_at",
             field=models.DateTimeField(blank=True, null=True),
         ),
         migrations.AddField(
-            model_name='invoice',
-            name='submitted_at',
+            model_name="invoice",
+            name="submitted_at",
             field=models.DateTimeField(blank=True, null=True),
         ),
     ]

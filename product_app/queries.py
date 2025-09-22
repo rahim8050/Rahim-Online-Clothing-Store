@@ -1,4 +1,5 @@
 from django.db.models import Q
+
 from users.utils import vendor_owner_ids_for
 
 

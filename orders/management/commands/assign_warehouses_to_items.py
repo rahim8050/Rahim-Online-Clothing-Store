@@ -30,7 +30,4 @@ class Command(BaseCommand):
             item.save(update_fields=["warehouse"])
             assigned += 1
 
-        self.stdout.write(
-            self.style.SUCCESS(f"Assigned warehouses to {assigned} order items.")
-        )
-
+        self.stdout.write(self.style.SUCCESS(f"Assigned warehouses to {assigned} order items."))

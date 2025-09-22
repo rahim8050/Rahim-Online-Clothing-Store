@@ -8,31 +8,35 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('cart', '0007_backfill_cartitem_created_at'),
-        ('product_app', '0010_backfill_product_version'),
+        ("cart", "0007_backfill_cartitem_created_at"),
+        ("product_app", "0010_backfill_product_version"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='cartitem',
-            name='product',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='cart_items', to='product_app.product'),
+            model_name="cartitem",
+            name="product",
+            field=models.ForeignKey(
+                on_delete=django.db.models.deletion.PROTECT,
+                related_name="cart_items",
+                to="product_app.product",
+            ),
         ),
         migrations.AddIndex(
-            model_name='cart',
-            index=models.Index(fields=['user', 'status'], name='cart_cart_user_id_2c8a21_idx'),
+            model_name="cart",
+            index=models.Index(fields=["user", "status"], name="cart_cart_user_id_2c8a21_idx"),
         ),
         migrations.AddIndex(
-            model_name='cart',
-            index=models.Index(fields=['created_at'], name='cart_cart_created_981ed1_idx'),
+            model_name="cart",
+            index=models.Index(fields=["created_at"], name="cart_cart_created_981ed1_idx"),
         ),
         migrations.AddIndex(
-            model_name='cartitem',
-            index=models.Index(fields=['cart'], name='cart_cartit_cart_id_4fb076_idx'),
+            model_name="cartitem",
+            index=models.Index(fields=["cart"], name="cart_cartit_cart_id_4fb076_idx"),
         ),
         migrations.AddIndex(
-            model_name='cartitem',
-            index=models.Index(fields=['product'], name='cart_cartit_product_985dba_idx'),
+            model_name="cartitem",
+            index=models.Index(fields=["product"], name="cart_cartit_product_985dba_idx"),
         ),
     ]

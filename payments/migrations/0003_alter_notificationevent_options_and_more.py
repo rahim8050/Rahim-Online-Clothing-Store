@@ -8,27 +8,36 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('payments', '0002_notificationevent'),
+        ("payments", "0002_notificationevent"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
     operations = [
         migrations.AlterModelOptions(
-            name='notificationevent',
-            options={'verbose_name': 'Notification event', 'verbose_name_plural': 'Notification events'},
+            name="notificationevent",
+            options={
+                "verbose_name": "Notification event",
+                "verbose_name_plural": "Notification events",
+            },
         ),
         migrations.AlterField(
-            model_name='notificationevent',
-            name='event_key',
+            model_name="notificationevent",
+            name="event_key",
             field=models.CharField(db_index=True, max_length=128, unique=True),
         ),
         migrations.AlterField(
-            model_name='notificationevent',
-            name='user',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='payment_notifications', to=settings.AUTH_USER_MODEL),
+            model_name="notificationevent",
+            name="user",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="payment_notifications",
+                to=settings.AUTH_USER_MODEL,
+            ),
         ),
         migrations.AlterModelTable(
-            name='notificationevent',
-            table='payments_notification_event',
+            name="notificationevent",
+            table="payments_notification_event",
         ),
     ]

@@ -2,12 +2,12 @@ from __future__ import annotations
 
 from datetime import timedelta
 
-from django.core.management.base import BaseCommand, CommandError
+from django.conf import settings
+from django.core.management.base import BaseCommand
 from django.utils import timezone
 
 from invoicing.models import Invoice
 from invoicing.services.etims import submit_invoice
-from django.conf import settings
 
 
 class Command(BaseCommand):
@@ -21,7 +21,9 @@ class Command(BaseCommand):
         org_id = options.get("org")
         days = int(options.get("since") or 7)
         since = timezone.now() - timedelta(days=days)
-        qs = Invoice.objects.filter(org_id=org_id, issued_at__gte=since).exclude(status=Invoice.Status.ACCEPTED)
+        qs = Invoice.objects.filter(org_id=org_id, issued_at__gte=since).exclude(
+            status=Invoice.Status.ACCEPTED
+        )
         if not qs.exists():
             self.stdout.write("No invoices to submit")
             return

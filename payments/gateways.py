@@ -1,8 +1,8 @@
 # payments/gateways.py
 import os
-from decimal import Decimal, ROUND_HALF_UP
-import requests
+from decimal import ROUND_HALF_UP, Decimal
 
+import requests
 from django.db import transaction as dbtx
 from django.utils import timezone
 
@@ -12,8 +12,8 @@ from .models import Transaction
 DEV_ALLOW_INSECURE_WEBHOOKS = os.getenv("PAYMENTS_ALLOW_INSECURE_WEBHOOKS", "0") == "1"
 PAYSTACK_SECRET = os.getenv("PAYSTACK_SECRET_KEY", "")
 # payments/notify.py
-from django.db import transaction, IntegrityError
 from django.core.mail import send_mail
+from django.db import IntegrityError, transaction
 
 from payments.models import NotificationEvent  # the model lives in payments/models.py
 
@@ -49,6 +49,7 @@ def send_payment_email(to_email: str, order_no, amount, reference, stage: str) -
     body = f"Your payment of KES {amount} is {stage}. Ref: {reference}"
     send_mail(subject, body, None, [to_email], fail_silently=False)
 
+
 def refund_gateway_charge(tx):
     """Unified refund entry. Returns: {'ok': bool, 'refund_id': str|None, 'raw': dict|None, 'error': str|None}"""
     gw = getattr(tx, "gateway", None)
@@ -60,6 +61,7 @@ def refund_gateway_charge(tx):
         return _mpesa_refund(tx)
     return {"ok": False, "refund_id": None, "raw": None, "error": f"Unsupported gateway: {gw}"}
 
+
 # ---------- Paystack ----------
 def _paystack_refund(tx):
     if DEV_ALLOW_INSECURE_WEBHOOKS:
@@ -67,17 +69,22 @@ def _paystack_refund(tx):
         return {"ok": True, "refund_id": f"RF_{tx.reference}", "raw": {"dev": True}, "error": None}
     return _paystack_refund_live(tx)
 
+
 def _paystack_refund_live(tx):
     if not PAYSTACK_SECRET:
         return {"ok": False, "refund_id": None, "raw": None, "error": "Missing PAYSTACK_SECRET_KEY"}
 
     headers = {"Authorization": f"Bearer {PAYSTACK_SECRET}"}
     # amount in kobo using Decimal to avoid float rounding
-    amount_kobo = int((Decimal(str(tx.amount)) * Decimal("100")).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+    amount_kobo = int(
+        (Decimal(str(tx.amount)) * Decimal("100")).quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+    )
     payload = {"transaction": tx.gateway_reference or tx.reference, "amount": amount_kobo}
 
     try:
-        r = requests.post("https://api.paystack.co/refund", headers=headers, json=payload, timeout=30)
+        r = requests.post(
+            "https://api.paystack.co/refund", headers=headers, json=payload, timeout=30
+        )
         data = r.json() if r.content else {}
     except Exception as e:
         return {"ok": False, "refund_id": None, "raw": {"exc": str(e)}, "error": "network"}
@@ -86,16 +93,24 @@ def _paystack_refund_live(tx):
     refund_id = (data.get("data") or {}).get("reference")
     return {"ok": ok, "refund_id": refund_id, "raw": data, "error": None if ok else "api"}
 
+
 # ---------- Other gateways (stubs for now) ----------
 def _stripe_refund(tx):
     if DEV_ALLOW_INSECURE_WEBHOOKS:
-        return {"ok": True, "refund_id": f"rf_{tx.reference.lower()}", "raw": {"dev": True}, "error": None}
+        return {
+            "ok": True,
+            "refund_id": f"rf_{tx.reference.lower()}",
+            "raw": {"dev": True},
+            "error": None,
+        }
     return {"ok": False, "refund_id": None, "raw": None, "error": "Real refund not implemented"}
+
 
 def _mpesa_refund(tx):
     if DEV_ALLOW_INSECURE_WEBHOOKS:
         return {"ok": True, "refund_id": f"MP_{tx.reference}", "raw": {"dev": True}, "error": None}
     return {"ok": False, "refund_id": None, "raw": None, "error": "Reversal not implemented"}
+
 
 # ---------- Duplicate-success auto-refund ----------
 def maybe_refund_duplicate_success(tx, keep_earliest=True, refunded_status="refunded"):

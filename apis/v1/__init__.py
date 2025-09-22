@@ -3,4 +3,3 @@
 This module exposes read-only catalog and orders endpoints by default,
 while allowing authenticated vendors to manage their products via DRF.
 """
-

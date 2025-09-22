@@ -1,12 +1,8 @@
-from datetime import timedelta
-
-from django.conf import settings
 from django.core import signing
 from django.db import transaction
 from django.db.models import F
 
 from .models import Cart, CartItem
-
 
 # Cookie configuration
 COOKIE_NAME = "guest_cart_id"
@@ -58,9 +54,7 @@ def merge_guest_into_user(guest_cart: Cart, user_cart: Cart) -> Cart:
         guest_cart = Cart.objects.select_for_update().get(pk=guest_cart.pk)
 
         for item in (
-            CartItem.objects.select_for_update()
-            .filter(cart=guest_cart)
-            .select_related("product")
+            CartItem.objects.select_for_update().filter(cart=guest_cart).select_related("product")
         ):
             target, created = CartItem.objects.select_for_update().get_or_create(
                 cart=user_cart,
@@ -68,12 +62,9 @@ def merge_guest_into_user(guest_cart: Cart, user_cart: Cart) -> Cart:
                 defaults={"quantity": item.quantity},
             )
             if not created:
-                CartItem.objects.filter(pk=target.pk).update(
-                    quantity=F("quantity") + item.quantity
-                )
+                CartItem.objects.filter(pk=target.pk).update(quantity=F("quantity") + item.quantity)
 
         # cleanup guest cart
         CartItem.objects.filter(cart=guest_cart).delete()
         guest_cart.delete()
     return user_cart
-

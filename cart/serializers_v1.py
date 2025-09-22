@@ -1,9 +1,11 @@
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 from drf_spectacular.utils import extend_schema_field
 
-from .models import Cart, CartItem
-from product_app.serializers_v1 import ProductV1Serializer
 from product_app.models import Product
+from product_app.serializers_v1 import ProductV1Serializer
+
+from .models import Cart, CartItem
 
 
 class CartItemV1ReadSerializer(serializers.ModelSerializer):
@@ -30,4 +32,3 @@ class CartV1Serializer(serializers.ModelSerializer):
     @extend_schema_field(serializers.DecimalField(max_digits=12, decimal_places=2))  # guessed
     def get_total_price(self, obj) -> str:
         return str(obj.get_total_price())
-

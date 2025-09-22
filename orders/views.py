@@ -7,7 +7,7 @@ import json
 import logging
 import math
 import time
-from decimal import Decimal, ROUND_HALF_UP, InvalidOperation
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Any
 
 import paypalrestsdk
@@ -24,19 +24,11 @@ from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
-from django.views.decorators.http import require_GET, require_POST, require_http_methods
+from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
 from cart.models import Cart
 from orders.forms import OrderForm
-from orders.models import (
-    Delivery,
-    DeliveryPing,
-    EmailDispatchLog,  # kept if referenced in templates/elsewhere
-    Order,
-    OrderItem,
-    PaymentEvent,
-    Transaction,
-)
+from orders.models import Delivery, Order, OrderItem, PaymentEvent, Transaction
 from orders.money import to_minor_units
 from orders.services import assign_warehouses_and_update_stock
 from orders.services.totals import safe_order_total
@@ -128,9 +120,7 @@ def _haversine_km(a_lat, a_lng, b_lat, b_lng):
     dLng = math.radians(b_lng - a_lng)
     s1 = (
         math.sin(dLat / 2) ** 2
-        + math.cos(math.radians(a_lat))
-        * math.cos(math.radians(b_lat))
-        * math.sin(dLng / 2) ** 2
+        + math.cos(math.radians(a_lat)) * math.cos(math.radians(b_lat)) * math.sin(dLng / 2) ** 2
     )
     return 2 * R * math.asin(math.sqrt(s1))
 
@@ -164,9 +154,7 @@ def _geoapify_route(a_lat, a_lng, b_lat, b_lng, api_key: str):
 def _osrm_route(a_lat, a_lng, b_lat, b_lng):
     base = "https://router.project-osrm.org/route/v1/driving"
     url = f"{base}/{a_lng},{a_lat};{b_lng},{b_lat}"
-    r = requests.get(
-        url, params={"overview": "full", "geometries": "geojson"}, timeout=10
-    )
+    r = requests.get(url, params={"overview": "full", "geometries": "geojson"}, timeout=10)
     r.raise_for_status()
     j = r.json()
     route = (j.get("routes") or [None])[0]
@@ -192,9 +180,7 @@ def driver_deliveries_page(request):
 @require_GET
 def driver_deliveries_api(request):
     qs = (
-        Delivery.objects.filter(driver=request.user)
-        .select_related("order")
-        .order_by("-updated_at")
+        Delivery.objects.filter(driver=request.user).select_related("order").order_by("-updated_at")
     )
     data = [
         {
@@ -498,8 +484,7 @@ def order_edit(request, order_id: int):
             lat = _parse_coord(request.POST.get("dest_lat") or order.dest_lat)
             lng = _parse_coord(request.POST.get("dest_lng") or order.dest_lng)
             if not (
-                Decimal("-90") <= lat <= Decimal("90")
-                and Decimal("-180") <= lng <= Decimal("180")
+                Decimal("-90") <= lat <= Decimal("90") and Decimal("-180") <= lng <= Decimal("180")
             ):
                 raise ValueError
         except Exception:
@@ -581,7 +566,9 @@ def paystack_checkout(request, order_id: int):
     order = get_object_or_404(Order, id=order_id, user=request.user)
 
     # channel resolution
-    payment_method = (request.GET.get("payment_method") or request.POST.get("payment_method") or "card").lower()
+    payment_method = (
+        request.GET.get("payment_method") or request.POST.get("payment_method") or "card"
+    ).lower()
     if payment_method not in {"card", "mpesa"}:
         messages.error(request, "Invalid payment method")
         return redirect("orders:order_confirmation", order.id)
@@ -649,11 +636,15 @@ def paystack_webhook(request):
     # 1) Verify signature using raw request body
     raw = request.body  # bytes
     signature = (request.META.get("HTTP_X_PAYSTACK_SIGNATURE", "") or "").strip().lower()
-    expected = hmac.new(
-        getattr(settings, "PAYSTACK_SECRET_KEY", "").encode("utf-8"),
-        raw,
-        hashlib.sha512,
-    ).hexdigest().lower()
+    expected = (
+        hmac.new(
+            getattr(settings, "PAYSTACK_SECRET_KEY", "").encode("utf-8"),
+            raw,
+            hashlib.sha512,
+        )
+        .hexdigest()
+        .lower()
+    )
     if not signature or not hmac.compare_digest(expected, signature):
         logger_ps.warning("Invalid Paystack signature")
         return JsonResponse({"detail": "invalid signature"}, status=401)
@@ -922,7 +913,9 @@ def stripe_webhook(request):
     sig_header = request.META.get("HTTP_STRIPE_SIGNATURE")
     endpoint_secret = getattr(settings, "STRIPE_WEBHOOK_SECRET", "")
     try:
-        event = stripe.Webhook.construct_event(payload=payload, sig_header=sig_header, secret=endpoint_secret)
+        event = stripe.Webhook.construct_event(
+            payload=payload, sig_header=sig_header, secret=endpoint_secret
+        )
     except Exception:
         return HttpResponse(status=400)
 

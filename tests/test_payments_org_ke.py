@@ -1,17 +1,16 @@
-import json
-import hmac
 import hashlib
+import hmac
+import json
 from decimal import Decimal
 
 import pytest
 from django.contrib.auth import get_user_model
 from django.urls import reverse
 
-from vendor_app.models import VendorOrg, VendorMember, VendorProfile
-from product_app.models import Category, Product, Warehouse, ProductStock
 from orders.models import Order, OrderItem
-from payments.models import Transaction, PaymentEvent, Payout
-
+from payments.models import PaymentEvent, Payout, Transaction
+from product_app.models import Category, Product, ProductStock, Warehouse
+from vendor_app.models import VendorMember, VendorOrg, VendorProfile
 
 pytestmark = pytest.mark.django_db
 
@@ -24,7 +23,9 @@ def setup_org_environment(rate=Decimal("0.02")):
     VendorProfile.objects.create(user=owner, org=org)
 
     cat = Category.objects.create(name="c", slug="c")
-    product = Product.objects.create(category=cat, name="tee", slug="tee", price=Decimal("100.00"), owner=owner)
+    product = Product.objects.create(
+        category=cat, name="tee", slug="tee", price=Decimal("100.00"), owner=owner
+    )
     wh = Warehouse.objects.create(name="w", latitude=0.1, longitude=36.8, address="NBO")
     ProductStock.objects.create(product=product, warehouse=wh, quantity=3)
 
@@ -38,7 +39,9 @@ def setup_org_environment(rate=Decimal("0.02")):
         dest_lat=Decimal("0.1"),
         dest_lng=Decimal("36.8"),
     )
-    OrderItem.objects.create(order=order, product=product, quantity=1, price=product.price, warehouse=wh)
+    OrderItem.objects.create(
+        order=order, product=product, quantity=1, price=product.price, warehouse=wh
+    )
 
     txn = Transaction.objects.create(
         order=order,
@@ -67,10 +70,14 @@ def test_mpesa_webhook_idempotent_and_org_scoped(client):
         }
     }
     # First call processes
-    resp = client.post(reverse("webhook-mpesa"), data=json.dumps(body), content_type="application/json")
+    resp = client.post(
+        reverse("webhook-mpesa"), data=json.dumps(body), content_type="application/json"
+    )
     assert resp.status_code == 200
     # Second identical call should be idempotently acknowledged
-    resp = client.post(reverse("webhook-mpesa"), data=json.dumps(body), content_type="application/json")
+    resp = client.post(
+        reverse("webhook-mpesa"), data=json.dumps(body), content_type="application/json"
+    )
     assert resp.status_code == 200
 
     txn.refresh_from_db()
@@ -110,17 +117,26 @@ def test_paystack_event_fee_breakdown_saved(client, settings):
     txn.refresh_from_db()
     assert str(txn.gross_amount) == "100.00"
     assert str(txn.net_to_vendor) == "98.00"
-    assert PaymentEvent.objects.filter(reference=txn.reference, vendor_org=org, provider="paystack").exists()
+    assert PaymentEvent.objects.filter(
+        reference=txn.reference, vendor_org=org, provider="paystack"
+    ).exists()
 
 
 def test_org_payout_calculation(client):
     org, order, txn = setup_org_environment(rate=Decimal("0.05"))  # 5%
     body = {
-        "Body": {"stkCallback": {"MerchantRequestID": txn.reference, "ResultCode": 0, "CallbackMetadata": {"Item": []}}}
+        "Body": {
+            "stkCallback": {
+                "MerchantRequestID": txn.reference,
+                "ResultCode": 0,
+                "CallbackMetadata": {"Item": []},
+            }
+        }
     }
-    resp = client.post(reverse("webhook-mpesa"), data=json.dumps(body), content_type="application/json")
+    resp = client.post(
+        reverse("webhook-mpesa"), data=json.dumps(body), content_type="application/json"
+    )
     assert resp.status_code == 200
     txn.refresh_from_db()
     # 5% commission on 100 => net 95
     assert str(txn.net_to_vendor) == "95.00"
-

@@ -2,7 +2,7 @@ from django.db import migrations
 
 
 def backfill(apps, schema_editor):
-    Product = apps.get_model('product_app', 'Product')
+    Product = apps.get_model("product_app", "Product")
     Product.objects.filter(version__isnull=True).update(version=1)
 
 
@@ -14,4 +14,3 @@ class Migration(migrations.Migration):
     operations = [
         migrations.RunPython(backfill, migrations.RunPython.noop),
     ]
-

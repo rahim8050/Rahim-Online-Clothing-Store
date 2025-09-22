@@ -1,5 +1,6 @@
 from django.contrib import admin
-from .models import ChatSession, ChatMessage, ToolCallLog
+
+from .models import ChatMessage, ChatSession, ToolCallLog
 
 
 @admin.register(ChatSession)
@@ -21,4 +22,3 @@ class ToolCallLogAdmin(admin.ModelAdmin):
     list_display = ("id", "session", "tool_name", "created_at")
     search_fields = ("tool_name", "session__session_key")
     list_filter = ("tool_name", "created_at")
-

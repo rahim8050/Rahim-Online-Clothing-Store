@@ -1,12 +1,14 @@
 # orders/tests/test_money_types.py
 from decimal import Decimal
-from django.test import TestCase, Client
-from django.urls import reverse
-from django.contrib.auth import get_user_model
 
-from product_app.models import Category, Product
+from django.contrib.auth import get_user_model
+from django.test import Client, TestCase
+from django.urls import reverse
+
 from cart.models import Cart, CartItem
 from orders.models import Order
+from product_app.models import Category, Product
+
 
 class MoneyTypesTests(TestCase):
     def setUp(self):
@@ -52,7 +54,7 @@ class MoneyTypesTests(TestCase):
             data={
                 "full_name": "Rahim",
                 "email": "r@x.x",
-                "address": "Nairobi",                 # some forms still require it
+                "address": "Nairobi",  # some forms still require it
                 "payment_method": "card",
                 "dest_address_text": "Nairobi CBD",
                 "dest_lat": "1.000000",

@@ -1,16 +1,14 @@
-import pytest
-import hmac
 import hashlib
+import hmac
 from decimal import Decimal
 
+import pytest
 from django.contrib.auth import get_user_model
-from django.urls import reverse
 from rest_framework.test import APIClient
 
-from vendor_app.models import VendorOrg, VendorMember, VendorProfile
-from orders.models import Order
 from invoicing.models import Invoice, InvoiceLine
-
+from orders.models import Order
+from vendor_app.models import VendorMember, VendorOrg, VendorProfile
 
 pytestmark = pytest.mark.django_db
 
@@ -26,9 +24,23 @@ def seed_invoice():
     VendorMember.objects.create(org=org, user=owner, role=VendorMember.Role.OWNER)
     VendorProfile.objects.create(user=owner, org=org)
     # create a minimal order
-    order = Order.objects.create(user=owner, full_name="B", email=owner.email, address="A", dest_address_text="D", dest_lat=0.1, dest_lng=36.8)
+    order = Order.objects.create(
+        user=owner,
+        full_name="B",
+        email=owner.email,
+        address="A",
+        dest_address_text="D",
+        dest_lat=0.1,
+        dest_lng=36.8,
+    )
     inv = Invoice.objects.create(org=org, order=order, buyer_name="BuyerX")
-    InvoiceLine.objects.create(invoice=inv, name="L1", qty=Decimal("1"), unit_price=Decimal("10.00"), tax_rate=Decimal("0.16"))
+    InvoiceLine.objects.create(
+        invoice=inv,
+        name="L1",
+        qty=Decimal("1"),
+        unit_price=Decimal("10.00"),
+        tax_rate=Decimal("0.16"),
+    )
     return owner, org, inv
 
 
@@ -55,6 +67,7 @@ def test_etims_webhook_updates_state_idempotently(settings, client):
     settings.ETIMS_WEBHOOK_SECRET = "sek"
     owner, org, inv = seed_invoice()
     import json
+
     payload = {"invoice_id": inv.id, "status": "accepted", "irn": "IRN-TEST"}
     raw = json.dumps(payload).encode("utf-8")
     sig = hmac.new(b"sek", raw, hashlib.sha256).hexdigest()

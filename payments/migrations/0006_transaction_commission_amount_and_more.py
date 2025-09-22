@@ -7,65 +7,120 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('payments', '0005_idempotencykey'),
-        ('vendor_app', '0004_vendororg_org_commission_rate_and_more'),
+        ("payments", "0005_idempotencykey"),
+        ("vendor_app", "0004_vendororg_org_commission_rate_and_more"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='transaction',
-            name='commission_amount',
+            model_name="transaction",
+            name="commission_amount",
             field=models.DecimalField(decimal_places=2, default=0, max_digits=12),
         ),
         migrations.AddField(
-            model_name='transaction',
-            name='fees_amount',
+            model_name="transaction",
+            name="fees_amount",
             field=models.DecimalField(decimal_places=2, default=0, max_digits=12),
         ),
         migrations.AddField(
-            model_name='transaction',
-            name='gross_amount',
+            model_name="transaction",
+            name="gross_amount",
             field=models.DecimalField(decimal_places=2, default=0, max_digits=12),
         ),
         migrations.AddField(
-            model_name='transaction',
-            name='net_to_vendor',
+            model_name="transaction",
+            name="net_to_vendor",
             field=models.DecimalField(decimal_places=2, default=0, max_digits=12),
         ),
         migrations.AddField(
-            model_name='transaction',
-            name='vendor_org',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='transactions', to='vendor_app.vendororg'),
+            model_name="transaction",
+            name="vendor_org",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="transactions",
+                to="vendor_app.vendororg",
+            ),
         ),
         migrations.CreateModel(
-            name='Payout',
+            name="Payout",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('amount', models.DecimalField(decimal_places=2, max_digits=12)),
-                ('currency', models.CharField(default='KES', max_length=10)),
-                ('status', models.CharField(choices=[('pending', 'Pending'), ('queued', 'Queued'), ('paid', 'Paid'), ('failed', 'Failed')], default='pending', max_length=16)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('executed_at', models.DateTimeField(blank=True, null=True)),
-                ('transaction', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, related_name='payout', to='payments.transaction')),
-                ('vendor_org', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='payouts', to='vendor_app.vendororg')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True, primary_key=True, serialize=False, verbose_name="ID"
+                    ),
+                ),
+                ("amount", models.DecimalField(decimal_places=2, max_digits=12)),
+                ("currency", models.CharField(default="KES", max_length=10)),
+                (
+                    "status",
+                    models.CharField(
+                        choices=[
+                            ("pending", "Pending"),
+                            ("queued", "Queued"),
+                            ("paid", "Paid"),
+                            ("failed", "Failed"),
+                        ],
+                        default="pending",
+                        max_length=16,
+                    ),
+                ),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("executed_at", models.DateTimeField(blank=True, null=True)),
+                (
+                    "transaction",
+                    models.OneToOneField(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="payout",
+                        to="payments.transaction",
+                    ),
+                ),
+                (
+                    "vendor_org",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="payouts",
+                        to="vendor_app.vendororg",
+                    ),
+                ),
             ],
         ),
         migrations.CreateModel(
-            name='PaymentEvent',
+            name="PaymentEvent",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('provider', models.CharField(max_length=24)),
-                ('reference', models.CharField(db_index=True, max_length=128)),
-                ('body_sha256', models.CharField(max_length=64, unique=True)),
-                ('body', models.JSONField(blank=True, null=True)),
-                ('gross_amount', models.DecimalField(decimal_places=2, default=0, max_digits=12)),
-                ('fees_amount', models.DecimalField(decimal_places=2, default=0, max_digits=12)),
-                ('net_to_vendor', models.DecimalField(decimal_places=2, default=0, max_digits=12)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('vendor_org', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='payment_events', to='vendor_app.vendororg')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True, primary_key=True, serialize=False, verbose_name="ID"
+                    ),
+                ),
+                ("provider", models.CharField(max_length=24)),
+                ("reference", models.CharField(db_index=True, max_length=128)),
+                ("body_sha256", models.CharField(max_length=64, unique=True)),
+                ("body", models.JSONField(blank=True, null=True)),
+                ("gross_amount", models.DecimalField(decimal_places=2, default=0, max_digits=12)),
+                ("fees_amount", models.DecimalField(decimal_places=2, default=0, max_digits=12)),
+                ("net_to_vendor", models.DecimalField(decimal_places=2, default=0, max_digits=12)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                (
+                    "vendor_org",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        related_name="payment_events",
+                        to="vendor_app.vendororg",
+                    ),
+                ),
             ],
             options={
-                'indexes': [models.Index(fields=['reference', 'created_at'], name='payments_pa_referen_03b5ff_idx')],
+                "indexes": [
+                    models.Index(
+                        fields=["reference", "created_at"], name="payments_pa_referen_03b5ff_idx"
+                    )
+                ],
             },
         ),
     ]

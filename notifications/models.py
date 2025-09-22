@@ -1,12 +1,14 @@
-from django.db import models
-
 # Create your models here.
 # notifications/models.py
 from django.conf import settings
+from django.db import models
+
 
 class Notification(models.Model):
-    LEVELS = (("info","Info"),("success","Success"),("warning","Warning"),("error","Error"))
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="notifications")
+    LEVELS = (("info", "Info"), ("success", "Success"), ("warning", "Warning"), ("error", "Error"))
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="notifications"
+    )
     title = models.CharField(max_length=200)
     message = models.TextField()
     level = models.CharField(max_length=10, choices=LEVELS, default="info")

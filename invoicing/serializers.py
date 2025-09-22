@@ -52,4 +52,3 @@ class InvoiceSerializer(serializers.ModelSerializer):
             "last_error",
             "lines",
         ]
-

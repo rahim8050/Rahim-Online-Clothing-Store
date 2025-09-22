@@ -1,14 +1,14 @@
-from django.urls import include, path
+from django.urls import path
 from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 from .viewsets import (
     CategoryViewSet,
+    OrderItemViewSet,
+    OrderViewSet,
+    ProductStockViewSet,
     ProductViewSet,
     WarehouseViewSet,
-    ProductStockViewSet,
-    OrderViewSet,
-    OrderItemViewSet,
 )
 
 # Reuse existing WhoAmI from apis.views for consistency
@@ -42,4 +42,3 @@ if WhoAmI is not None:
     urlpatterns += [path("auth/me/", WhoAmI.as_view(), name="v1-whoami")]
 
 urlpatterns += router.urls
-
