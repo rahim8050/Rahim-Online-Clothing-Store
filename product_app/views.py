@@ -8,6 +8,7 @@ from django.utils.safestring import mark_safe
 
 from product_app.models import Product
 from product_app.queries import shopable_products_q
+from django.utils.html import json_script
 
 app_name = "product_app"
 from .models import Category, Product
@@ -60,7 +61,7 @@ def product_list(request, category_slug=None):
         request,
         "products/product/list.html",
         {
-            "initial_data_json": mark_safe(json.dumps(initial_data)),
+            "initial_data": initial_data,
             "category": category,
         },
     )
@@ -78,7 +79,7 @@ def product_detail(request, id, slug):
     return render(
         request,
         "products/product/detail.html",
-        {"product": product, "product_json": mark_safe(json.dumps(product_data))},
+         {"product": product, "product_json": product_data}
     )
 
 
@@ -137,7 +138,7 @@ def SearchProduct(request, category_slug=None):
         "products/product/list.html",
         {
             "category": category,
-            "initial_data_json": mark_safe(json.dumps(initial_data)),
+            "initial_data": initial_data,
         },
     )
 

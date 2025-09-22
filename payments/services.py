@@ -20,7 +20,8 @@ from .enums import Gateway, TxnStatus
 from .idempotency import idempotent
 from .models import AuditLog, PaymentEvent, Payout, Transaction
 from .selectors import safe_decrement_stock, set_order_paid
-
+import logging
+logger = logging.getLogger(__name__)
 
 # =========================================================
 #                           Helpers
@@ -370,7 +371,7 @@ def apply_org_settlement(
                 transaction=txn,
                 defaults={"vendor_org": org, "amount": net, "currency": txn.currency},
             )
-    except Exception:
-        pass
+    except Exception as e:
+          logger.debug("idempotency side-effect failed: %s", e, exc_info=True)
 
     return evt

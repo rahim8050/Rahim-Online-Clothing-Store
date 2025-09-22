@@ -1,36 +1,48 @@
+ci:
+  skip: []
+default_language_version:
+  python: python3
+
 repos:
-- repo: https://github.com/PyCQA/bandit
-  rev: 1.7.9
-  hooks:
-    - id: bandit
-      name: bandit (project apps only)
-      pass_filenames: false           # ← IMPORTANT
-      args:
-        - -r
-        # scan ONLY your code dirs
-        - Rahim_Online_ClothesStore
-        - apis
-        - cart
-        - orders
-        - payments
-        - users
-        - product_app
-        - inventory
-        - vendor_app
-        - Mpesa
-        - assistant
-        - utilities
-        # exclude common noise and tests
-        - -x
-        - venv,node_modules,staticfiles,**/migrations/**,**/tests/**,**/site-packages/**,frontend,extensions,static,static/vendor
-      exclude: >
-        (?x)(
-          ^venv/|
-          ^node_modules/|
-          ^staticfiles/|
-          ^static/|
-          ^frontend/|
-          .*/migrations/|
-          .*/tests/|
-          .*/site-packages/
-        )
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: check-merge-conflict
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.7.9
+    hooks:
+      - id: bandit
+        name: bandit (project apps only)
+        stages: [manual]          # run only when you ask
+        always_run: true          # run even if no files matched
+        pass_filenames: false     # we pass dirs via -r below
+        args:
+          - -r
+          - Rahim_Online_ClothesStore
+          - apis
+          - cart
+          - orders
+          - payments
+          - users
+          - product_app
+          - inventory
+          - vendor_app
+          - Mpesa
+          - assistant
+          - utilities
+          - -x
+          - venv,node_modules,staticfiles,**/migrations/**,**/tests/**,**/site-packages/**,frontend,extensions,static,static/vendor
+        exclude: >
+          (?x)(
+            ^venv/|
+            ^node_modules/|
+            ^staticfiles/|
+            ^static/|
+            ^frontend/|
+            .*/migrations/|
+            .*/tests/|
+            .*/site-packages/
+          )

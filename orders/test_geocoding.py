@@ -23,7 +23,8 @@ class GeocodeAddressTests(SimpleTestCase):
 class EnsureOrderCoordsTests(TestCase):
     def setUp(self):
         User = get_user_model()
-        self.user = User.objects.create_user(username="u", password="p")
+        from django.utils.crypto import get_random_string
+        self.user = User.objects.create_user(username="u", password=get_random_string(12))  # nosec B106
 
     @patch("orders.services.destinations.geocode_address")
     def test_updates_missing_coords(self, mock_geo):

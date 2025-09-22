@@ -8,7 +8,8 @@ from django.db import transaction
 
 from .models import AuditLog, IdempotencyKey
 
-
+import logging
+logger = logging.getLogger(__name__)
 def body_sha256(data: bytes) -> str:
     return hashlib.sha256(data or b"").hexdigest()
 
@@ -52,8 +53,8 @@ def idempotent(scope: str) -> Callable:
                     rbytes = (str(result) or "").encode("utf-8")
                     idem.response_hash = body_sha256(rbytes)
                     idem.save(update_fields=["response_hash"])
-                except Exception:
-                    pass
+                except Exception as e:
+                   logger.debug("idempotency side-effect failed: %s", e, exc_info=True)
                 return result
 
         return wrapper
