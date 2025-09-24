@@ -496,7 +496,11 @@ if IS_PROD and EMAIL_BACKEND.endswith("smtp.EmailBackend"):
 # CSP (django-csp)
 # ---------------------------------------------------------------------
 # settings.py
-from csp.constants import NONCE, SELF  # plus NONE/STRICT_DYNAMIC if you need them
+try:
+    from csp.constants import NONCE, SELF  # plus NONE/STRICT_DYNAMIC if you need them
+except ImportError:  # pragma: no cover - optional dependency
+    NONCE = "'nonce-unsafe-inline'"
+    SELF = "'self'"
 
 CONTENT_SECURITY_POLICY = {
     "DIRECTIVES": {
@@ -603,3 +607,34 @@ REST_FRAMEWORK = {
         "vendor.org": "60/min",
     },
 }
+
+# >>> BEGIN: auto-csp-guard
+try:
+    import csp  # noqa: F401
+    _CSP_AVAILABLE=True
+except Exception:
+    _CSP_AVAILABLE=False
+
+try:
+    MIDDLEWARE
+except NameError:
+    MIDDLEWARE=[]
+
+if _CSP_AVAILABLE:
+    _mw=list(MIDDLEWARE)
+    _csp='csp.middleware.CSPMiddleware'
+    if _csp not in _mw:
+        try: idx=_mw.index('django.middleware.security.SecurityMiddleware')+1
+        except ValueError: idx=0
+        _mw.insert(idx,_csp)
+    MIDDLEWARE=tuple(_mw) if isinstance(MIDDLEWARE, tuple) else _mw
+
+if _CSP_AVAILABLE:
+    _policy = globals().get('CONTENT_SECURITY_POLICY')
+    if not isinstance(_policy, dict):
+        _policy = {'DIRECTIVES': {}}
+    _directives = _policy.setdefault('DIRECTIVES', {})
+    _directives.setdefault('default-src', ("'self'",))
+    _directives.setdefault('frame-ancestors', ("'self'",))
+    CONTENT_SECURITY_POLICY = _policy
+# >>> END: auto-csp-guard
