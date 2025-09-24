@@ -4,26 +4,24 @@ import re
 import sys
 from pathlib import Path
 
+import django
+from django.apps import apps
+from django.contrib.admin.sites import site as admin_site
+from django.urls import URLPattern, URLResolver, get_resolver
+
 # --- Django bootstrap (no DB use) ---
 BASE_DIR = Path(__file__).resolve().parents[1]
 if str(BASE_DIR) not in sys.path:
     sys.path.insert(0, str(BASE_DIR))
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "Rahim_Online_ClothesStore.settings")
 os.environ.setdefault("SECRET_KEY", "dummy")
-import django
 
 django.setup()
-
-from django.apps import apps
-from django.contrib.admin.sites import site as admin_site
-from django.urls import URLPattern, URLResolver, get_resolver
-
 
 # --------------- helpers ---------------
 def read_text(rel):
     p = BASE_DIR / rel
     return p.read_text(encoding="utf-8", errors="ignore") if p.exists() else ""
-
 
 def grep_lines(rel, pattern):
     out = []
@@ -37,11 +35,9 @@ def grep_lines(rel, pattern):
                 out.append((rel, i, line.rstrip()))
     return out
 
-
 def find_def_line(rel, name):
     hits = grep_lines(rel, rf"^\s*(class|def)\s+{re.escape(name)}\b")
     return hits[0][:2] if hits else (rel, None)
-
 
 def iter_patterns(patterns, prefix=""):
     for p in patterns:
@@ -54,7 +50,6 @@ def iter_patterns(patterns, prefix=""):
             yield path, view_name
         elif isinstance(p, URLResolver):
             yield from iter_patterns(p.url_patterns, prefix + str(p.pattern))
-
 
 def model_fields_sheet(model):
     rows = []
@@ -73,7 +68,6 @@ def model_fields_sheet(model):
         rows.append(entry)
     return rows
 
-
 def model_constraints(model):
     out = []
     for c in model._meta.constraints:
@@ -82,13 +76,11 @@ def model_constraints(model):
         out.append({"kind": kind, "name": c.name, "expr": str(expr)})
     return out
 
-
 def model_indexes(model):
     return [
         {"name": getattr(ix, "name", None), "fields": getattr(ix, "fields", None)}
         for ix in model._meta.indexes
     ]
-
 
 # --------------- inputs / scanning ---------------
 Delivery = apps.get_model("orders", "Delivery")
@@ -198,7 +190,7 @@ fields = model_fields_sheet(Delivery)
 
 # --------------- render markdown ---------------
 md = []
-md.append("# Driver Domain Profile — Auto Audit\n")
+md.append("# Driver Domain Profile â€” Auto Audit\n")
 md.append("## Driver Model Sheet\n")
 mdl_file, mdl_line = defline_delivery
 md.append(f"- Model: `orders.models.Delivery`  *(defined at {mdl_file}:{mdl_line})*\n")
@@ -267,7 +259,7 @@ for r in matrix_rows:
 md.append("\n## API & WS Surface\n")
 md.append("### URLs (filtered)\n")
 for u, v in filtered_urls:
-    md.append(f"- `{u}` → `{v}`\n")
+    md.append(f"- `{u}` â†’ `{v}`\n")
 md.append("\n### WebSocket\n")
 md.append(
     f"- Routing file hits: `{files_to_scan['routing']}`, samples: `{'; '.join(ws_paths) or 'n/a'}`\n"
@@ -310,7 +302,7 @@ md.append("\n## Gaps & Risks (detected heuristically)\n")
 if not admin_registered:
     md.append("- Delivery not registered in admin (reduced ops visibility).\n")
 if not consumer_methods["delivery_event"]:
-    md.append("- consumer missing delivery_event() (REST→WS bridge relies on this).\n")
+    md.append("- consumer missing delivery_event() (RESTâ†’WS bridge relies on this).\n")
 if not event_sends["group_send_delivery_event"]:
     md.append("- views may not publish WS events (`delivery.event`).\n")
 if not serializer_hits["DeliverySerializer"]:
@@ -318,12 +310,12 @@ if not serializer_hits["DeliverySerializer"]:
 
 md.append("\n## Fix/Enhancement TODOs (ranked)\n")
 md.append(
-    "1) Ensure REST→WS bridge: helper `_publish_delivery(...)` and `delivery_event` handler in consumer.\n"
+    "1) Ensure RESTâ†’WS bridge: helper `_publish_delivery(...)` and `delivery_event` handler in consumer.\n"
 )
 md.append("2) Add tests for assign/unassign/accept/status/location APIs.\n")
 md.append("3) Admin: register Delivery with list_display, filters, search.\n")
 md.append(
-    "4) Enforce allowed status transitions (assigned→picked_up→en_route→delivered/cancelled).\n"
+    "4) Enforce allowed status transitions (assignedâ†’picked_upâ†’en_routeâ†’delivered/cancelled).\n"
 )
 md.append("5) Frontend: reconnect & wsUrl fallback; handle `assign/status/position`.\n")
 

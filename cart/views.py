@@ -1,4 +1,5 @@
 import json
+import logging
 import traceback
 from json import JSONDecodeError
 
@@ -8,14 +9,14 @@ from django.db.models import Sum
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
-import logging
-logger = logging.getLogger(__name__)
+
 from orders.forms import OrderForm
 from product_app.models import Product, ProductStock
 from users.permissions import NotBuyingOwnListing
 
 from .models import Cart, CartItem
 
+logger = logging.getLogger(__name__)
 
 # cart/views.py
 def wants_json(request):
@@ -107,7 +108,7 @@ def cart_add(request, product_id):
         request.session["cart_count"] = int(request.session.get("cart_count", 0)) + qty
 
         return _json_ok(
-            f"Added {qty} × {product.name} to cart.",
+            f"Added {qty} Ãƒâ€” {product.name} to cart.",
             count=request.session["cart_count"],
             extra={"item_id": item.id, "product_id": product.id, "quantity": item.quantity},
             status=201,

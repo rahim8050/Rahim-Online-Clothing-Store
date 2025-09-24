@@ -1,13 +1,9 @@
-import django
-
-django.setup()
 from django.test import TestCase
 from django.urls import reverse
 from rest_framework.test import APIClient
 
 from product_app.models import Category, Product
 from users.models import CustomUser, VendorStaff
-
 
 class ShopableProductsTests(TestCase):
     def setUp(self):
