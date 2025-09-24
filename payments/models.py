@@ -34,6 +34,23 @@ class IdempotencyKey(models.Model):
         return f"{self.scope}:{self.key}"
 
 
+class ReconcileIdempotency(models.Model):
+    key = models.CharField(max_length=200, unique=True)
+    executed_at = models.DateTimeField(null=True, blank=True)
+    result_json = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "payments_idempotency"
+        indexes = [
+            models.Index(fields=["created_at"], name="payments_idem_created_at_idx"),
+        ]
+
+    def __str__(self) -> str:  # pragma: no cover
+        return self.key
+
+
 class Transaction(models.Model):
     order = models.ForeignKey("orders.Order", on_delete=models.CASCADE, related_name="transactions")
     user = models.ForeignKey(
