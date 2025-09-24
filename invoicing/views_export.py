@@ -54,8 +54,8 @@ class DownloadCsvView(View):
         buf = StringIO()
         w = csv.writer(buf)
         w.writerow(["SKU", "Name", "Qty", "Unit Price", "Tax Rate", "Line Total", "Tax Total"])
-        for l in inv.lines.all():
-            w.writerow([l.sku, l.name, l.qty, l.unit_price, l.tax_rate, l.line_total, l.tax_total])
+        for line in inv.lineines.alineline():
+            w.writerow([line.sku, line.name, line.qty, line.unit_price, line.tax_rate, line.line_total, line.tax_total])
         resp = JsonResponse({}, status=200)
         resp.content = buf.getvalue().encode("utf-8")
         resp["Content-Type"] = "text/csv"

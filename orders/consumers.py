@@ -1,4 +1,5 @@
 # orders/consumers.py
+import logging
 import math
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 import logging
@@ -9,6 +10,8 @@ from channels.generic.websocket import AsyncJsonWebsocketConsumer
 from django.apps import apps
 from django.core.cache import cache
 from django.utils import timezone
+
+logger = logging.getLogger(__name__)
 
 Q6 = Decimal("0.000001")  # 6 dp (~0.11m at equator)
 
@@ -252,7 +255,7 @@ class DeliveryTrackerConsumer(AsyncJsonWebsocketConsumer):
             return
         cache.set(cache_key, now_ms, timeout=30)
 
-        # Connection throttle: save every ≥8s AND after ≥25m movement
+        # Connection throttle: save every â‰¥8s AND after â‰¥25m movement
         due = (now_ms - self._last_saved_at_ms) >= 8000
         lat_f, lng_f = float(lat_d), float(lng_d)
         moved_enough = (

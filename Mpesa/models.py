@@ -22,6 +22,3 @@ class Payment(models.Model):
 
     def __str__(self):
         return f"{self.merchant_request_id} - {self.code} - {self.amount}"
-
-    def __str__(self):
-        return f"{self.merchant_request_id} - {self.code} - {self.amount}"

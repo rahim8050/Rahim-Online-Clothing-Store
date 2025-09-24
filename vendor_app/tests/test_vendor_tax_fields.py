@@ -46,7 +46,6 @@ def test_kra_pin_visibility_role_restrictions():
 
     manager = mk_user("manager")
     staff = mk_user("staff")
-    outsider = mk_user("outsider")
     admin = mk_user("admin", is_staff=True)
     VendorMember.objects.create(org=org, user=manager, role=VendorMember.Role.MANAGER)
     VendorMember.objects.create(org=org, user=staff, role=VendorMember.Role.STAFF)
@@ -90,6 +89,6 @@ def test_audit_log_on_kra_pin_change():
     assert resp.status_code in (200, 202)
 
     logs = list(VendorOrgAuditLog.objects.filter(org=org))
-    fields = {l.field for l in logs}
+    fields = {log.field for log in logs}
     assert "kra_pin" in fields and "tax_status" in fields
-    assert any(l.actor_id == owner.id for l in logs)
+    assert any(log.actor_id == owner.id for log in logs)

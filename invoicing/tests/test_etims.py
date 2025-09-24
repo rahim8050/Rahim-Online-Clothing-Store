@@ -48,10 +48,10 @@ def test_submit_invoice_idempotent():
         unit_price=Decimal("10.00"),
         tax_rate=Decimal("0.16"),
     )
-    r1 = submit_invoice(invoice=inv, idempotency_key=f"invoice:submit:{inv.id}")
+    _ = submit_invoice(invoice=inv, idempotency_key=f"invoice:submit:{inv.id}")
     inv.refresh_from_db()
     irn1 = inv.irn
-    r2 = submit_invoice(invoice=inv, idempotency_key=f"invoice:submit:{inv.id}")
+    _ = submit_invoice(invoice=inv, idempotency_key=f"invoice:submit:{inv.id}")
     inv.refresh_from_db()
     assert inv.status == Invoice.Status.ACCEPTED
     assert inv.irn == irn1
@@ -68,7 +68,7 @@ def test_state_transitions_and_irn_persist():
         unit_price=Decimal("5.00"),
         tax_rate=Decimal("0.16"),
     )
-    r = submit_invoice(invoice=inv, idempotency_key=f"invoice:submit:{inv.id}")
+    _ = submit_invoice(invoice=inv, idempotency_key=f"invoice:submit:{inv.id}")
     inv.refresh_from_db()
     assert inv.status == Invoice.Status.ACCEPTED
     assert inv.irn
@@ -86,7 +86,7 @@ def test_reject_flow_preserves_error_msg():
         unit_price=Decimal("1.00"),
         tax_rate=Decimal("0.00"),
     )
-    r = submit_invoice(invoice=inv, idempotency_key=f"invoice:submit:{inv.id}")
+    _ = submit_invoice(invoice=inv, idempotency_key=f"invoice:submit:{inv.id}")
     inv.refresh_from_db()
     assert inv.status == Invoice.Status.REJECTED
     assert inv.irn == ""

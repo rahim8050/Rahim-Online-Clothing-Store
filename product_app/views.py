@@ -1,21 +1,14 @@
-import json
-
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db.models import Q
 from django.shortcuts import get_object_or_404, render
-from django.utils.safestring import mark_safe
 
-from product_app.models import Product
-from product_app.queries import shopable_products_q
-from django.utils.html import json_script
+from .models import Category, Product
+from .queries import shopable_products_q
 
 app_name = "product_app"
-from .models import Category, Product
-
 
 def product_list(request, category_slug=None):
-    print("🔥 product_list view triggered")
     categories = Category.objects.all()
     category = None
 

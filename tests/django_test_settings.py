@@ -1,3 +1,5 @@
+from channels.routing import ProtocolTypeRouter
+
 SECRET_KEY = "test-secret-key"
 DEBUG = True
 ALLOWED_HOSTS = ["*"]
@@ -49,7 +51,6 @@ CHANNEL_LAYERS = {"default": {"BACKEND": "channels.layers.InMemoryChannelLayer"}
 ROOT_URLCONF = "tests.test_urls"
 ASGI_APPLICATION = __name__ + ".application"
 
-from channels.routing import ProtocolTypeRouter
 
 application = ProtocolTypeRouter({})
 
