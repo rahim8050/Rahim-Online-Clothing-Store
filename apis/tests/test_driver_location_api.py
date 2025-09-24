@@ -1,9 +1,6 @@
 from uuid import uuid4
 
-import django
 import pytest
-
-django.setup()
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
@@ -12,7 +9,6 @@ from orders.models import Delivery, Order
 from users.constants import DRIVER
 
 User = get_user_model()
-
 
 @pytest.mark.django_db
 def test_driver_location_persists_and_publishes(client, monkeypatch):

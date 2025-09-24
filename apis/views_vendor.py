@@ -56,7 +56,6 @@ class VendorKPIAPI(APIView):
     def get(self, request):
         Product = apps.get_model("product_app", "Product")
         Order = apps.get_model("orders", "Order")
-        OrderItem = apps.get_model("orders", "OrderItem")
         Transaction = apps.get_model("orders", "Transaction")
 
         try:

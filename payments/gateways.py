@@ -3,19 +3,17 @@ import os
 from decimal import ROUND_HALF_UP, Decimal
 
 import requests
+from django.core.mail import send_mail
+from django.db import IntegrityError, transaction
 from django.db import transaction as dbtx
 from django.utils import timezone
 
+from payments.models import NotificationEvent  # the model lives in payments/models.py
 from .models import Transaction
 
 # Toggle stubbed refunds in dev
 DEV_ALLOW_INSECURE_WEBHOOKS = os.getenv("PAYMENTS_ALLOW_INSECURE_WEBHOOKS", "0") == "1"
 PAYSTACK_SECRET = os.getenv("PAYSTACK_SECRET_KEY", "")
-# payments/notify.py
-from django.core.mail import send_mail
-from django.db import IntegrityError, transaction
-
-from payments.models import NotificationEvent  # the model lives in payments/models.py
 
 __all__ = ["emit_once", "send_refund_email", "send_payment_email"]  # explicit exports
 

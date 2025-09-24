@@ -48,7 +48,6 @@ class CartViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.Gen
     def _ensure_active_owned(self, request, pk) -> Cart:
         cart = get_object_or_404(self.get_queryset(), pk=pk)
         if cart.status != Cart.Status.ACTIVE:
-            raise_response = Response({"detail": "Cart is not active."}, status=400)
             # Raise via DRF shortcut
             from rest_framework.exceptions import ValidationError
 

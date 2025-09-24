@@ -18,6 +18,7 @@ from users import (
 )
 from users.models import VendorApplication, VendorStaff
 from users.utils import resolve_vendor_owner_for
+from payments.enums import Gateway
 import logging
 logger = logging.getLogger(__name__)
 
@@ -476,3 +477,34 @@ class VendorApplicationCreateSerializer(serializers.ModelSerializer):
         if getattr(f, "size", 0) > 5 * 1024 * 1024:
             raise serializers.ValidationError("File too large (max 5MB).")
         return f
+
+# -----------------------
+# Payments reconciliation
+# -----------------------
+class PaymentReconcileRequestSerializer(serializers.Serializer):
+    gateway = serializers.ChoiceField(choices=Gateway.choices)
+    ref = serializers.CharField(max_length=200)
+
+    def validate_ref(self, value: str) -> str:
+        v = (value or "").strip()
+        if not v:
+            raise serializers.ValidationError("Reference cannot be blank.")
+        return v
+
+
+class PaymentReconcileResponseSerializer(serializers.Serializer):
+    ok = serializers.BooleanField()
+    cached = serializers.BooleanField()
+    status = serializers.CharField()
+    gateway = serializers.CharField()
+    reference = serializers.CharField()
+    transaction_id = serializers.IntegerField()
+    order_id = serializers.IntegerField()
+    idempotency_key = serializers.CharField()
+    duplicate = serializers.BooleanField()
+    effects = serializers.DictField(child=serializers.BooleanField(), required=False)
+    transaction = serializers.DictField(child=serializers.JSONField())
+    order = serializers.DictField(child=serializers.JSONField())
+    provider = serializers.DictField(child=serializers.JSONField())
+    code = serializers.CharField(required=False)
+    detail = serializers.CharField(required=False)

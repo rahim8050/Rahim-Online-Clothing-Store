@@ -61,8 +61,8 @@ class Invoice(models.Model):
 
     def compute_totals(self) -> tuple[Decimal, Decimal, Decimal]:
         lines = list(self.lines.all())
-        sub = sum((l.line_total for l in lines), Decimal("0.00"))
-        tax = sum((l.tax_total for l in lines), Decimal("0.00"))
+        sub = sum((line.line_total for line in lines), Decimal("0.00"))
+        tax = sum((line.tax_total for line in lines), Decimal("0.00"))
         tot = (sub + tax).quantize(Q2, rounding=ROUND_HALF_UP)
         return (
             Decimal(sub).quantize(Q2, rounding=ROUND_HALF_UP),

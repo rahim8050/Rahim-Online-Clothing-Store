@@ -44,7 +44,7 @@ def test_kpi_daily_aggregation_consistency():
     # record a transaction tied to org
     from django.utils import timezone
 
-    tx = Transaction.objects.create(
+    txn = Transaction.objects.create(
         order=order,
         user=buyer,
         method="card",
@@ -60,6 +60,7 @@ def test_kpi_daily_aggregation_consistency():
         processed_at=timezone.now(),
     )
     from decimal import Decimal as D
+    assert txn.vendor_org == org
 
     kpi = aggregate_kpis_daily(org.id)
     assert kpi.orders >= 1 and kpi.gross_revenue >= D("100.00")

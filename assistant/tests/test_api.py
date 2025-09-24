@@ -36,8 +36,8 @@ def _mk_order(user, **kwargs):
 
 @pytest.mark.django_db
 def test_list_orders_matches_natural_phrase(client):
-    u = _login(client)
-    _mk_order(u)
+    user = _login(client)
+    _mk_order(user)
     url = "/api/assistant/ask/"
     for msg in ("tell me about my orders", "show my orders", "list orders"):
         r = client.post(
@@ -49,8 +49,8 @@ def test_list_orders_matches_natural_phrase(client):
 
 @pytest.mark.django_db
 def test_order_status_by_id_and_order_number(client):
-    u = _login(client)
-    o = _mk_order(u)
+    user = _login(client)
+    o = _mk_order(user)
     url = "/api/assistant/ask/"
     r = client.post(
         url,
@@ -70,10 +70,10 @@ def test_order_status_by_id_and_order_number(client):
 
 @pytest.mark.django_db
 def test_payment_status_and_delivery_status_paths(client):
-    u = _login(client)
-    o = _mk_order(u)
+    user = _login(client)
+    o = _mk_order(user)
     Transaction.objects.create(
-        user=u,
+        user=user,
         order=o,
         amount=10,
         method="card",
@@ -101,7 +101,7 @@ def test_payment_status_and_delivery_status_paths(client):
 
 @pytest.mark.django_db
 def test_ownership_enforced(client):
-    u = _login(client)
+    _login(client)
     v = get_user_model().objects.create_user(
         username="bob", email="bob@example.com", password="pass"
     )

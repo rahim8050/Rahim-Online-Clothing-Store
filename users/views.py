@@ -28,7 +28,6 @@ from django.utils.http import urlsafe_base64_decode
 from django.utils.timezone import now
 from django.views import View
 from django.views.generic import FormView
-from rest_framework import generics, permissions
 from rest_framework.exceptions import ValidationError
 
 from orders.models import Delivery, Order, OrderItem, Transaction
