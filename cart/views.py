@@ -9,7 +9,8 @@ from django.db.models import Sum
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
-
+import logging
+logger = logging.getLogger(__name__)
 from orders.forms import OrderForm
 from product_app.models import Product, ProductStock
 from users.permissions import NotBuyingOwnListing
