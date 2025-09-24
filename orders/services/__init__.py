@@ -1,7 +1,6 @@
 """Order-related services."""
 
 from collections.abc import Iterable
-from typing import Tuple
 
 from django.db import transaction
 from django.db.models import F
@@ -99,7 +98,6 @@ def assign_warehouses_and_update_stock(order):
 
 def get_nearest_stock(product, latitude, longitude):
     """Return nearest ProductStock with available quantity."""
-    customer_location = (latitude, longitude)
     stocks = ProductStock.objects.filter(product=product, quantity__gt=0).select_related(
         "warehouse"
     )

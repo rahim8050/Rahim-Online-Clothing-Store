@@ -20,7 +20,6 @@ class Command(BaseCommand):
                 memberships = VendorStaff.objects.filter(
                     owner_id=pair["owner_id"], staff_id=pair["staff_id"]
                 ).order_by("-created_at", "-id")
-                keep = memberships.first()
                 for member in memberships[1:]:
                     if member.is_active:
                         member.is_active = False

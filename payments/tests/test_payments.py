@@ -70,7 +70,7 @@ class PaymentTestCase(TestCase):
         txn.refresh_from_db()
         self.assertEqual(r1.status_code, 200)
         self.assertEqual(txn.status, TxnStatus.SUCCESS)
-        r2 = self.client.post(url, body, content_type="application/json")
+        self.client.post(url, body, content_type="application/json")
         txn.refresh_from_db()
         self.assertEqual(txn.status, TxnStatus.SUCCESS)
         self.assertTrue(
@@ -80,7 +80,7 @@ class PaymentTestCase(TestCase):
     @patch("payments.services.issue_refund")
     @patch("payments.views.verify_stripe")
     def test_duplicate_success_auto_refund(self, mock_verify, mock_refund):
-        txn1 = Transaction.objects.create(
+        Transaction.objects.create(
             order=self.order,
             user=self.user,
             method=PaymentMethod.CARD,
@@ -124,7 +124,7 @@ class PaymentTestCase(TestCase):
 
     @patch("payments.views.verify_mpesa")
     def test_duplicate_mpesa_manual(self, mock_verify):
-        txn1 = Transaction.objects.create(
+        Transaction.objects.create(
             order=self.order,
             user=self.user,
             method=PaymentMethod.MPESA,

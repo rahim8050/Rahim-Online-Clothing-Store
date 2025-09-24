@@ -36,6 +36,14 @@ from core.models import log_action
 from core.permissions import InGroups
 from core.siteutils import current_domain
 from inventory.services import check_low_stock_and_notify
+from payments.enums import Gateway
+from payments.services.reconcile import (
+    ReconcileConflict,
+    ReconcileError,
+    reconcile_mpesa,
+    reconcile_paystack,
+    reconcile_stripe,
+)
 from orders.models import Delivery, DeliveryEvent, OrderItem
 from product_app.models import Product
 from product_app.queries import shopable_products_q
@@ -60,6 +68,8 @@ from .serializers import (
     VendorStaffInviteSerializer,
     VendorStaffOutSerializer,
     VendorStaffRemoveSerializer,
+    PaymentReconcileRequestSerializer,
+    PaymentReconcileResponseSerializer,
     WhoAmISerializer,
     _EmptySerializer,
 )
@@ -500,7 +510,10 @@ class VendorProductsImportCSV(APIView):
             return Response({"detail": "unable to read file"}, status=400)
 
         reader = csv.DictReader(StringIO(buf))
-        norm = lambda s: (s or "").strip().lower()
+
+        def norm(value: str | None) -> str:
+            return (value or "").strip().lower()
+
         wanted = {"name", "sku", "price", "stock", "published"}
         header = {norm(h): h for h in (reader.fieldnames or [])}
         if not wanted.issubset(set(header.keys())):
@@ -893,3 +906,57 @@ class VendorOwnersAPI(APIView):
         rows = User.objects.filter(id__in=ids).only("id", "first_name", "last_name", "email")
         data = [{"id": u.id, "name": (u.get_full_name() or u.email or str(u.id))} for u in rows]
         return Response(sorted(data, key=lambda x: x["name"].lower()))
+
+# -----------------------
+# Payments reconciliation
+# -----------------------
+class PaymentReconcileAPI(APIView):
+    permission_classes = [permissions.IsAdminUser]
+    serializer_class = PaymentReconcileRequestSerializer
+
+    @extend_schema(
+        request=PaymentReconcileRequestSerializer,
+        responses={200: PaymentReconcileResponseSerializer},
+    )
+    def post(self, request):
+        serializer = self.serializer_class(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        gateway_value = serializer.validated_data["gateway"]
+        reference = serializer.validated_data["ref"]
+
+        try:
+            gateway = Gateway(gateway_value)
+        except ValueError:
+            return Response(
+                {"ok": False, "code": "invalid_gateway", "detail": "Unsupported gateway supplied."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        handler = {
+            Gateway.PAYSTACK: reconcile_paystack,
+            Gateway.MPESA: reconcile_mpesa,
+            Gateway.STRIPE: reconcile_stripe,
+        }[gateway]
+
+        logger.info(
+            "payments.reconcile.request",
+            extra={"gateway": gateway.value, "reference": reference, "user": request.user.id},
+        )
+
+        try:
+            result = handler(reference)
+        except ReconcileConflict as exc:
+            payload = {"ok": False, "code": exc.code, "detail": exc.message}
+            if exc.extra:
+                payload.update(exc.extra)
+            return Response(payload, status=exc.status_code)
+        except ReconcileError as exc:
+            payload = {"ok": False, "code": exc.code, "detail": exc.message}
+            if exc.extra:
+                payload.update(exc.extra)
+            return Response(payload, status=exc.status_code)
+
+        result.setdefault("ok", True)
+        result.setdefault("gateway", gateway.value)
+        result.setdefault("cached", False)
+        return Response(result, status=status.HTTP_200_OK)

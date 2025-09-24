@@ -16,10 +16,10 @@ from django.utils import timezone
 
 from vendor_app.models import VendorOrg
 
-from .enums import Gateway, TxnStatus
-from .idempotency import idempotent
-from .models import AuditLog, PaymentEvent, Payout, Transaction
-from .selectors import safe_decrement_stock, set_order_paid
+from payments.enums import Gateway, TxnStatus
+from payments.idempotency import idempotent
+from payments.models import AuditLog, PaymentEvent, Payout, Transaction
+from payments.selectors import safe_decrement_stock, set_order_paid
 import logging
 logger = logging.getLogger(__name__)
 

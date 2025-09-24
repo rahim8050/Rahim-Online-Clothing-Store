@@ -26,6 +26,16 @@ def safe_decrement_stock(order, request_id: str = ""):
 
 
 def set_order_paid(order, request_id: str = ""):
-    order.payment_status = "PAID"
-    order.save(update_fields=["payment_status"])
+    updates: list[str] = []
+    if getattr(order, "payment_status", "").lower() != "paid":
+        order.payment_status = "paid"
+        updates.append("payment_status")
+    if not getattr(order, "paid", False):
+        order.paid = True
+        updates.append("paid")
+    if hasattr(order, "stock_updated") and not getattr(order, "stock_updated", False):
+        order.stock_updated = True
+        updates.append("stock_updated")
+    if updates:
+        order.save(update_fields=updates)
     AuditLog.log(event="ORDER_PAID", order=order, request_id=request_id)
