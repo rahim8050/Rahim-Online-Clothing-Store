@@ -611,23 +611,25 @@ REST_FRAMEWORK = {
 # >>> BEGIN: auto-csp-guard
 try:
     import csp  # noqa: F401
-    _CSP_AVAILABLE=True
+    _CSP_AVAILABLE = True
 except Exception:
-    _CSP_AVAILABLE=False
+    _CSP_AVAILABLE = False
 
 try:
     MIDDLEWARE
 except NameError:
-    MIDDLEWARE=[]
+    MIDDLEWARE = []
 
 if _CSP_AVAILABLE:
-    _mw=list(MIDDLEWARE)
-    _csp='csp.middleware.CSPMiddleware'
+    _mw = list(MIDDLEWARE)
+    _csp = 'csp.middleware.CSPMiddleware'
     if _csp not in _mw:
-        try: idx=_mw.index('django.middleware.security.SecurityMiddleware')+1
-        except ValueError: idx=0
-        _mw.insert(idx,_csp)
-    MIDDLEWARE=tuple(_mw) if isinstance(MIDDLEWARE, tuple) else _mw
+        try:
+            idx = _mw.index('django.middleware.security.SecurityMiddleware') + 1
+        except ValueError:
+            idx = 0
+        _mw.insert(idx, _csp)
+    MIDDLEWARE = tuple(_mw) if isinstance(MIDDLEWARE, tuple) else _mw
 
 if _CSP_AVAILABLE:
     _policy = globals().get('CONTENT_SECURITY_POLICY')
@@ -637,4 +639,5 @@ if _CSP_AVAILABLE:
     _directives.setdefault('default-src', ("'self'",))
     _directives.setdefault('frame-ancestors', ("'self'",))
     CONTENT_SECURITY_POLICY = _policy
+
 # >>> END: auto-csp-guard

@@ -5,8 +5,6 @@ os.environ.setdefault("SECRET_KEY", "test")
 os.environ.setdefault("DEBUG", "1")
 import django
 
-django.setup()
-
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -16,8 +14,9 @@ from django.test import Client, TestCase, override_settings
 from orders.geo import haversine_km
 from orders.models import Delivery, Order
 
-User = get_user_model()
+django.setup()
 
+User = get_user_model()
 
 @override_settings(
     CHANNEL_LAYERS={"default": {"BACKEND": "channels.layers.InMemoryChannelLayer"}},

@@ -510,7 +510,10 @@ class VendorProductsImportCSV(APIView):
             return Response({"detail": "unable to read file"}, status=400)
 
         reader = csv.DictReader(StringIO(buf))
-        norm = lambda s: (s or "").strip().lower()
+
+        def norm(value: str | None) -> str:
+            return (value or "").strip().lower()
+
         wanted = {"name", "sku", "price", "stock", "published"}
         header = {norm(h): h for h in (reader.fieldnames or [])}
         if not wanted.issubset(set(header.keys())):

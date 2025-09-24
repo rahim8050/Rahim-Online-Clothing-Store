@@ -94,7 +94,7 @@ class InvoiceViewSet(viewsets.ReadOnlyModelViewSet):
                 {"detail": "ETIMS disabled"}, status=status.HTTP_503_SERVICE_UNAVAILABLE
             )
 
-        result = submit_invoice(invoice=inv, idempotency_key=f"invoice:submit:{inv.id}")
+        submit_invoice(invoice=inv, idempotency_key=f"invoice:submit:{inv.id}")
         inv.refresh_from_db()
         return Response(InvoiceSerializer(inv).data, status=status.HTTP_200_OK)
 
@@ -149,9 +149,9 @@ class InvoiceViewSet(viewsets.ReadOnlyModelViewSet):
             buf = StringIO()
             w = csv.writer(buf)
             w.writerow(["SKU", "Name", "Qty", "Unit Price", "Tax Rate", "Line Total", "Tax Total"])
-            for l in inv.lines.all():
+            for line in inv.lines.all():
                 w.writerow(
-                    [l.sku, l.name, l.qty, l.unit_price, l.tax_rate, l.line_total, l.tax_total]
+                    [line.sku, line.name, line.qty, line.unit_price, line.tax_rate, line.line_total, line.tax_total]
                 )
             resp = Response(buf.getvalue(), content_type="text/csv")
             resp["Content-Disposition"] = f"attachment; filename=invoice_{inv.id}.csv"
@@ -219,8 +219,8 @@ class InvoiceViewSet(viewsets.ReadOnlyModelViewSet):
         buf = StringIO()
         w = csv.writer(buf)
         w.writerow(["SKU", "Name", "Qty", "Unit Price", "Tax Rate", "Line Total", "Tax Total"])
-        for l in inv.lines.all():
-            w.writerow([l.sku, l.name, l.qty, l.unit_price, l.tax_rate, l.line_total, l.tax_total])
+        for line in inv.lines.all():
+            w.writerow([line.sku, line.name, line.qty, line.unit_price, line.tax_rate, line.line_total, line.tax_total])
         resp = Response(buf.getvalue(), content_type="text/csv")
         resp["Content-Disposition"] = f"attachment; filename=invoice_{inv_id}.csv"
         return resp

@@ -2,8 +2,6 @@ from drf_spectacular.utils import extend_schema
 from rest_framework import permissions, serializers
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework import serializers
-from drf_spectacular.utils import extend_schema
 
 try:
     from apis.serializers import WhoAmISerializer as _WhoAmISerializer  # reuse existing serializer
