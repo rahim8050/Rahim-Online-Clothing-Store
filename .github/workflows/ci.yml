@@ -21,9 +21,19 @@ jobs:
           --health-cmd="pg_isready -U postgres" --health-interval=10s
           --health-timeout=5s --health-retries=5
 
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     env:
       DJANGO_SETTINGS_MODULE: Rahim_Online_ClothesStore.settings
       DATABASE_URL: postgres://postgres:postgres@localhost:5432/testdb
+      REDIS_URL: redis://localhost:6379/0
       SECRET_KEY: ${{ secrets.SECRET_KEY || 'dummy-key-for-testing' }}
       DEBUG: 0
       PYTHONDONTWRITEBYTECODE: 1
@@ -54,6 +64,9 @@ jobs:
           pip install -r requirements.txt
           pip install pytest pytest-django pytest-cov pre-commit ruff black isort mypy
 
+      - name: Install Redis CLI
+        run: sudo apt-get update && sudo apt-get install -y redis-tools
+
       - name: Wait for PostgreSQL
         run: |
           for i in {1..30}; do
@@ -62,6 +75,17 @@ jobs:
               break
             fi
             echo "Waiting for PostgreSQL... attempt $i"
+            sleep 2
+          done
+
+      - name: Wait for Redis
+        run: |
+          for i in {1..30}; do
+            if redis-cli -h localhost -p 6379 ping | grep -q PONG; then
+              echo "Redis is ready!"
+              break
+            fi
+            echo "Waiting for Redis... attempt $i"
             sleep 2
           done
 
@@ -111,24 +135,18 @@ jobs:
           path: |
             bandit-report.html
 
-      - name: Upload to Codecov (optional)
-        uses: codecov/codecov-action@v3
-        if: success()
-        with:
-          file: ./coverage.xml
-          flags: unittests
-          name: codecov-umbrella
-
   quality-gate:
     runs-on: ubuntu-latest
     needs: test
     if: always()
 
     steps:
-      - name: Download artifacts
-        uses: actions/download-artifact@v4
-
       - name: Check test results
         run: |
-          echo "Quality gate check passed"
-          echo "Test job status: ${{ needs.test.result }}"
+          echo "Quality gate check - Test job status: ${{ needs.test.result }}"
+          if [ "${{ needs.test.result }}" != "success" ]; then
+            echo "Tests failed - quality gate not passed"
+            exit 1
+          else
+            echo "All checks passed - quality gate succeeded"
+          fi
