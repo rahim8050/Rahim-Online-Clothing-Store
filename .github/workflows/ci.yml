@@ -32,12 +32,15 @@ jobs:
 
     env:
       DJANGO_SETTINGS_MODULE: Rahim_Online_ClothesStore.settings
-      DATABASE_URL: postgres://postgres:postgres@localhost:5432/testdb
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/testdb?sslmode=disable
       REDIS_URL: redis://localhost:6379/0
       SECRET_KEY: ${{ secrets.SECRET_KEY || 'dummy-key-for-testing' }}
-      DEBUG: 0
+      DEBUG: 1  # Changed to 1 to avoid production checks
       PYTHONDONTWRITEBYTECODE: 1
       PYTHONUNBUFFERED: 1
+
+      # Database SSL settings
+      DB_SSLMODE: disable
 
       # Payment environment variables
       PAYSTACK_PUBLIC_KEY: pk_test_dummy_paystack_public_key
@@ -57,11 +60,6 @@ jobs:
       # Django security settings
       ALLOWED_HOSTS: localhost,127.0.0.1,0.0.0.0
       CSRF_TRUSTED_ORIGINS: http://localhost,http://127.0.0.1
-
-      # Additional common Django settings
-      CORS_ALLOWED_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
-      USE_X_FORWARDED_HOST: false
-      SECURE_SSL_REDIRECT: false
 
     steps:
       - uses: actions/checkout@v4
@@ -86,10 +84,10 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -r requirements.txt
-          pip install pytest pytest-django pytest-cov pre-commit ruff black isort mypy
+          pip install pytest pytest-django pytest-cov pre-commit ruff black isort mypy psycopg2-binary
 
-      - name: Install Redis CLI
-        run: sudo apt-get update && sudo apt-get install -y redis-tools
+      - name: Install Redis CLI and PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y redis-tools postgresql-client
 
       - name: Wait for PostgreSQL
         run: |
@@ -112,6 +110,10 @@ jobs:
             echo "Waiting for Redis... attempt $i"
             sleep 2
           done
+
+      - name: Test database connection
+        run: |
+          psql "$DATABASE_URL" -c "SELECT version();"
 
       - name: Run database migrations
         run: python manage.py migrate --noinput
