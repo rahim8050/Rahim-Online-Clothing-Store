@@ -2,8 +2,6 @@
 import logging
 import math
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
-import logging
-logger = logging.getLogger(__name__)
 
 from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
