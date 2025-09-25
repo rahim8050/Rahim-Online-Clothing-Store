@@ -15,7 +15,9 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument("--org", type=int, required=True, help="VendorOrg ID")
-        parser.add_argument("--since", type=int, default=7, help="Days ago to include (default 7)")
+        parser.add_argument(
+            "--since", type=int, default=7, help="Days ago to include (default 7)"
+        )
 
     def handle(self, *args, **options):
         org_id = options.get("org")
@@ -28,8 +30,12 @@ class Command(BaseCommand):
             self.stdout.write("No invoices to submit")
             return
         if not getattr(settings, "ETIMS_ENABLED", False):
-            self.stdout.write(self.style.WARNING("ETIMS disabled; aborting submissions."))
+            self.stdout.write(
+                self.style.WARNING("ETIMS disabled; aborting submissions.")
+            )
             return
         for inv in qs.iterator():
-            res = submit_invoice(invoice=inv, idempotency_key=f"invoice:submit:{inv.id}")
+            res = submit_invoice(
+                invoice=inv, idempotency_key=f"invoice:submit:{inv.id}"
+            )
             self.stdout.write(f"Invoice {inv.id}: {res.status} {res.irn or ''}")

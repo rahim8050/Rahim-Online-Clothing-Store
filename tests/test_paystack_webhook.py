@@ -16,7 +16,9 @@ class PaystackWebhookTests(TestCase):
     @patch("orders.views.assign_warehouses_and_update_stock")
     def test_charge_success_updates_records(self, mock_assign):
         User = get_user_model()
-        user = User.objects.create_user(username="u", password="p", email="u@example.com")
+        user = User.objects.create_user(
+            username="u", password="p", email="u@example.com"
+        )
         cat = Category.objects.create(name="c", slug="c")
         prod = Product.objects.create(category=cat, name="p", slug="p", price=10)
         wh = Warehouse.objects.create(name="w", latitude=1.0, longitude=36.0)
@@ -32,7 +34,9 @@ class PaystackWebhookTests(TestCase):
             dest_lat=1.0,
             dest_lng=36.0,
         )
-        OrderItem.objects.create(order=order, product=prod, price=10, quantity=1, warehouse=wh)
+        OrderItem.objects.create(
+            order=order, product=prod, price=10, quantity=1, warehouse=wh
+        )
         tx = Transaction.objects.create(
             user=user,
             order=order,

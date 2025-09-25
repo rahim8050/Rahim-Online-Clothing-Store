@@ -12,7 +12,15 @@ class CategoryAdmin(admin.ModelAdmin):
 
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
-    list_display = ["name", "price", "category", "status", "available", "version", "total_stock"]
+    list_display = [
+        "name",
+        "price",
+        "category",
+        "status",
+        "available",
+        "version",
+        "total_stock",
+    ]
     list_filter = ("status", "available", "category")
     prepopulated_fields = {"slug": ("name",)}
     readonly_fields = ("version",)

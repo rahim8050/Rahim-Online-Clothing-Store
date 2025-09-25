@@ -50,7 +50,12 @@ from product_app.queries import shopable_products_q
 from product_app.utils import get_vendor_field
 from users.constants import DRIVER
 from users.models import VendorApplication, VendorStaff
-from users.permissions import HasVendorScope, IsDriver, IsVendorOrVendorStaff, IsVendorOwner
+from users.permissions import (
+    HasVendorScope,
+    IsDriver,
+    IsVendorOrVendorStaff,
+    IsVendorOwner,
+)
 from users.services import activate_vendor_staff  # group sync helper
 from users.utils import resolve_vendor_owner_for, vendor_owner_ids_for
 
@@ -98,7 +103,9 @@ class VendorProductsImportResultSerializer(serializers.Serializer):
 
 
 # ----------------------- Helpers -----------------------
-def _publish_delivery(delivery: Delivery, kind: str, payload: dict | None = None) -> None:
+def _publish_delivery(
+    delivery: Delivery, kind: str, payload: dict | None = None
+) -> None:
     """Publish a generic delivery event to the delivery's WS group."""
     layer = get_channel_layer()
     if not layer:
@@ -192,7 +199,9 @@ class VendorProductsAPI(APIView):
         try:
             base_qs = Product.objects.filter(**{vendor_field_id: owner_id})
         except Exception:
-            logger.warning("Product model missing vendor field '%s'", field, exc_info=True)
+            logger.warning(
+                "Product model missing vendor field '%s'", field, exc_info=True
+            )
             base_qs = Product.objects.none()
 
         q = request.query_params.get("q")
@@ -208,7 +217,9 @@ class VendorProductsAPI(APIView):
         else:
             products = base_qs
 
-        serializer = ProductSerializer(products, many=True, context={"request": request})
+        serializer = ProductSerializer(
+            products, many=True, context={"request": request}
+        )
         return Response(serializer.data)
 
 
@@ -219,7 +230,11 @@ class DriverDeliveriesAPI(APIView):
 
     @extend_schema(request=None, responses=DeliverySerializer(many=True))
     def get(self, request):
-        qs = Delivery.objects.filter(driver=request.user).select_related("order").order_by("-id")
+        qs = (
+            Delivery.objects.filter(driver=request.user)
+            .select_related("order")
+            .order_by("-id")
+        )
         serializer = DeliverySerializer(qs, many=True, context={"request": request})
         return Response(serializer.data)
 
@@ -303,10 +318,11 @@ class DeliveryAssignAPI(APIView):
         except Exception as e:
             logger.exception("Non-critical side-effect failed in %s: %s", __name__, e)
 
-
         try:
             owner_id = getattr(
-                delivery.order.items.first().product, get_vendor_field(Product) + "_id", None
+                delivery.order.items.first().product,
+                get_vendor_field(Product) + "_id",
+                None,
             )
             log_action(
                 request.user,
@@ -320,7 +336,6 @@ class DeliveryAssignAPI(APIView):
                 _publish_vendor(owner_id, "delivery.assigned", {"rid": delivery.id})
         except Exception as e:
             logger.exception("Non-critical side-effect failed in %s: %s", __name__, e)
-
 
         _publish_delivery(delivery, "assign", {"driver_id": driver.id})
         return Response(DeliverySerializer(delivery, context={"request": request}).data)
@@ -340,21 +355,25 @@ class DeliveryUnassignAPI(APIView):
         delivery.save(update_fields=["driver", "status", "assigned_at"])
 
         try:
-            DeliveryEvent.objects.create(delivery=delivery, actor=request.user, type="unassign")
+            DeliveryEvent.objects.create(
+                delivery=delivery, actor=request.user, type="unassign"
+            )
         except Exception as e:
             logger.exception("Non-critical side-effect failed in %s: %s", __name__, e)
 
-
         try:
             owner_id = getattr(
-                delivery.order.items.first().product, get_vendor_field(Product) + "_id", None
+                delivery.order.items.first().product,
+                get_vendor_field(Product) + "_id",
+                None,
             )
-            log_action(request.user, owner_id, "delivery.unassign", "delivery", delivery.id)
+            log_action(
+                request.user, owner_id, "delivery.unassign", "delivery", delivery.id
+            )
             if owner_id:
                 _publish_vendor(owner_id, "delivery.unassigned", {"rid": delivery.id})
         except Exception as e:
             logger.exception("Non-critical side-effect failed in %s: %s", __name__, e)
-
 
         _publish_delivery(delivery, "unassign", {"driver_id": None})
         return Response(DeliverySerializer(delivery, context={"request": request}).data)
@@ -390,9 +409,13 @@ class DeliveryStatusAPI(APIView):
         if new_status == Delivery.Status.PICKED_UP:
             delivery.picked_up_at = timezone.now()
             try:
-                DeliveryEvent.objects.create(delivery=delivery, actor=request.user, type="picked")
+                DeliveryEvent.objects.create(
+                    delivery=delivery, actor=request.user, type="picked"
+                )
             except Exception as e:
-               logger.exception("Non-critical side-effect failed in %s: %s", __name__, e)
+                logger.exception(
+                    "Non-critical side-effect failed in %s: %s", __name__, e
+                )
 
         elif new_status == Delivery.Status.DELIVERED:
             delivery.delivered_at = timezone.now()
@@ -401,8 +424,9 @@ class DeliveryStatusAPI(APIView):
                     delivery=delivery, actor=request.user, type="delivered"
                 )
             except Exception as e:
-               logger.exception("Non-critical side-effect failed in %s: %s", __name__, e)
-
+                logger.exception(
+                    "Non-critical side-effect failed in %s: %s", __name__, e
+                )
 
         delivery.save(update_fields=["status", "picked_up_at", "delivered_at"])
         _publish_delivery(delivery, "status", {"status": new_status})
@@ -425,14 +449,17 @@ class DriverLocationAPI(APIView):
 
     serializer_class = DriverLocationInSerializer
 
-    @extend_schema(request=DriverLocationInSerializer, responses=DriverLocationOutSerializer)
+    @extend_schema(
+        request=DriverLocationInSerializer, responses=DriverLocationOutSerializer
+    )
     def post(self, request):
         delivery_id = request.data.get("delivery_id")
         try:
             delivery_id = int(delivery_id)
         except (TypeError, ValueError):
             return Response(
-                {"detail": "delivery_id required (int)"}, status=status.HTTP_400_BAD_REQUEST
+                {"detail": "delivery_id required (int)"},
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         try:
@@ -440,13 +467,17 @@ class DriverLocationAPI(APIView):
             lng = _q6(request.data.get("lng"))
         except (InvalidOperation, TypeError, ValueError):
             return Response(
-                {"detail": "lat/lng must be numeric"}, status=status.HTTP_400_BAD_REQUEST
+                {"detail": "lat/lng must be numeric"},
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         if not (
-            Decimal("-90") <= lat <= Decimal("90") and Decimal("-180") <= lng <= Decimal("180")
+            Decimal("-90") <= lat <= Decimal("90")
+            and Decimal("-180") <= lng <= Decimal("180")
         ):
-            return Response({"detail": "lat/lng out of range"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"detail": "lat/lng out of range"}, status=status.HTTP_400_BAD_REQUEST
+            )
 
         delivery = get_object_or_404(Delivery, pk=delivery_id, driver=request.user)
 
@@ -454,7 +485,9 @@ class DriverLocationAPI(APIView):
         delivery.last_lat = lat
         delivery.last_lng = lng
         delivery.last_ping_at = now
-        delivery.save(update_fields=["last_lat", "last_lng", "last_ping_at", "updated_at"])
+        delivery.save(
+            update_fields=["last_lat", "last_lng", "last_ping_at", "updated_at"]
+        )
 
         _publish_delivery(
             delivery,
@@ -518,11 +551,14 @@ class VendorProductsImportCSV(APIView):
         header = {norm(h): h for h in (reader.fieldnames or [])}
         if not wanted.issubset(set(header.keys())):
             return Response(
-                {"detail": "missing columns", "required": sorted(list(wanted))}, status=400
+                {"detail": "missing columns", "required": sorted(list(wanted))},
+                status=400,
             )
 
         try:
-            owner_id = resolve_vendor_owner_for(request.user, request.data.get("owner_id"))
+            owner_id = resolve_vendor_owner_for(
+                request.user, request.data.get("owner_id")
+            )
         except ValueError as e:
             return Response({"owner_id": str(e)}, status=400)
 
@@ -564,7 +600,9 @@ class VendorProductsExportCSV(APIView):
     @extend_schema(request=None, responses={(200, "text/csv"): OpenApiTypes.STR})
     def get(self, request):
         try:
-            owner_id = resolve_vendor_owner_for(request.user, request.query_params.get("owner_id"))
+            owner_id = resolve_vendor_owner_for(
+                request.user, request.query_params.get("owner_id")
+            )
         except ValueError as e:
             return Response({"owner_id": str(e)}, status=400)
 
@@ -592,9 +630,13 @@ class VendorStaffInviteAPI(APIView):
         message = serializers.CharField()
         data = serializers.DictField()
 
-    @extend_schema(request=VendorStaffInviteSerializer, responses=VendorStaffInviteOutSerializer)
+    @extend_schema(
+        request=VendorStaffInviteSerializer, responses=VendorStaffInviteOutSerializer
+    )
     def post(self, request):
-        ser = VendorStaffInviteSerializer(data=request.data, context={"request": request})
+        ser = VendorStaffInviteSerializer(
+            data=request.data, context={"request": request}
+        )
         ser.is_valid(raise_exception=True)
 
         owner_id = ser.validated_data["owner_id"]
@@ -631,9 +673,7 @@ class VendorStaffInviteAPI(APIView):
                         ),
                     },
                 )
-                text_content = (
-                    f"You've been invited as vendor staff.\n\nAccept your invite: {invite_link}"
-                )
+                text_content = f"You've been invited as vendor staff.\n\nAccept your invite: {invite_link}"
 
                 def _send():
                     try:
@@ -645,7 +685,9 @@ class VendorStaffInviteAPI(APIView):
                         )
                         email.attach_alternative(html_content, "text/html")
                         email.send(fail_silently=False)
-                        logger.info("Invite email sent to %s (vs=%s)", staff.email, vs.id)
+                        logger.info(
+                            "Invite email sent to %s (vs=%s)", staff.email, vs.id
+                        )
                     except Exception as e:
                         logger.exception("Invite email failed for vs=%s: %s", vs.id, e)
 
@@ -654,14 +696,15 @@ class VendorStaffInviteAPI(APIView):
         try:
             log_action(request.user, owner_id, "staff.invite", "user", staff.id)
         except Exception as e:
-           logger.exception("Non-critical side-effect failed in %s: %s", __name__, e)
-
+            logger.exception("Non-critical side-effect failed in %s: %s", __name__, e)
 
         return Response(
             {
                 "ok": True,
                 "message": (
-                    "Invite created and email queued." if created else "Invite already pending."
+                    "Invite created and email queued."
+                    if created
+                    else "Invite already pending."
                 ),
                 "data": {
                     "vendor_staff_id": vs.id,
@@ -699,11 +742,15 @@ class VendorStaffAcceptAPI(APIView):
             return Response({"detail": "Malformed invite token."}, status=400)
 
         if request.user.id != staff_id:
-            return Response({"detail": "This invite is not for the current user."}, status=403)
+            return Response(
+                {"detail": "This invite is not for the current user."}, status=403
+            )
 
         with transaction.atomic():
             try:
-                vs = VendorStaff.objects.select_for_update().get(pk=vs_id, staff_id=staff_id)
+                vs = VendorStaff.objects.select_for_update().get(
+                    pk=vs_id, staff_id=staff_id
+                )
             except VendorStaff.DoesNotExist:
                 return Response({"detail": "Invite not found."}, status=404)
 
@@ -741,7 +788,9 @@ class VendorStaffListCreateView(APIView):
         qs = VendorStaff.objects.filter(owner_id=owner_id).order_by("-id")
         return Response(VendorStaffOutSerializer(qs, many=True).data)
 
-    @extend_schema(request=VendorStaffCreateSerializer, responses=VendorStaffOutSerializer)
+    @extend_schema(
+        request=VendorStaffCreateSerializer, responses=VendorStaffOutSerializer
+    )
     def post(self, request):
         raw_owner = request.data.get("owner_id")
         try:
@@ -757,9 +806,11 @@ class VendorStaffListCreateView(APIView):
         try:
             log_action(request.user, owner_id, "staff.create", "vendorstaff", row.id)
         except Exception as e:
-           logger.exception("Non-critical side-effect failed in %s: %s", __name__, e)
+            logger.exception("Non-critical side-effect failed in %s: %s", __name__, e)
 
-        return Response(VendorStaffOutSerializer(row).data, status=status.HTTP_201_CREATED)
+        return Response(
+            VendorStaffOutSerializer(row).data, status=status.HTTP_201_CREATED
+        )
 
 
 class VendorStaffRemoveAPI(APIView):
@@ -769,7 +820,9 @@ class VendorStaffRemoveAPI(APIView):
     class VendorStaffRemoveOutSerializer(serializers.Serializer):
         ok = serializers.BooleanField()
 
-    @extend_schema(request=VendorStaffRemoveSerializer, responses=VendorStaffRemoveOutSerializer)
+    @extend_schema(
+        request=VendorStaffRemoveSerializer, responses=VendorStaffRemoveOutSerializer
+    )
     def post(self, request, staff_id: int | None = None):
         payload = dict(request.data)
         if staff_id is not None and not payload.get("staff_id"):
@@ -783,7 +836,11 @@ class VendorStaffRemoveAPI(APIView):
             raw_owner = request.data.get("owner_id")
             owner_id = resolve_vendor_owner_for(request.user, raw_owner)
             log_action(
-                request.user, owner_id, "staff.remove", "user", ser.validated_data.get("staff_id")
+                request.user,
+                owner_id,
+                "staff.remove",
+                "user",
+                ser.validated_data.get("staff_id"),
             )
         except Exception as e:
             logger.exception("Non-critical side-effect failed in %s: %s", __name__, e)
@@ -803,7 +860,9 @@ class VendorStaffDeactivateAPI(APIView):
         from users.services import deactivate_vendor_staff
 
         try:
-            owner_id = resolve_vendor_owner_for(request.user, request.data.get("owner_id"))
+            owner_id = resolve_vendor_owner_for(
+                request.user, request.data.get("owner_id")
+            )
         except ValueError as e:
             return Response({"owner_id": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         try:
@@ -828,17 +887,28 @@ class VendorApplyAPI(APIView):
         created = serializers.BooleanField()
 
     @transaction.atomic
-    @extend_schema(request=VendorApplicationCreateSerializer, responses=VendorApplyOutSerializer)
+    @extend_schema(
+        request=VendorApplicationCreateSerializer, responses=VendorApplyOutSerializer
+    )
     def post(self, request):
         user = request.user
 
         # 1) Block if already vendor/staff
-        is_vendor_group = user.groups.filter(name__in=["Vendor", "Vendor Staff"]).exists()
-        if is_vendor_group or VendorStaff.objects.filter(staff=user, is_active=True).exists():
-            return Response({"detail": "Already a vendor/staff."}, status=status.HTTP_409_CONFLICT)
+        is_vendor_group = user.groups.filter(
+            name__in=["Vendor", "Vendor Staff"]
+        ).exists()
+        if (
+            is_vendor_group
+            or VendorStaff.objects.filter(staff=user, is_active=True).exists()
+        ):
+            return Response(
+                {"detail": "Already a vendor/staff."}, status=status.HTTP_409_CONFLICT
+            )
 
         # 2) Validate payload
-        ser = VendorApplicationCreateSerializer(data=request.data, context={"request": request})
+        ser = VendorApplicationCreateSerializer(
+            data=request.data, context={"request": request}
+        )
         ser.is_valid(raise_exception=True)
 
         # 3) Idempotent pending app per user
@@ -850,7 +920,9 @@ class VendorApplyAPI(APIView):
             )
         except Exception:
             app = (
-                VendorApplication.objects.filter(user=user, status=VendorApplication.PENDING)
+                VendorApplication.objects.filter(
+                    user=user, status=VendorApplication.PENDING
+                )
                 .order_by("-id")
                 .first()
             )
@@ -903,9 +975,15 @@ class VendorOwnersAPI(APIView):
         ids = list(vendor_owner_ids_for(request.user))
         if not ids:
             return Response([])
-        rows = User.objects.filter(id__in=ids).only("id", "first_name", "last_name", "email")
-        data = [{"id": u.id, "name": (u.get_full_name() or u.email or str(u.id))} for u in rows]
+        rows = User.objects.filter(id__in=ids).only(
+            "id", "first_name", "last_name", "email"
+        )
+        data = [
+            {"id": u.id, "name": (u.get_full_name() or u.email or str(u.id))}
+            for u in rows
+        ]
         return Response(sorted(data, key=lambda x: x["name"].lower()))
+
 
 # -----------------------
 # Payments reconciliation
@@ -928,7 +1006,11 @@ class PaymentReconcileAPI(APIView):
             gateway = Gateway(gateway_value)
         except ValueError:
             return Response(
-                {"ok": False, "code": "invalid_gateway", "detail": "Unsupported gateway supplied."},
+                {
+                    "ok": False,
+                    "code": "invalid_gateway",
+                    "detail": "Unsupported gateway supplied.",
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -940,7 +1022,11 @@ class PaymentReconcileAPI(APIView):
 
         logger.info(
             "payments.reconcile.request",
-            extra={"gateway": gateway.value, "reference": reference, "user": request.user.id},
+            extra={
+                "gateway": gateway.value,
+                "reference": reference,
+                "user": request.user.id,
+            },
         )
 
         try:

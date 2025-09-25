@@ -37,7 +37,9 @@ class Command(BaseCommand):
                 tx.save()
 
                 self.stdout.write(
-                    self.style.SUCCESS(f"[✓] Verified {tx.reference} → {tx.status.upper()}")
+                    self.style.SUCCESS(
+                        f"[✓] Verified {tx.reference} → {tx.status.upper()}"
+                    )
                 )
             except Exception as e:
                 self.stdout.write(

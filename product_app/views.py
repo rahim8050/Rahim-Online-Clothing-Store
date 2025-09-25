@@ -8,6 +8,7 @@ from .queries import shopable_products_q
 
 app_name = "product_app"
 
+
 def product_list(request, category_slug=None):
     categories = Category.objects.all()
     category = None
@@ -72,7 +73,7 @@ def product_detail(request, id, slug):
     return render(
         request,
         "products/product/detail.html",
-         {"product": product, "product_json": product_data}
+        {"product": product, "product_json": product_data},
     )
 
 

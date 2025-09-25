@@ -23,7 +23,9 @@ class _BaseOrgPermission(BasePermission):
             return True
         if not request.user or not request.user.is_authenticated:
             return False
-        if getattr(request.user, "is_staff", False) or getattr(request.user, "is_superuser", False):
+        if getattr(request.user, "is_staff", False) or getattr(
+            request.user, "is_superuser", False
+        ):
             return True
         org: VendorOrg | None = resolve_org_from_request(request, view)
         if org is None:

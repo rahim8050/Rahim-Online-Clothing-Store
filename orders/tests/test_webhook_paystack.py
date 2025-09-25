@@ -14,7 +14,9 @@ from product_app.models import Category, Product, ProductStock, Warehouse
 class PaystackWebhookHardenedTests(TestCase):
     def setUp(self):
         User = get_user_model()
-        self.user = User.objects.create_user(username="u", password="p", email="u@example.com")
+        self.user = User.objects.create_user(
+            username="u", password="p", email="u@example.com"
+        )
         cat = Category.objects.create(name="c", slug="c")
         prod = Product.objects.create(category=cat, name="p", slug="p", price=10)
         wh = Warehouse.objects.create(name="w", latitude=1.0, longitude=36.0)
@@ -30,7 +32,9 @@ class PaystackWebhookHardenedTests(TestCase):
             dest_lat=1.0,
             dest_lng=36.0,
         )
-        OrderItem.objects.create(order=self.order, product=prod, price=10, quantity=1, warehouse=wh)
+        OrderItem.objects.create(
+            order=self.order, product=prod, price=10, quantity=1, warehouse=wh
+        )
         self.tx = Transaction.objects.create(
             user=self.user,
             order=self.order,
@@ -49,7 +53,10 @@ class PaystackWebhookHardenedTests(TestCase):
         body = json.dumps(
             {
                 "event": "charge.success",
-                "data": {"reference": self.tx.reference, "metadata": {"order_id": self.order.id}},
+                "data": {
+                    "reference": self.tx.reference,
+                    "metadata": {"order_id": self.order.id},
+                },
             },
             separators=(",", ":"),
         ).encode()
@@ -66,7 +73,9 @@ class PaystackWebhookHardenedTests(TestCase):
         self.assertTrue(self.tx.callback_received)
         self.assertTrue(self.tx.verified)
         self.assertEqual(self.tx.status, "success")
-        self.assertTrue(PaymentEvent.objects.filter(reference=self.tx.reference).exists())
+        self.assertTrue(
+            PaymentEvent.objects.filter(reference=self.tx.reference).exists()
+        )
 
     def test_webhook_invalid_signature_returns_401_and_creates_nothing(self):
         body = json.dumps(
@@ -92,7 +101,10 @@ class PaystackWebhookHardenedTests(TestCase):
         body = json.dumps(
             {
                 "event": "charge.success",
-                "data": {"reference": self.tx.reference, "metadata": {"order_id": self.order.id}},
+                "data": {
+                    "reference": self.tx.reference,
+                    "metadata": {"order_id": self.order.id},
+                },
             },
             separators=(",", ":"),
         ).encode()
@@ -117,7 +129,10 @@ class PaystackWebhookHardenedTests(TestCase):
 
     def test_webhook_malformed_json_returns_400(self):
         # Intentionally malformed JSON (missing closing brace)
-        bad = b'{"event":"charge.success","data":{"reference":"%s"}' % self.tx.reference.encode()
+        bad = (
+            b'{"event":"charge.success","data":{"reference":"%s"}'
+            % self.tx.reference.encode()
+        )
         sig = self._sign(bad)
         resp = self.client.post(
             reverse("orders:paystack_webhook"),

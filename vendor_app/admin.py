@@ -5,7 +5,15 @@ from .models import VendorKPI, VendorMember, VendorOrg, VendorOrgAuditLog, Vendo
 
 @admin.register(VendorOrg)
 class VendorOrgAdmin(admin.ModelAdmin):
-    list_display = ("id", "name", "slug", "owner", "is_active", "tax_status", "created_at")
+    list_display = (
+        "id",
+        "name",
+        "slug",
+        "owner",
+        "is_active",
+        "tax_status",
+        "created_at",
+    )
     list_filter = ("is_active", "tax_status")
     search_fields = ("name", "slug", "owner__email", "owner__username", "kra_pin")
     prepopulated_fields = {"slug": ("name",)}

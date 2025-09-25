@@ -55,7 +55,10 @@ def reverse_geocode(
             "body": _safe_json(resp),
         }
     except requests.RequestException as e:
-        return {"error": f"HTTP error: {e.__class__.__name__}: {e}", "status_code": None}
+        return {
+            "error": f"HTTP error: {e.__class__.__name__}: {e}",
+            "status_code": None,
+        }
 
 
 def _safe_json(resp: requests.Response) -> Any:

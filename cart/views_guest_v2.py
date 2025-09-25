@@ -12,7 +12,9 @@ from .models import Cart, CartItem
 from .serializers_v2 import CartItemWriteSerializer, CartSerializer
 
 
-class GuestCartViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet):
+class GuestCartViewSet(
+    mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet
+):
     """Guest cart endpoints using a signed cookie.
 
     - POST /guest/carts/my_active/

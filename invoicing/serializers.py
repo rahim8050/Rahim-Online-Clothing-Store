@@ -8,7 +8,16 @@ from .models import Invoice, InvoiceLine
 class InvoiceLineSerializer(serializers.ModelSerializer):
     class Meta:
         model = InvoiceLine
-        fields = ["id", "sku", "name", "qty", "unit_price", "tax_rate", "line_total", "tax_total"]
+        fields = [
+            "id",
+            "sku",
+            "name",
+            "qty",
+            "unit_price",
+            "tax_rate",
+            "line_total",
+            "tax_total",
+        ]
         read_only_fields = ["id", "line_total", "tax_total"]
 
 

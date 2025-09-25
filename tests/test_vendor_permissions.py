@@ -20,7 +20,9 @@ def user_factory(db):
         username = kwargs.pop("username", f"u{counter['i']}")
         email = kwargs.pop("email", f"u{counter['i']}@example.com")
         password = kwargs.pop("password", "pass")
-        return User.objects.create_user(username=username, email=email, password=password, **kwargs)
+        return User.objects.create_user(
+            username=username, email=email, password=password, **kwargs
+        )
 
     return make
 
@@ -108,7 +110,9 @@ def test_csv_export_import_scope_gating(user_factory, as_login_client):
     VendorStaff.objects.create(
         owner=owner, staff=staff_ok, is_active=True, scopes=["catalog"]
     )  # has catalog scope
-    VendorStaff.objects.create(owner=owner, staff=staff_no, is_active=True, scopes=[])  # no scope
+    VendorStaff.objects.create(
+        owner=owner, staff=staff_no, is_active=True, scopes=[]
+    )  # no scope
 
     # Export: owner ok
     c = as_login_client(owner)

@@ -9,8 +9,6 @@ from django.db.models import Sum
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
-import logging
-logger = logging.getLogger(__name__)
 from orders.forms import OrderForm
 from product_app.models import Product, ProductStock
 from users.permissions import NotBuyingOwnListing
@@ -18,6 +16,7 @@ from users.permissions import NotBuyingOwnListing
 from .models import Cart, CartItem
 
 logger = logging.getLogger(__name__)
+
 
 # cart/views.py
 def wants_json(request):
@@ -65,14 +64,16 @@ def cart_add(request, product_id):
             try:
                 qty = int(json.loads(request.body).get("quantity", 1))
             except (ValueError, TypeError, JSONDecodeError) as e:
-                 logger.debug("Invalid quantity payload: %s", e, exc_info=True)
+                logger.debug("Invalid quantity payload: %s", e, exc_info=True)
         else:
             try:
                 qty = int(request.POST.get("quantity", 1))
             except Exception:
                 qty = 1
         if qty < 1:
-            return _json_err("Quantity must be at least 1.", code="INVALID_QUANTITY", status=400)
+            return _json_err(
+                "Quantity must be at least 1.", code="INVALID_QUANTITY", status=400
+            )
 
         # not buying own listing
         perm = NotBuyingOwnListing()
@@ -85,14 +86,20 @@ def cart_add(request, product_id):
 
         # optional stock + availability checks
         if hasattr(product, "available") and not product.available:
-            return _json_err("Product is not available.", code="UNAVAILABLE", status=409)
+            return _json_err(
+                "Product is not available.", code="UNAVAILABLE", status=409
+            )
 
         available = (
-            ProductStock.objects.filter(product=product).aggregate(total=Sum("quantity"))["total"]
+            ProductStock.objects.filter(product=product).aggregate(
+                total=Sum("quantity")
+            )["total"]
             or 0
         )
         if qty > available:
-            return _json_err(f"Only {available} left in stock.", code="OUT_OF_STOCK", status=409)
+            return _json_err(
+                f"Only {available} left in stock.", code="OUT_OF_STOCK", status=409
+            )
 
         # session cart
         cart_id = request.session.get("cart_id")
@@ -111,14 +118,20 @@ def cart_add(request, product_id):
         return _json_ok(
             f"Added {qty} Ãƒâ€” {product.name} to cart.",
             count=request.session["cart_count"],
-            extra={"item_id": item.id, "product_id": product.id, "quantity": item.quantity},
+            extra={
+                "item_id": item.id,
+                "product_id": product.id,
+                "quantity": item.quantity,
+            },
             status=201,
         )
 
     except Exception as e:
         print("Error in cart_add:", e)
         traceback.print_exc()
-        return _json_err("Something went wrong. Please try again.", code="SERVER_ERROR", status=500)
+        return _json_err(
+            "Something went wrong. Please try again.", code="SERVER_ERROR", status=500
+        )
 
 
 def cart_count(request):
@@ -129,7 +142,9 @@ def cart_count(request):
 
     try:
         cart = Cart.objects.get(id=cart_id)
-        total_items = sum(item.quantity for item in cart.items.all())  # Count quantity across items
+        total_items = sum(
+            item.quantity for item in cart.items.all()
+        )  # Count quantity across items
         return JsonResponse({"count": total_items})
     except Cart.DoesNotExist:
         return JsonResponse({"count": 0})
@@ -176,7 +191,9 @@ def cart_detail(request):
         if "cart_id" in request.session:
             del request.session["cart_id"]
         return render(
-            request, "cart/cart_detail.html", {"cart": None, "cart_items": [], "total_price": 0}
+            request,
+            "cart/cart_detail.html",
+            {"cart": None, "cart_items": [], "total_price": 0},
         )
 
 
@@ -196,7 +213,9 @@ def get_cart_data(request):
                         "price": str(
                             item.product.price
                         ),  # Convert Decimal to string for JSON serialization
-                        "image_url": item.product.image.url if item.product.image else "",
+                        "image_url": item.product.image.url
+                        if item.product.image
+                        else "",
                         "detail_url": item.product.get_absolute_url(),
                     },
                     "quantity": item.quantity,
@@ -292,7 +311,9 @@ def cart_decrement(request, product_id):
 
             # Update session cart_count
             if "cart_count" in request.session:
-                request.session["cart_count"] = max(0, request.session["cart_count"] - 1)
+                request.session["cart_count"] = max(
+                    0, request.session["cart_count"] - 1
+                )
 
             messages.info(request, f"Removed one {item.product.name}")
         else:
@@ -301,7 +322,9 @@ def cart_decrement(request, product_id):
 
             # Update session cart_count
             if "cart_count" in request.session:
-                request.session["cart_count"] = max(0, request.session["cart_count"] - 1)
+                request.session["cart_count"] = max(
+                    0, request.session["cart_count"] - 1
+                )
 
             messages.info(request, f"Removed {item.product.name} from cart")
 

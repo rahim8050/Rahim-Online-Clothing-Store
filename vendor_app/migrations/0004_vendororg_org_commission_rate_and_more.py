@@ -4,7 +4,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("vendor_app", "0003_vendorprofile_org_not_null"),
     ]
@@ -19,7 +18,9 @@ class Migration(migrations.Migration):
             model_name="vendororg",
             name="org_payout_channel",
             field=models.CharField(
-                choices=[("mpesa", "M-PESA"), ("bank", "Bank")], default="mpesa", max_length=16
+                choices=[("mpesa", "M-PESA"), ("bank", "Bank")],
+                default="mpesa",
+                max_length=16,
             ),
         ),
     ]

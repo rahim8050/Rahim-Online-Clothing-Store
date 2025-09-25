@@ -4,7 +4,6 @@ from django.db import migrations
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("orders", "0008_fix_lat_lng_before_constraint"),
         ("orders", "0009_deliveryevent"),

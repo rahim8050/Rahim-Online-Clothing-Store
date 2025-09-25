@@ -15,18 +15,24 @@ def api():
 
 @pytest.fixture()
 def user(db):
-    return User.objects.create_user(username="u1", email="u1@example.com", password="pass")
+    return User.objects.create_user(
+        username="u1", email="u1@example.com", password="pass"
+    )
 
 
 @pytest.fixture()
 def other_user(db):
-    return User.objects.create_user(username="u2", email="u2@example.com", password="pass")
+    return User.objects.create_user(
+        username="u2", email="u2@example.com", password="pass"
+    )
 
 
 @pytest.fixture()
 def product(db):
     cat = Category.objects.create(name="Shirts", slug="shirts")
-    return Product.objects.create(category=cat, name="Blue Shirt", slug="blue-shirt", price="10.00")
+    return Product.objects.create(
+        category=cat, name="Blue Shirt", slug="blue-shirt", price="10.00"
+    )
 
 
 def auth(client, user):
@@ -58,7 +64,9 @@ def test_list_returns_only_users_carts(api, user, other_user):
     ids = [c["id"] for c in r.data]
     assert c1.id in ids
     # ensure other's cart is hidden
-    assert all(c["id"] != Cart.objects.filter(user=other_user).first().id for c in r.data)
+    assert all(
+        c["id"] != Cart.objects.filter(user=other_user).first().id for c in r.data
+    )
 
 
 @pytest.mark.django_db
@@ -74,11 +82,15 @@ def test_add_item_creates_or_increments_uniquely(api, user, product):
     auth(api, user)
     cart_id = api.get(v2("/carts/my/active/")).data["id"]
     r1 = api.post(
-        v2(f"/carts/{cart_id}/add_item/"), {"product": product.id, "quantity": 1}, format="json"
+        v2(f"/carts/{cart_id}/add_item/"),
+        {"product": product.id, "quantity": 1},
+        format="json",
     )
     assert r1.status_code == 200
     r2 = api.post(
-        v2(f"/carts/{cart_id}/add_item/"), {"product": product.id, "quantity": 2}, format="json"
+        v2(f"/carts/{cart_id}/add_item/"),
+        {"product": product.id, "quantity": 2},
+        format="json",
     )
     assert r2.status_code == 200
     item = CartItem.objects.get(cart_id=cart_id, product=product)
@@ -91,7 +103,9 @@ def test_update_item_sets_exact_quantity(api, user, product):
     cart = Cart.objects.create(user=user)
     item = CartItem.objects.create(cart=cart, product=product, quantity=1)
     r = api.post(
-        v2(f"/carts/{cart.id}/update_item/"), {"item_id": item.id, "quantity": 5}, format="json"
+        v2(f"/carts/{cart.id}/update_item/"),
+        {"item_id": item.id, "quantity": 5},
+        format="json",
     )
     assert r.status_code == 200
     item.refresh_from_db()
@@ -105,11 +119,17 @@ def test_remove_item_deletes_only_own_item(api, user, other_user, product):
     other_cart = Cart.objects.create(user=other_user)
     my_item = CartItem.objects.create(cart=my_cart, product=product, quantity=1)
     other_item = CartItem.objects.create(cart=other_cart, product=product, quantity=1)
-    r = api.post(v2(f"/carts/{my_cart.id}/remove_item/"), {"item_id": other_item.id}, format="json")
+    r = api.post(
+        v2(f"/carts/{my_cart.id}/remove_item/"),
+        {"item_id": other_item.id},
+        format="json",
+    )
     assert r.status_code == 200
     assert r.data["removed"] is False
     assert CartItem.objects.filter(pk=other_item.id).exists()
-    r2 = api.post(v2(f"/carts/{my_cart.id}/remove_item/"), {"item_id": my_item.id}, format="json")
+    r2 = api.post(
+        v2(f"/carts/{my_cart.id}/remove_item/"), {"item_id": my_item.id}, format="json"
+    )
     assert r2.status_code == 200
     assert r2.data["removed"] is True
     assert not CartItem.objects.filter(pk=my_item.id).exists()

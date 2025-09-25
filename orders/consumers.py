@@ -2,8 +2,6 @@
 import logging
 import math
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
-import logging
-logger = logging.getLogger(__name__)
 
 from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
@@ -46,7 +44,9 @@ class DeliveryTrackerConsumer(AsyncJsonWebsocketConsumer):
     async def disconnect(self, close_code):
         try:
             if hasattr(self, "group_name"):
-                await self.channel_layer.group_discard(self.group_name, self.channel_name)
+                await self.channel_layer.group_discard(
+                    self.group_name, self.channel_name
+                )
         except Exception as e:
             logger.debug("channels discard failed: %s", e, exc_info=True)
 
@@ -124,7 +124,9 @@ class DeliveryTrackerConsumer(AsyncJsonWebsocketConsumer):
         dLng = math.radians(lng2 - lng1)
         s1 = (
             math.sin(dLat / 2) ** 2
-            + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dLng / 2) ** 2
+            + math.cos(math.radians(lat1))
+            * math.cos(math.radians(lat2))
+            * math.sin(dLng / 2) ** 2
         )
         return 2 * R * math.asin(math.sqrt(s1))
 
@@ -135,18 +137,24 @@ class DeliveryTrackerConsumer(AsyncJsonWebsocketConsumer):
             d = Delivery.objects.select_related("order").get(pk=int(delivery_id))
         except Delivery.DoesNotExist:
             return False
-        return (d.driver_id == user_id) or (getattr(d.order, "user_id", None) == user_id)
+        return (d.driver_id == user_id) or (
+            getattr(d.order, "user_id", None) == user_id
+        )
 
     @database_sync_to_async
     def _is_owner_driver(self, delivery_id: int, user_id: int) -> bool:
         try:
             Delivery = apps.get_model("orders", "Delivery")
-            return Delivery.objects.filter(pk=int(delivery_id), driver_id=user_id).exists()
+            return Delivery.objects.filter(
+                pk=int(delivery_id), driver_id=user_id
+            ).exists()
         except Exception:
             return False
 
     @database_sync_to_async
-    def _save_position(self, delivery_id: int, user_id: int, lat: Decimal, lng: Decimal):
+    def _save_position(
+        self, delivery_id: int, user_id: int, lat: Decimal, lng: Decimal
+    ):
         """
         Persist position for the assigned driver.
         Returns (changed: bool, new_status: str|None).
@@ -210,7 +218,11 @@ class DeliveryTrackerConsumer(AsyncJsonWebsocketConsumer):
         except Delivery.DoesNotExist:
             return False
 
-        allowed = {Delivery.Status.PICKED_UP, Delivery.Status.EN_ROUTE, Delivery.Status.DELIVERED}
+        allowed = {
+            Delivery.Status.PICKED_UP,
+            Delivery.Status.EN_ROUTE,
+            Delivery.Status.DELIVERED,
+        }
         if status_new not in allowed:
             return False
 
@@ -242,7 +254,8 @@ class DeliveryTrackerConsumer(AsyncJsonWebsocketConsumer):
             return
 
         if not (
-            Decimal("-90") <= lat_d <= Decimal("90") and Decimal("-180") <= lng_d <= Decimal("180")
+            Decimal("-90") <= lat_d <= Decimal("90")
+            and Decimal("-180") <= lng_d <= Decimal("180")
         ):
             await self.send_json({"type": "error", "error": "out_of_range"})
             return

@@ -13,7 +13,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     initial = True
 
     dependencies = [
@@ -28,7 +27,10 @@ class Migration(migrations.Migration):
                 (
                     "id",
                     models.BigAutoField(
-                        auto_created=True, primary_key=True, serialize=False, verbose_name="ID"
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
                     ),
                 ),
                 ("full_name", models.CharField(max_length=100)),
@@ -38,7 +40,10 @@ class Migration(migrations.Migration):
                 ("longitude", models.FloatField(blank=True, null=True)),
                 ("location_address", models.TextField(blank=True, null=True)),
                 ("coords_locked", models.BooleanField(default=False)),
-                ("coords_source", models.CharField(blank=True, default="", max_length=20)),
+                (
+                    "coords_source",
+                    models.CharField(blank=True, default="", max_length=20),
+                ),
                 ("coords_updated_at", models.DateTimeField(blank=True, null=True)),
                 ("created_at", models.DateTimeField(auto_now_add=True)),
                 ("updated_at", models.DateTimeField(auto_now=True)),
@@ -47,17 +52,27 @@ class Migration(migrations.Migration):
                     "mpesa_checkout_request_id",
                     models.CharField(blank=True, max_length=100, null=True),
                 ),
-                ("mpesa_phone_number", models.CharField(blank=True, max_length=15, null=True)),
-                ("mpesa_transaction_code", models.CharField(blank=True, max_length=50, null=True)),
+                (
+                    "mpesa_phone_number",
+                    models.CharField(blank=True, max_length=15, null=True),
+                ),
+                (
+                    "mpesa_transaction_code",
+                    models.CharField(blank=True, max_length=50, null=True),
+                ),
                 ("payment_method", models.CharField(default="MPESA", max_length=20)),
                 ("stock_updated", models.BooleanField(default=False)),
                 ("payment_status", models.CharField(default="pending", max_length=20)),
-                ("payment_intent_id", models.CharField(blank=True, max_length=100, null=True)),
+                (
+                    "payment_intent_id",
+                    models.CharField(blank=True, max_length=100, null=True),
+                ),
                 ("stripe_receipt_url", models.URLField(blank=True, null=True)),
                 (
                     "user",
                     models.ForeignKey(
-                        on_delete=django.db.models.deletion.CASCADE, to=settings.AUTH_USER_MODEL
+                        on_delete=django.db.models.deletion.CASCADE,
+                        to=settings.AUTH_USER_MODEL,
                     ),
                 ),
             ],
@@ -68,7 +83,10 @@ class Migration(migrations.Migration):
                 (
                     "id",
                     models.BigAutoField(
-                        auto_created=True, primary_key=True, serialize=False, verbose_name="ID"
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
                     ),
                 ),
                 ("price", models.DecimalField(decimal_places=2, max_digits=10)),
@@ -119,7 +137,10 @@ class Migration(migrations.Migration):
                 (
                     "id",
                     models.BigAutoField(
-                        auto_created=True, primary_key=True, serialize=False, verbose_name="ID"
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
                     ),
                 ),
                 ("email", models.EmailField(blank=True, max_length=254, null=True)),
@@ -127,7 +148,11 @@ class Migration(migrations.Migration):
                 (
                     "method",
                     models.CharField(
-                        choices=[("card", "Card"), ("mpesa", "M-Pesa"), ("paypal", "PayPal")],
+                        choices=[
+                            ("card", "Card"),
+                            ("mpesa", "M-Pesa"),
+                            ("paypal", "PayPal"),
+                        ],
                         max_length=10,
                     ),
                 ),
@@ -169,7 +194,8 @@ class Migration(migrations.Migration):
                 (
                     "user",
                     models.ForeignKey(
-                        on_delete=django.db.models.deletion.CASCADE, to=settings.AUTH_USER_MODEL
+                        on_delete=django.db.models.deletion.CASCADE,
+                        to=settings.AUTH_USER_MODEL,
                     ),
                 ),
             ],
@@ -180,7 +206,10 @@ class Migration(migrations.Migration):
                 (
                     "id",
                     models.BigAutoField(
-                        auto_created=True, primary_key=True, serialize=False, verbose_name="ID"
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
                     ),
                 ),
                 ("status", models.CharField(max_length=10)),
@@ -189,7 +218,8 @@ class Migration(migrations.Migration):
                 (
                     "transaction",
                     models.ForeignKey(
-                        on_delete=django.db.models.deletion.CASCADE, to="orders.transaction"
+                        on_delete=django.db.models.deletion.CASCADE,
+                        to="orders.transaction",
                     ),
                 ),
             ],
@@ -236,7 +266,9 @@ class Migration(migrations.Migration):
             model_name="orderitem",
             constraint=models.CheckConstraint(
                 condition=models.Q(
-                    ("delivery_status", "created"), ("warehouse__isnull", False), _connector="OR"
+                    ("delivery_status", "created"),
+                    ("warehouse__isnull", False),
+                    _connector="OR",
                 ),
                 name="item_requires_warehouse_when_moving",
             ),

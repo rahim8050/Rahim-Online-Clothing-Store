@@ -12,7 +12,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     initial = True
 
     dependencies = []
@@ -24,7 +23,10 @@ class Migration(migrations.Migration):
                 (
                     "id",
                     models.BigAutoField(
-                        auto_created=True, primary_key=True, serialize=False, verbose_name="ID"
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
                     ),
                 ),
                 ("name", models.CharField(max_length=100)),
@@ -40,7 +42,10 @@ class Migration(migrations.Migration):
                 (
                     "id",
                     models.BigAutoField(
-                        auto_created=True, primary_key=True, serialize=False, verbose_name="ID"
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
                     ),
                 ),
                 ("name", models.CharField(max_length=100)),
@@ -50,7 +55,10 @@ class Migration(migrations.Migration):
                 ("available", models.BooleanField(default=True)),
                 ("created", models.DateTimeField(auto_now_add=True)),
                 ("updated", models.DateTimeField(auto_now=True)),
-                ("image", models.ImageField(blank=True, null=True, upload_to="products")),
+                (
+                    "image",
+                    models.ImageField(blank=True, null=True, upload_to="products"),
+                ),
                 (
                     "category",
                     models.ForeignKey(
@@ -67,7 +75,10 @@ class Migration(migrations.Migration):
                 (
                     "id",
                     models.BigAutoField(
-                        auto_created=True, primary_key=True, serialize=False, verbose_name="ID"
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
                     ),
                 ),
                 ("name", models.CharField(max_length=100)),
@@ -78,11 +89,15 @@ class Migration(migrations.Migration):
             options={
                 "constraints": [
                     models.CheckConstraint(
-                        condition=models.Q(("latitude__gte", -90), ("latitude__lte", 90)),
+                        condition=models.Q(
+                            ("latitude__gte", -90), ("latitude__lte", 90)
+                        ),
                         name="warehouse_lat_range",
                     ),
                     models.CheckConstraint(
-                        condition=models.Q(("longitude__gte", -180), ("longitude__lte", 180)),
+                        condition=models.Q(
+                            ("longitude__gte", -180), ("longitude__lte", 180)
+                        ),
                         name="warehouse_lng_range",
                     ),
                     models.CheckConstraint(
@@ -103,7 +118,10 @@ class Migration(migrations.Migration):
                 (
                     "id",
                     models.BigAutoField(
-                        auto_created=True, primary_key=True, serialize=False, verbose_name="ID"
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
                     ),
                 ),
                 ("quantity", models.PositiveIntegerField(default=0)),

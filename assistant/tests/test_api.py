@@ -8,14 +8,18 @@ from orders.models import Delivery, Order, Transaction
 def test_requires_auth_returns_401_for_anon(client):
     url = "/api/assistant/ask/"
     r = client.post(
-        url, data={"session_key": "s1", "message": "list orders"}, content_type="application/json"
+        url,
+        data={"session_key": "s1", "message": "list orders"},
+        content_type="application/json",
     )
     assert r.status_code in (401, 403)
 
 
 def _login(client):
     User = get_user_model()
-    u = User.objects.create_user(username="alice", email="alice@example.com", password="pass")
+    u = User.objects.create_user(
+        username="alice", email="alice@example.com", password="pass"
+    )
     client.force_login(u)
     return u
 
@@ -41,7 +45,9 @@ def test_list_orders_matches_natural_phrase(client):
     url = "/api/assistant/ask/"
     for msg in ("tell me about my orders", "show my orders", "list orders"):
         r = client.post(
-            url, data={"session_key": "s1", "message": msg}, content_type="application/json"
+            url,
+            data={"session_key": "s1", "message": msg},
+            content_type="application/json",
         )
         assert r.status_code == 200
         assert "Recent orders:" in r.json()["reply"]
@@ -122,7 +128,9 @@ def test_faq_shipping_and_returns(client):
     url = "/api/assistant/ask/"
     for msg in ("shipping", "returns"):
         r = client.post(
-            url, data={"session_key": "s1", "message": msg}, content_type="application/json"
+            url,
+            data={"session_key": "s1", "message": msg},
+            content_type="application/json",
         )
         assert r.status_code == 200
         assert len(r.json()["reply"]) > 8
@@ -168,6 +176,8 @@ def test_rate_limit_user(client):
         )
     # Eventually should start failing with 429; timing-sensitive in CI
     r = client.post(
-        url, data={"session_key": "s1", "message": "list orders"}, content_type="application/json"
+        url,
+        data={"session_key": "s1", "message": "list orders"},
+        content_type="application/json",
     )
     assert r.status_code in (200, 429)

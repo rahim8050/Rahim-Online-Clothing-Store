@@ -14,7 +14,9 @@ class VendorApplyTests(TestCase):
         self.url = reverse("apis:vendor-apply")
 
     def _doc(self):
-        return SimpleUploadedFile("kyc.pdf", b"%PDF-1.4\n...", content_type="application/pdf")
+        return SimpleUploadedFile(
+            "kyc.pdf", b"%PDF-1.4\n...", content_type="application/pdf"
+        )
 
     def test_first_apply_requires_kyc(self):
         self.client.login(username="u1", password="x")

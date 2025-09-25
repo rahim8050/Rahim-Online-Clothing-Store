@@ -11,6 +11,7 @@ from django.db.models import Model
 
 logger = logging.getLogger(__name__)
 
+
 # ---------- Geoapify ----------
 def reverse_geocode(lat: float, lon: float) -> Optional[Dict[str, Any]]:
     """
@@ -33,6 +34,7 @@ def reverse_geocode(lat: float, lon: float) -> Optional[Dict[str, Any]]:
         logger.warning("Geoapify reverse geocode failed: %s", e, exc_info=True)
         return None
 
+
 # Optionally: a tiny helper to extract a nice label if present
 def extract_formatted_address(payload: Dict[str, Any]) -> Optional[str]:
     try:
@@ -45,8 +47,10 @@ def extract_formatted_address(payload: Dict[str, Any]) -> Optional[str]:
     except Exception:
         return None
 
+
 # ---------- Vendor field utility ----------
 VENDOR_FIELDS = ["vendor", "owner", "user", "created_by"]
+
 
 def get_vendor_field(model: type[Model]) -> str:
     for field in VENDOR_FIELDS:
@@ -55,5 +59,7 @@ def get_vendor_field(model: type[Model]) -> str:
             return field
         except FieldDoesNotExist:
             continue
-    logger.warning("No vendor FK field found on %s; defaulting to 'vendor'", model.__name__)
+    logger.warning(
+        "No vendor FK field found on %s; defaulting to 'vendor'", model.__name__
+    )
     return "vendor"

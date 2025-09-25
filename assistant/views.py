@@ -13,8 +13,12 @@ from . import tools
 from .models import ChatMessage, ChatSession
 
 PATTERNS = {
-    "list_orders": re.compile(r"\b(list|show|see|check|tell me about|view|my)\s+orders?\b", re.I),
-    "order_status_id": re.compile(r"\b(order\s+status|status\s+of\s+order)\s+#?\s*(\d+)\b", re.I),
+    "list_orders": re.compile(
+        r"\b(list|show|see|check|tell me about|view|my)\s+orders?\b", re.I
+    ),
+    "order_status_id": re.compile(
+        r"\b(order\s+status|status\s+of\s+order)\s+#?\s*(\d+)\b", re.I
+    ),
     "order_status_no": re.compile(
         r"\b(order\s+status|status\s+of\s+order)\s+(rah[-\s]?\d+)\b", re.I
     ),
@@ -57,7 +61,9 @@ class AskView(APIView):
     def post(self, request):
         data = request.data or {}
         # --- session key: optional; fall back to Django session id ---
-        sess_key = (data.get("session_key") or request.session.session_key or "").strip()[:64]
+        sess_key = (
+            data.get("session_key") or request.session.session_key or ""
+        ).strip()[:64]
         if not sess_key:
             # ensure we have a Django session id
             request.session.save()
@@ -77,10 +83,14 @@ class AskView(APIView):
             )
 
         # create / load session scoped to user
-        sess, _ = ChatSession.objects.get_or_create(user=request.user, session_key=sess_key)
+        sess, _ = ChatSession.objects.get_or_create(
+            user=request.user, session_key=sess_key
+        )
 
         # store user message
-        ChatMessage.objects.create(session=sess, role=ChatMessage.Role.USER, content=message)
+        ChatMessage.objects.create(
+            session=sess, role=ChatMessage.Role.USER, content=message
+        )
 
         # route by regex
         msg_norm = _normalize_msg(message)
@@ -90,7 +100,9 @@ class AskView(APIView):
         if PATTERNS["list_orders"].search(msg_norm):
             reply = tools.order_list(request.user, session=sess)
             try:
-                table = tools.list_orders_table(request.user)  # optional structured table
+                table = tools.list_orders_table(
+                    request.user
+                )  # optional structured table
             except Exception:
                 table = None
         else:
@@ -105,7 +117,9 @@ class AskView(APIView):
             elif m_pay:
                 reply = tools.payment_status(request.user, m_pay.group(2), session=sess)
             elif m_del:
-                reply = tools.delivery_status(request.user, m_del.group(2), session=sess)
+                reply = tools.delivery_status(
+                    request.user, m_del.group(2), session=sess
+                )
             elif PATTERNS["shipping"].search(msg_norm):
                 reply = tools.faq("shipping", session=sess)
             elif PATTERNS["returns"].search(msg_norm):

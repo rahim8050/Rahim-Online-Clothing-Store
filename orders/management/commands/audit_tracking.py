@@ -8,9 +8,15 @@ class Command(BaseCommand):
     help = "Audit tracking data and optionally fix missing warehouses"
 
     def add_arguments(self, parser):
-        parser.add_argument("--fix", action="store_true", help="assign missing warehouses")
-        parser.add_argument("--default-lat", type=float, help="latitude for orders missing coords")
-        parser.add_argument("--default-lng", type=float, help="longitude for orders missing coords")
+        parser.add_argument(
+            "--fix", action="store_true", help="assign missing warehouses"
+        )
+        parser.add_argument(
+            "--default-lat", type=float, help="latitude for orders missing coords"
+        )
+        parser.add_argument(
+            "--default-lng", type=float, help="longitude for orders missing coords"
+        )
 
     def handle(self, *args, **opts):
         fix = opts.get("fix")
@@ -24,7 +30,11 @@ class Command(BaseCommand):
         for item in qs:
             lat = item.order.latitude
             lng = item.order.longitude
-            if (lat is None or lng is None) and default_lat is not None and default_lng is not None:
+            if (
+                (lat is None or lng is None)
+                and default_lat is not None
+                and default_lng is not None
+            ):
                 lat = default_lat
                 lng = default_lng
                 if fix:

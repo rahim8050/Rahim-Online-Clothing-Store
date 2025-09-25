@@ -26,5 +26,7 @@ def ensure_order_coords(order: Order, *, force: bool = False) -> bool:
     order.longitude = lng
     order.coords_source = "geocode"
     order.coords_updated_at = timezone.now()
-    order.save(update_fields=["latitude", "longitude", "coords_source", "coords_updated_at"])
+    order.save(
+        update_fields=["latitude", "longitude", "coords_source", "coords_updated_at"]
+    )
     return True

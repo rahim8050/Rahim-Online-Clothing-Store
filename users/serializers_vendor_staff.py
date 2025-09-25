@@ -75,7 +75,9 @@ class VendorStaffRemoveSerializer(serializers.Serializer):
     def save(self, **kwargs):
         request = self.context["request"]
         try:
-            owner_id = resolve_vendor_owner_for(request.user, self.validated_data.get("owner_id"))
+            owner_id = resolve_vendor_owner_for(
+                request.user, self.validated_data.get("owner_id")
+            )
         except ValueError as e:
             raise serializers.ValidationError({"owner_id": str(e)})
 
@@ -98,7 +100,9 @@ class VendorStaffToggleSerializer(serializers.Serializer):
     def save(self, **kwargs):
         request = self.context["request"]
         try:
-            owner_id = resolve_vendor_owner_for(request.user, self.validated_data.get("owner_id"))
+            owner_id = resolve_vendor_owner_for(
+                request.user, self.validated_data.get("owner_id")
+            )
         except ValueError as e:
             raise serializers.ValidationError({"owner_id": str(e)})
 
@@ -112,7 +116,9 @@ class VendorStaffToggleSerializer(serializers.Serializer):
         if self.validated_data["is_active"]:
             membership.is_active = True
             membership.save(update_fields=["is_active"])
-            Group.objects.get_or_create(name=VENDOR_STAFF)[0].user_set.add(membership.staff)
+            Group.objects.get_or_create(name=VENDOR_STAFF)[0].user_set.add(
+                membership.staff
+            )
         else:
             deactivate_vendor_staff(membership)
 

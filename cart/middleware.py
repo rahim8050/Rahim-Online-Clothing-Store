@@ -3,6 +3,7 @@ from django.utils.deprecation import MiddlewareMixin
 
 from .guest import clear_cookie, get_signed_cookie
 import logging
+
 logger = logging.getLogger(__name__)
 
 

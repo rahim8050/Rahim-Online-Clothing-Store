@@ -6,7 +6,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     initial = True
 
     dependencies = [
@@ -68,7 +67,9 @@ class Migration(migrations.Migration):
                 ("reference", models.CharField(max_length=64, unique=True)),
                 (
                     "gateway_reference",
-                    models.CharField(blank=True, max_length=128, null=True, unique=True),
+                    models.CharField(
+                        blank=True, max_length=128, null=True, unique=True
+                    ),
                 ),
                 ("callback_received", models.BooleanField(default=False)),
                 ("signature_valid", models.BooleanField(default=False)),
@@ -151,7 +152,9 @@ class Migration(migrations.Migration):
         ),
         migrations.AddIndex(
             model_name="transaction",
-            index=models.Index(fields=["created_at"], name="payments_tr_created_02ae92_idx"),
+            index=models.Index(
+                fields=["created_at"], name="payments_tr_created_02ae92_idx"
+            ),
         ),
         migrations.AddConstraint(
             model_name="transaction",
@@ -163,6 +166,8 @@ class Migration(migrations.Migration):
         ),
         migrations.AddIndex(
             model_name="auditlog",
-            index=models.Index(fields=["event", "created_at"], name="payments_au_event_9088de_idx"),
+            index=models.Index(
+                fields=["event", "created_at"], name="payments_au_event_9088de_idx"
+            ),
         ),
     ]

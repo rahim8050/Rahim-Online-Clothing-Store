@@ -44,9 +44,9 @@ class Command(BaseCommand):
 
         if not reference:
             try:
-                tx = Transaction.objects.filter(order_id=order_id, gateway="paystack").latest(
-                    "created_at"
-                )
+                tx = Transaction.objects.filter(
+                    order_id=order_id, gateway="paystack"
+                ).latest("created_at")
             except Transaction.DoesNotExist:
                 raise CommandError("No Paystack transaction for given order")
             reference = tx.reference
@@ -68,7 +68,11 @@ class Command(BaseCommand):
             event = f"charge.{status}"
             payload = {
                 "event": event,
-                "data": {"id": int(time.time()), "reference": reference, "status": status},
+                "data": {
+                    "id": int(time.time()),
+                    "reference": reference,
+                    "status": status,
+                },
             }
             # Use compact JSON to ensure signature matches body bytes exactly
             body = json.dumps(payload, separators=(",", ":"))
@@ -101,7 +105,9 @@ class Command(BaseCommand):
         self.stdout.write(
             f"Transaction status={tx.status}, callback_received={tx.callback_received}"
         )
-        self.stdout.write(f"Order paid={order.paid}, payment_status={order.payment_status}")
+        self.stdout.write(
+            f"Order paid={order.paid}, payment_status={order.payment_status}"
+        )
 
         # if options["send_drone"] and status == "success":
 

@@ -43,7 +43,9 @@ class ReconcileError(Exception):
 class ReconcileConflict(ReconcileError):
     """Raised when reconciliation cannot proceed due to current gateway state."""
 
-    def __init__(self, code: str, message: str, *, extra: dict[str, Any] | None = None) -> None:
+    def __init__(
+        self, code: str, message: str, *, extra: dict[str, Any] | None = None
+    ) -> None:
         super().__init__(code=code, message=message, status_code=409, extra=extra)
 
 
@@ -128,7 +130,10 @@ def reconcile_stripe(session_id: str) -> dict[str, Any]:
 # Internal helpers
 # ---------------------------------------------------------------------------
 
-def _finalize_success(txn: Transaction, verify: VerifyResult, key: str) -> dict[str, Any]:
+
+def _finalize_success(
+    txn: Transaction, verify: VerifyResult, key: str
+) -> dict[str, Any]:
     with transaction.atomic():
         record, _ = ReconcileIdempotency.objects.select_for_update().get_or_create(
             key=key,
@@ -141,7 +146,11 @@ def _finalize_success(txn: Transaction, verify: VerifyResult, key: str) -> dict[
             _metric("reconcile_cached", gateway=txn.gateway)
             logger.info(
                 "payments.reconcile.cached",
-                extra={"gateway": txn.gateway, "reference": txn.reference, "transaction_id": txn.pk},
+                extra={
+                    "gateway": txn.gateway,
+                    "reference": txn.reference,
+                    "transaction_id": txn.pk,
+                },
             )
             return cached_payload
 
@@ -160,10 +169,15 @@ def _finalize_success(txn: Transaction, verify: VerifyResult, key: str) -> dict[
                 txn=locked_txn, gateway_reference=verify.reference, request_id=key
             )
         except ValidationError as exc:
-            _metric("reconcile_failure", gateway=locked_txn.gateway, reason="stock_conflict")
+            _metric(
+                "reconcile_failure", gateway=locked_txn.gateway, reason="stock_conflict"
+            )
             logger.warning(
                 "payments.reconcile.stock_conflict",
-                extra={"gateway": locked_txn.gateway, "reference": locked_txn.reference},
+                extra={
+                    "gateway": locked_txn.gateway,
+                    "reference": locked_txn.reference,
+                },
             )
             raise ReconcileConflict("stock_conflict", str(exc)) from exc
 
@@ -183,7 +197,9 @@ def _finalize_success(txn: Transaction, verify: VerifyResult, key: str) -> dict[
         _store_result(record, summary)
 
         user_id = getattr(order, "user_id", None)
-        vendor_owner_id = getattr(getattr(locked_txn, "vendor_org", None), "owner_id", None)
+        vendor_owner_id = getattr(
+            getattr(locked_txn, "vendor_org", None), "owner_id", None
+        )
         transaction.on_commit(
             lambda: _emit_events(user_id, vendor_owner_id, summary, cached=False)
         )
@@ -219,7 +235,9 @@ def _register_failure(txn: Transaction, verify: VerifyResult, key: str) -> None:
         order = locked_txn.order
         order.refresh_from_db(fields=["paid", "payment_status", "stock_updated"])
         user_id = getattr(order, "user_id", None)
-        vendor_owner_id = getattr(getattr(locked_txn, "vendor_org", None), "owner_id", None)
+        vendor_owner_id = getattr(
+            getattr(locked_txn, "vendor_org", None), "owner_id", None
+        )
         summary = {
             "ok": False,
             "status": locked_txn.status,
@@ -256,7 +274,11 @@ def _register_failure(txn: Transaction, verify: VerifyResult, key: str) -> None:
 
     logger.info(
         "payments.reconcile.gateway_failed",
-        extra={"gateway": txn.gateway, "reference": txn.reference, "transaction_id": txn.pk},
+        extra={
+            "gateway": txn.gateway,
+            "reference": txn.reference,
+            "transaction_id": txn.pk,
+        },
     )
 
 
@@ -313,7 +335,9 @@ def _fetch_paystack_status(txn: Transaction, reference: str) -> VerifyResult:
 
     data = payload.get("data") or {}
     status_str = str(data.get("status") or "").lower()
-    gateway_ref = data.get("reference") or data.get("id") or txn.gateway_reference or reference
+    gateway_ref = (
+        data.get("reference") or data.get("id") or txn.gateway_reference or reference
+    )
 
     if response.status_code >= 500:
         raise ReconcileError(
@@ -418,10 +442,16 @@ def _emit_events(
             if layer:
                 async_to_sync(layer.group_send)(
                     f"vendor.{int(vendor_owner_id)}",
-                    {"type": "vendor.event", "t": "payments.reconciled", "payload": payload},
+                    {
+                        "type": "vendor.event",
+                        "t": "payments.reconciled",
+                        "payload": payload,
+                    },
                 )
         except Exception as exc:  # pragma: no cover - defensive
-            logger.debug("payments.reconcile.push_vendor_failed: %s", exc, exc_info=True)
+            logger.debug(
+                "payments.reconcile.push_vendor_failed: %s", exc, exc_info=True
+            )
 
 
 def _build_idempotency_key(txn: Transaction, reference_hint: str | None) -> str:

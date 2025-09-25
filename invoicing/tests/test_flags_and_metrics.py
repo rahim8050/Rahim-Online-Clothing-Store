@@ -9,7 +9,9 @@ from invoicing.models import Invoice
 @override_settings(ETIMS_ENABLED=False)
 def test_feature_flag_blocks_endpoints_when_disabled(client, django_user_model):
     # create minimal invoice + user; leverage factories if present
-    user = django_user_model.objects.create_user(username="m", email="m@x.com", password="pw")
+    user = django_user_model.objects.create_user(
+        username="m", email="m@x.com", password="pw"
+    )
     client.force_login(user)
     # pick any invoice id if fixtures exist; otherwise skip softly
     inv = Invoice.objects.first()

@@ -25,7 +25,10 @@ def create_order_from_cart(user, cart):
             dest_lng=0,
         )
         product_ids = [i.product_id for i in cart.items.select_related("product")]
-        products = {p.id: p for p in Product.objects.select_for_update().filter(id__in=product_ids)}
+        products = {
+            p.id: p
+            for p in Product.objects.select_for_update().filter(id__in=product_ids)
+        }
 
         for item in cart.items.all():
             product = products.get(item.product_id)
@@ -80,7 +83,9 @@ def assign_warehouses_and_update_stock(order):
         items = order.items.select_for_update().select_related("product")
         for item in items:
             if not item.warehouse_id:
-                stock_entry = get_nearest_stock(item.product, order.latitude, order.longitude)
+                stock_entry = get_nearest_stock(
+                    item.product, order.latitude, order.longitude
+                )
                 if not stock_entry:
                     raise ValueError("No stock available")
                 item.warehouse = stock_entry.warehouse
@@ -98,9 +103,9 @@ def assign_warehouses_and_update_stock(order):
 
 def get_nearest_stock(product, latitude, longitude):
     """Return nearest ProductStock with available quantity."""
-    stocks = ProductStock.objects.filter(product=product, quantity__gt=0).select_related(
-        "warehouse"
-    )
+    stocks = ProductStock.objects.filter(
+        product=product, quantity__gt=0
+    ).select_related("warehouse")
     nearest = None
     min_distance = None
     for stock in stocks:

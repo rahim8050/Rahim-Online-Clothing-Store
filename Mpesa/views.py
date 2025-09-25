@@ -26,12 +26,16 @@ def daraja_stk_push(request):
 
             if not phone_number:
                 return render(
-                    request, "orders/order_confirmation.html", {"error": "Phone number is required"}
+                    request,
+                    "orders/order_confirmation.html",
+                    {"error": "Phone number is required"},
                 )
 
             if not order_id:
                 return render(
-                    request, "orders/order_confirmation.html", {"error": "Order ID is required"}
+                    request,
+                    "orders/order_confirmation.html",
+                    {"error": "Order ID is required"},
                 )
 
             order = get_object_or_404(Order, id=order_id)
@@ -79,16 +83,23 @@ def daraja_stk_push(request):
                 return render(
                     request,
                     "orders/order_confirmation.html",
-                    {"error": "Failed to initiate M-Pesa payment.", "mpesa_error": resp_json},
+                    {
+                        "error": "Failed to initiate M-Pesa payment.",
+                        "mpesa_error": resp_json,
+                    },
                 )
 
         except Exception as e:
             traceback.print_exc()
             return render(
-                request, "orders/order_confirmation.html", {"error": f"An error occurred: {str(e)}"}
+                request,
+                "orders/order_confirmation.html",
+                {"error": f"An error occurred: {str(e)}"},
             )
 
-    return render(request, "orders/order_confirmation.html", {"error": "Invalid request method."})
+    return render(
+        request, "orders/order_confirmation.html", {"error": "Invalid request method."}
+    )
 
 
 # [Inactive] Preserved for future testing
@@ -116,12 +127,15 @@ def stk_callback(request):
             try:
                 #  Find the matching payment
                 payment = Payment.objects.get(
-                    merchant_request_id=merchant_request_id, checkout_request_id=checkout_request_id
+                    merchant_request_id=merchant_request_id,
+                    checkout_request_id=checkout_request_id,
                 )
                 payment.code = mpesa_receipt
                 payment.status = "COMPLETED"
                 payment.save()
-                Transaction.objects.filter(reference=checkout_request_id).update(status="success")
+                Transaction.objects.filter(reference=checkout_request_id).update(
+                    status="success"
+                )
 
                 #  Mark order as paid
                 order = payment.order
@@ -142,7 +156,11 @@ def stk_callback(request):
                     f"- The Rahim Online Clothing Store Team"
                 )
                 send_mail(
-                    subject, message, settings.DEFAULT_FROM_EMAIL, [user.email], fail_silently=False
+                    subject,
+                    message,
+                    settings.DEFAULT_FROM_EMAIL,
+                    [user.email],
+                    fail_silently=False,
                 )
 
             except Payment.DoesNotExist:

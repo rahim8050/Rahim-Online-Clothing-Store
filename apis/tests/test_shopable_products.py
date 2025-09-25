@@ -5,6 +5,7 @@ from rest_framework.test import APIClient
 from product_app.models import Category, Product
 from users.models import CustomUser, VendorStaff
 
+
 class ShopableProductsTests(TestCase):
     def setUp(self):
         self.client = APIClient()
@@ -18,7 +19,12 @@ class ShopableProductsTests(TestCase):
         )
         cat = Category.objects.create(name="Shirts", slug="shirts")
         Product.objects.create(
-            name="My Shirt", slug="my-shirt", price=1000, available=True, owner=owner, category=cat
+            name="My Shirt",
+            slug="my-shirt",
+            price=1000,
+            available=True,
+            owner=owner,
+            category=cat,
         )
         Product.objects.create(
             name="Other Shirt",
@@ -47,7 +53,12 @@ class ShopableProductsTests(TestCase):
         VendorStaff.objects.create(owner=boss, staff=staff, is_active=True)
         cat = Category.objects.create(name="Pants", slug="pants")
         Product.objects.create(
-            name="Boss Item", slug="boss-item", price=500, available=True, owner=boss, category=cat
+            name="Boss Item",
+            slug="boss-item",
+            price=500,
+            available=True,
+            owner=boss,
+            category=cat,
         )
 
         self.client.login(username="staff", email="staff@example.com", password="x")

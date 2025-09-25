@@ -16,7 +16,9 @@ class CheckoutInitV1(APIView):
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = CheckoutInitV1Serializer
 
-    @extend_schema(request=CheckoutInitV1Serializer, responses=CheckoutInitV1ResponseSerializer)
+    @extend_schema(
+        request=CheckoutInitV1Serializer, responses=CheckoutInitV1ResponseSerializer
+    )
     def post(self, request):
         ser = CheckoutInitV1Serializer(data=request.data)
         ser.is_valid(raise_exception=True)

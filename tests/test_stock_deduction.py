@@ -11,7 +11,9 @@ class StockDeductionTests(TestCase):
         User = get_user_model()
         self.user = User.objects.create_user(username="u", password="p")
         self.cat = Category.objects.create(name="c", slug="c")
-        self.product = Product.objects.create(category=self.cat, name="p", slug="p", price=10)
+        self.product = Product.objects.create(
+            category=self.cat, name="p", slug="p", price=10
+        )
         self.wh = Warehouse.objects.create(name="w", latitude=1.0, longitude=36.0)
         ProductStock.objects.create(product=self.product, warehouse=self.wh, quantity=5)
 

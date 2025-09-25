@@ -5,7 +5,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("vendor_app", "0005_vendororg_kra_pin_vendororg_tax_registered_at_and_more"),
     ]
@@ -17,24 +16,40 @@ class Migration(migrations.Migration):
                 (
                     "id",
                     models.BigAutoField(
-                        auto_created=True, primary_key=True, serialize=False, verbose_name="ID"
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
                     ),
                 ),
                 (
                     "window",
                     models.CharField(
-                        choices=[("daily", "Daily"), ("weekly", "Weekly"), ("monthly", "Monthly")],
+                        choices=[
+                            ("daily", "Daily"),
+                            ("weekly", "Weekly"),
+                            ("monthly", "Monthly"),
+                        ],
                         db_index=True,
                         max_length=16,
                     ),
                 ),
                 ("period_start", models.DateField()),
                 ("period_end", models.DateField()),
-                ("gross_revenue", models.DecimalField(decimal_places=2, default=0, max_digits=14)),
-                ("net_revenue", models.DecimalField(decimal_places=2, default=0, max_digits=14)),
+                (
+                    "gross_revenue",
+                    models.DecimalField(decimal_places=2, default=0, max_digits=14),
+                ),
+                (
+                    "net_revenue",
+                    models.DecimalField(decimal_places=2, default=0, max_digits=14),
+                ),
                 ("orders", models.PositiveIntegerField(default=0)),
                 ("refunds", models.PositiveIntegerField(default=0)),
-                ("success_rate", models.DecimalField(decimal_places=2, default=0, max_digits=5)),
+                (
+                    "success_rate",
+                    models.DecimalField(decimal_places=2, default=0, max_digits=5),
+                ),
                 (
                     "fulfillment_avg_mins",
                     models.DecimalField(decimal_places=2, default=0, max_digits=10),
@@ -51,7 +66,8 @@ class Migration(migrations.Migration):
             options={
                 "indexes": [
                     models.Index(
-                        fields=["org", "period_start", "window"], name="vendorkpi_org_date_idx"
+                        fields=["org", "period_start", "window"],
+                        name="vendorkpi_org_date_idx",
                     )
                 ],
                 "constraints": [
