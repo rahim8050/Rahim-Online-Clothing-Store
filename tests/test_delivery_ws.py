@@ -9,7 +9,9 @@ from orders.consumers import DeliveryTrackerConsumer
 
 @pytest.mark.asyncio
 async def test_delivery_ws_group_receive_status(monkeypatch, settings):
-    settings.CHANNEL_LAYERS = {"default": {"BACKEND": "channels.layers.InMemoryChannelLayer"}}
+    settings.CHANNEL_LAYERS = {
+        "default": {"BACKEND": "channels.layers.InMemoryChannelLayer"}
+    }
 
     # Bypass DB checks in consumer
     async def ok(*args, **kwargs):
@@ -38,7 +40,8 @@ async def test_delivery_ws_group_receive_status(monkeypatch, settings):
     # Send a group status event and expect it on the socket
     layer = get_channel_layer()
     await layer.group_send(
-        "delivery.123", {"type": "delivery.event", "kind": "status", "status": "en_route"}
+        "delivery.123",
+        {"type": "delivery.event", "kind": "status", "status": "en_route"},
     )
     out = await comm.receive_output(timeout=3)
     assert out["type"] == "websocket.send"
@@ -50,7 +53,9 @@ async def test_delivery_ws_group_receive_status(monkeypatch, settings):
 
 @pytest.mark.asyncio
 async def test_delivery_ws_group_receive_position(monkeypatch, settings):
-    settings.CHANNEL_LAYERS = {"default": {"BACKEND": "channels.layers.InMemoryChannelLayer"}}
+    settings.CHANNEL_LAYERS = {
+        "default": {"BACKEND": "channels.layers.InMemoryChannelLayer"}
+    }
 
     async def ok(*args, **kwargs):
         return True
@@ -76,7 +81,12 @@ async def test_delivery_ws_group_receive_position(monkeypatch, settings):
     layer = get_channel_layer()
     await layer.group_send(
         "delivery.7",
-        {"type": "delivery.event", "kind": "position_update", "lat": 1.2345, "lng": 2.3456},
+        {
+            "type": "delivery.event",
+            "kind": "position_update",
+            "lat": 1.2345,
+            "lng": 2.3456,
+        },
     )
     out = await comm.receive_output(timeout=3)
     assert out["type"] == "websocket.send"

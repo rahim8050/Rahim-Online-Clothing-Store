@@ -6,9 +6,11 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ("orders", "0006_rename_orders_paym_provider_ref_idx_orders_paym_provide_95adf4_idx"),
+        (
+            "orders",
+            "0006_rename_orders_paym_provider_ref_idx_orders_paym_provide_95adf4_idx",
+        ),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
@@ -108,28 +110,40 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name="order",
             name="latitude",
-            field=models.DecimalField(blank=True, decimal_places=6, max_digits=9, null=True),
+            field=models.DecimalField(
+                blank=True, decimal_places=6, max_digits=9, null=True
+            ),
         ),
         migrations.AlterField(
             model_name="order",
             name="longitude",
-            field=models.DecimalField(blank=True, decimal_places=6, max_digits=9, null=True),
+            field=models.DecimalField(
+                blank=True, decimal_places=6, max_digits=9, null=True
+            ),
         ),
         migrations.AddIndex(
             model_name="delivery",
-            index=models.Index(fields=["created_at"], name="orders_deli_created_1a3ff3_idx"),
+            index=models.Index(
+                fields=["created_at"], name="orders_deli_created_1a3ff3_idx"
+            ),
         ),
         migrations.AddIndex(
             model_name="delivery",
-            index=models.Index(fields=["updated_at"], name="orders_deli_updated_53e0ec_idx"),
+            index=models.Index(
+                fields=["updated_at"], name="orders_deli_updated_53e0ec_idx"
+            ),
         ),
         migrations.AddIndex(
             model_name="order",
-            index=models.Index(fields=["created_at"], name="orders_orde_created_0e92de_idx"),
+            index=models.Index(
+                fields=["created_at"], name="orders_orde_created_0e92de_idx"
+            ),
         ),
         migrations.AddIndex(
             model_name="order",
-            index=models.Index(fields=["updated_at"], name="orders_orde_updated_94e16c_idx"),
+            index=models.Index(
+                fields=["updated_at"], name="orders_orde_updated_94e16c_idx"
+            ),
         ),
         migrations.AddConstraint(
             model_name="delivery",

@@ -14,7 +14,8 @@ def inc(name: str, amount: int = 1, **labels) -> None:
     _COUNTERS[key] = _COUNTERS.get(key, 0) + int(amount)
     try:
         logger.info(
-            "metric.counter", extra={"metric": name, "value": _COUNTERS[key], "labels": labels}
+            "metric.counter",
+            extra={"metric": name, "value": _COUNTERS[key], "labels": labels},
         )
     except Exception:
         pass
@@ -24,7 +25,9 @@ def observe(name: str, value: float, **labels) -> None:
     key = _key(name, labels)
     _HIST.setdefault(key, []).append(float(value))
     try:
-        logger.info("metric.histogram", extra={"metric": name, "value": value, "labels": labels})
+        logger.info(
+            "metric.histogram", extra={"metric": name, "value": value, "labels": labels}
+        )
     except Exception:
         pass
 

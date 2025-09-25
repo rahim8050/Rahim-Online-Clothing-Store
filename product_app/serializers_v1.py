@@ -34,4 +34,11 @@ class ProductV1Serializer(serializers.ModelSerializer):
             "category_id",
             "owner",
         ]
-        read_only_fields = ["id", "created", "updated", "product_version", "owner", "category"]
+        read_only_fields = [
+            "id",
+            "created",
+            "updated",
+            "product_version",
+            "owner",
+            "category",
+        ]

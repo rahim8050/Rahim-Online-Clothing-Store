@@ -5,7 +5,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("cart", "0003_alter_cartitem_is_selected"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
@@ -28,7 +27,11 @@ class Migration(migrations.Migration):
             model_name="cart",
             name="status",
             field=models.CharField(
-                choices=[("active", "Active"), ("ordered", "Ordered"), ("abandoned", "Abandoned")],
+                choices=[
+                    ("active", "Active"),
+                    ("ordered", "Ordered"),
+                    ("abandoned", "Abandoned"),
+                ],
                 db_index=True,
                 default="active",
                 max_length=20,
@@ -53,7 +56,9 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name="cartitem",
             name="quantity",
-            field=models.PositiveIntegerField(default=1, validators=[MinValueValidator(1)]),
+            field=models.PositiveIntegerField(
+                default=1, validators=[MinValueValidator(1)]
+            ),
         ),
         migrations.AddField(
             model_name="cartitem",

@@ -28,6 +28,8 @@ class CartV1Serializer(serializers.ModelSerializer):
         model = Cart
         fields = ["id", "created_at", "updated_at", "items", "total_price"]
 
-    @extend_schema_field(serializers.DecimalField(max_digits=12, decimal_places=2))  # guessed
+    @extend_schema_field(
+        serializers.DecimalField(max_digits=12, decimal_places=2)
+    )  # guessed
     def get_total_price(self, obj) -> str:
         return str(obj.get_total_price())

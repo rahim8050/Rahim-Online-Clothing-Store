@@ -6,7 +6,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     initial = True
 
     dependencies = [
@@ -20,7 +19,10 @@ class Migration(migrations.Migration):
                 (
                     "id",
                     models.BigAutoField(
-                        auto_created=True, primary_key=True, serialize=False, verbose_name="ID"
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
                     ),
                 ),
                 ("name", models.CharField(max_length=120)),
@@ -44,13 +46,20 @@ class Migration(migrations.Migration):
                 (
                     "id",
                     models.BigAutoField(
-                        auto_created=True, primary_key=True, serialize=False, verbose_name="ID"
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
                     ),
                 ),
                 (
                     "role",
                     models.CharField(
-                        choices=[("OWNER", "Owner"), ("MANAGER", "Manager"), ("STAFF", "Staff")],
+                        choices=[
+                            ("OWNER", "Owner"),
+                            ("MANAGER", "Manager"),
+                            ("STAFF", "Staff"),
+                        ],
                         db_index=True,
                         max_length=16,
                     ),
@@ -82,7 +91,10 @@ class Migration(migrations.Migration):
                 (
                     "id",
                     models.BigAutoField(
-                        auto_created=True, primary_key=True, serialize=False, verbose_name="ID"
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
                     ),
                 ),
                 ("is_active", models.BooleanField(default=True)),
@@ -115,7 +127,8 @@ class Migration(migrations.Migration):
         migrations.AddConstraint(
             model_name="vendororg",
             constraint=models.CheckConstraint(
-                condition=models.Q(("slug", ""), _negated=True), name="vendororg_slug_not_empty"
+                condition=models.Q(("slug", ""), _negated=True),
+                name="vendororg_slug_not_empty",
             ),
         ),
         migrations.AddIndex(
@@ -131,13 +144,16 @@ class Migration(migrations.Migration):
         migrations.AddConstraint(
             model_name="vendormember",
             constraint=models.UniqueConstraint(
-                condition=models.Q(("role", "OWNER")), fields=("org",), name="uniq_owner_per_org"
+                condition=models.Q(("role", "OWNER")),
+                fields=("org",),
+                name="uniq_owner_per_org",
             ),
         ),
         migrations.AddConstraint(
             model_name="vendormember",
             constraint=models.CheckConstraint(
-                condition=models.Q(("role", ""), _negated=True), name="vendormember_role_not_empty"
+                condition=models.Q(("role", ""), _negated=True),
+                name="vendormember_role_not_empty",
             ),
         ),
         migrations.AddIndex(

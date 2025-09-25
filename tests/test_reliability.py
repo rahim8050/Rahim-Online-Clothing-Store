@@ -19,7 +19,9 @@ def make_catalog(qty=5):
     p = Product.objects.create(
         category=cat, name="Test Tee", slug="test-tee", price=Decimal("100.00")
     )
-    wh = Warehouse.objects.create(name="Main WH", latitude=0.02, longitude=36.8, address="Nairobi")
+    wh = Warehouse.objects.create(
+        name="Main WH", latitude=0.02, longitude=36.8, address="Nairobi"
+    )
     stock = ProductStock.objects.create(product=p, warehouse=wh, quantity=qty)
     return p, stock, wh
 

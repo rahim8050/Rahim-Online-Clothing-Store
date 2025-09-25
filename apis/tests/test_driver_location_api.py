@@ -10,11 +10,16 @@ from users.constants import DRIVER
 
 User = get_user_model()
 
+
 @pytest.mark.django_db
 def test_driver_location_persists_and_publishes(client, monkeypatch):
     suf = uuid4().hex[:6]
-    owner = User.objects.create_user(username=f"o{suf}", email=f"o{suf}@t.local", password="x")
-    driver = User.objects.create_user(username=f"d{suf}", email=f"d{suf}@t.local", password="x")
+    owner = User.objects.create_user(
+        username=f"o{suf}", email=f"o{suf}@t.local", password="x"
+    )
+    driver = User.objects.create_user(
+        username=f"d{suf}", email=f"d{suf}@t.local", password="x"
+    )
     Group.objects.get_or_create(name=DRIVER)[0].user_set.add(driver)
 
     order = Order.objects.create(

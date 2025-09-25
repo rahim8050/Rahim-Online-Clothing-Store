@@ -84,7 +84,9 @@ class InvoiceViewSet(viewsets.ReadOnlyModelViewSet):
     def submit(self, request, pk=None):
         inv: Invoice = self.get_object()
         user = request.user
-        if not (getattr(user, "is_staff", False) or has_min_role(user, inv.org, "MANAGER")):
+        if not (
+            getattr(user, "is_staff", False) or has_min_role(user, inv.org, "MANAGER")
+        ):
             return Response({"detail": "Forbidden"}, status=status.HTTP_403_FORBIDDEN)
         # Feature flag gate
         from django.conf import settings
@@ -99,13 +101,18 @@ class InvoiceViewSet(viewsets.ReadOnlyModelViewSet):
         return Response(InvoiceSerializer(inv).data, status=status.HTTP_200_OK)
 
     @action(
-        detail=True, methods=["get"], url_path="download", throttle_classes=[InvoiceExportThrottle]
+        detail=True,
+        methods=["get"],
+        url_path="download",
+        throttle_classes=[InvoiceExportThrottle],
     )
     def download(self, request, pk=None):
         inv: Invoice = self.get_object()
         # MUST be manager+ or staff
         user = request.user
-        if not (getattr(user, "is_staff", False) or has_min_role(user, inv.org, "MANAGER")):
+        if not (
+            getattr(user, "is_staff", False) or has_min_role(user, inv.org, "MANAGER")
+        ):
             return Response({"detail": "Forbidden"}, status=status.HTTP_403_FORBIDDEN)
         token = generate_signed_download_token(inv.id)
         base = request.build_absolute_uri(self.request.path)
@@ -148,10 +155,28 @@ class InvoiceViewSet(viewsets.ReadOnlyModelViewSet):
 
             buf = StringIO()
             w = csv.writer(buf)
-            w.writerow(["SKU", "Name", "Qty", "Unit Price", "Tax Rate", "Line Total", "Tax Total"])
+            w.writerow(
+                [
+                    "SKU",
+                    "Name",
+                    "Qty",
+                    "Unit Price",
+                    "Tax Rate",
+                    "Line Total",
+                    "Tax Total",
+                ]
+            )
             for line in inv.lines.all():
                 w.writerow(
-                    [line.sku, line.name, line.qty, line.unit_price, line.tax_rate, line.line_total, line.tax_total]
+                    [
+                        line.sku,
+                        line.name,
+                        line.qty,
+                        line.unit_price,
+                        line.tax_rate,
+                        line.line_total,
+                        line.tax_total,
+                    ]
                 )
             resp = Response(buf.getvalue(), content_type="text/csv")
             resp["Content-Disposition"] = f"attachment; filename=invoice_{inv.id}.csv"
@@ -218,9 +243,21 @@ class InvoiceViewSet(viewsets.ReadOnlyModelViewSet):
 
         buf = StringIO()
         w = csv.writer(buf)
-        w.writerow(["SKU", "Name", "Qty", "Unit Price", "Tax Rate", "Line Total", "Tax Total"])
+        w.writerow(
+            ["SKU", "Name", "Qty", "Unit Price", "Tax Rate", "Line Total", "Tax Total"]
+        )
         for line in inv.lines.all():
-            w.writerow([line.sku, line.name, line.qty, line.unit_price, line.tax_rate, line.line_total, line.tax_total])
+            w.writerow(
+                [
+                    line.sku,
+                    line.name,
+                    line.qty,
+                    line.unit_price,
+                    line.tax_rate,
+                    line.line_total,
+                    line.tax_total,
+                ]
+            )
         resp = Response(buf.getvalue(), content_type="text/csv")
         resp["Content-Disposition"] = f"attachment; filename=invoice_{inv_id}.csv"
         return resp

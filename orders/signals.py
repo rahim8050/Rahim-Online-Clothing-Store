@@ -36,7 +36,9 @@ def geocode_order_on_save(sender, instance, created, **kwargs):
 
 
 @receiver(post_save, sender=Delivery)
-def broadcast_delivery_update(sender, instance: Delivery, **kwargs):  # pragma: no cover - IO
+def broadcast_delivery_update(
+    sender, instance: Delivery, **kwargs
+):  # pragma: no cover - IO
     """Broadcast delivery status updates to its WS group with stable payload."""
     try:
         layer = get_channel_layer()

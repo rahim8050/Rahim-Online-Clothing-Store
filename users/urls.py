@@ -30,7 +30,11 @@ urlpatterns = [
     path("register/", RegisterUser.as_view(), name="register"),
     path("logout/", Logout.as_view(), name="logout"),
     path("activate/<uidb64>/<token>/", activate, name="activate"),
-    path("resend-activation/", ResendActivationEmailView.as_view(), name="resend_activation"),
+    path(
+        "resend-activation/",
+        ResendActivationEmailView.as_view(),
+        name="resend_activation",
+    ),
     # Profile / account
     path("profile/", profile_view, name="profile"),
     path("profile/settings/", profile_settings_view, name="profile_settings"),

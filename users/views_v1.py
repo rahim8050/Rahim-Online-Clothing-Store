@@ -4,7 +4,9 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 try:
-    from apis.serializers import WhoAmISerializer as _WhoAmISerializer  # reuse existing serializer
+    from apis.serializers import (
+        WhoAmISerializer as _WhoAmISerializer,
+    )  # reuse existing serializer
 except Exception:  # pragma: no cover
 
     class _WhoAmISerializer(serializers.Serializer):  # minimal fallback for docs

@@ -47,7 +47,9 @@ class Command(BaseCommand):
             )
             .filter(active_count=0)
         )
-        self.stdout.write(f"Inactive rows blocking re-invite: {inactive_blockers.count()}")
+        self.stdout.write(
+            f"Inactive rows blocking re-invite: {inactive_blockers.count()}"
+        )
         for row in inactive_blockers:
             self.stdout.write(
                 f"  - owner={row['owner_id']} staff={row['staff_id']} inactive_count={row['inactive_count']}"

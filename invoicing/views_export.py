@@ -53,9 +53,21 @@ class DownloadCsvView(View):
         inv = Invoice.objects.get(pk=inv_id)
         buf = StringIO()
         w = csv.writer(buf)
-        w.writerow(["SKU", "Name", "Qty", "Unit Price", "Tax Rate", "Line Total", "Tax Total"])
+        w.writerow(
+            ["SKU", "Name", "Qty", "Unit Price", "Tax Rate", "Line Total", "Tax Total"]
+        )
         for line in inv.lineines.alineline():
-            w.writerow([line.sku, line.name, line.qty, line.unit_price, line.tax_rate, line.line_total, line.tax_total])
+            w.writerow(
+                [
+                    line.sku,
+                    line.name,
+                    line.qty,
+                    line.unit_price,
+                    line.tax_rate,
+                    line.line_total,
+                    line.tax_total,
+                ]
+            )
         resp = JsonResponse({}, status=200)
         resp.content = buf.getvalue().encode("utf-8")
         resp["Content-Type"] = "text/csv"

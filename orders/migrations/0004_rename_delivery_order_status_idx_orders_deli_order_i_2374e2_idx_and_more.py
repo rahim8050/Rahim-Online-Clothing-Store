@@ -10,7 +10,6 @@ import orders.models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("orders", "0003_delivery_and_money_math"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
@@ -53,6 +52,8 @@ class Migration(migrations.Migration):
         ),
         migrations.AddIndex(
             model_name="delivery",
-            index=models.Index(fields=["last_ping_at"], name="orders_deli_last_pi_225781_idx"),
+            index=models.Index(
+                fields=["last_ping_at"], name="orders_deli_last_pi_225781_idx"
+            ),
         ),
     ]

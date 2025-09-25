@@ -13,7 +13,9 @@ def backfill(apps, schema_editor):
             continue
         try:
             # Best-effort stable representation from JSONField
-            body = json.dumps(raw, separators=(",", ":"), sort_keys=True).encode("utf-8")
+            body = json.dumps(raw, separators=(",", ":"), sort_keys=True).encode(
+                "utf-8"
+            )
             sha = hashlib.sha256(body).hexdigest().lower()
             t.body_sha256 = sha
             try:

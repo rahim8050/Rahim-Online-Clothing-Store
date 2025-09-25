@@ -18,7 +18,9 @@ class IsVendorOrVendorStaff(BasePermission):
         try:
             from users.models import VendorStaff  # adjust app label
 
-            is_active_staff = VendorStaff.objects.filter(staff=u, is_active=True).exists()
+            is_active_staff = VendorStaff.objects.filter(
+                staff=u, is_active=True
+            ).exists()
         except Exception:
             is_active_staff = False
 
@@ -92,7 +94,9 @@ class HasVendorScope(BasePermission):
         try:
             from users.models import VendorStaff
 
-            vs = VendorStaff.objects.filter(owner_id=owner_id, staff=u, is_active=True).first()
+            vs = VendorStaff.objects.filter(
+                owner_id=owner_id, staff=u, is_active=True
+            ).first()
             if not vs:
                 return False
             scopes = vs.scopes or []
@@ -144,4 +148,6 @@ class NotBuyingOwnListing(BasePermission):
 class IsDriver(BasePermission):
     def has_permission(self, request, view):
         u = getattr(request, "user", None)
-        return bool(u and u.is_authenticated and u.groups.filter(name="Driver").exists())
+        return bool(
+            u and u.is_authenticated and u.groups.filter(name="Driver").exists()
+        )

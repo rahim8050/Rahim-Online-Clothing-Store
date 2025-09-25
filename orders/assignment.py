@@ -27,7 +27,10 @@ def _haversine(lat1: Number, lng1: Number, lat2: Number, lng2: Number) -> float:
     dphi = math.radians(lat2 - lat1)
     dlambda = math.radians(lng2 - lng1)
 
-    a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
+    a = (
+        math.sin(dphi / 2) ** 2
+        + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
+    )
     return 2 * R * math.atan2(math.sqrt(a), math.sqrt(1.0 - a))
 
 

@@ -6,7 +6,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("cart", "0007_backfill_cartitem_created_at"),
         ("product_app", "0010_backfill_product_version"),
@@ -25,11 +24,15 @@ class Migration(migrations.Migration):
         ),
         migrations.AddIndex(
             model_name="cart",
-            index=models.Index(fields=["user", "status"], name="cart_cart_user_id_2c8a21_idx"),
+            index=models.Index(
+                fields=["user", "status"], name="cart_cart_user_id_2c8a21_idx"
+            ),
         ),
         migrations.AddIndex(
             model_name="cart",
-            index=models.Index(fields=["created_at"], name="cart_cart_created_981ed1_idx"),
+            index=models.Index(
+                fields=["created_at"], name="cart_cart_created_981ed1_idx"
+            ),
         ),
         migrations.AddIndex(
             model_name="cartitem",
@@ -37,6 +40,8 @@ class Migration(migrations.Migration):
         ),
         migrations.AddIndex(
             model_name="cartitem",
-            index=models.Index(fields=["product"], name="cart_cartit_product_985dba_idx"),
+            index=models.Index(
+                fields=["product"], name="cart_cartit_product_985dba_idx"
+            ),
         ),
     ]

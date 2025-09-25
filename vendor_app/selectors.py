@@ -29,7 +29,9 @@ def org_scoped_queryset(
 def get_kpis(org_id: int, window: str, last_n: int = 30):
     from .models import VendorKPI
 
-    qs = VendorKPI.objects.filter(org_id=org_id, window=window).order_by("-period_start")
+    qs = VendorKPI.objects.filter(org_id=org_id, window=window).order_by(
+        "-period_start"
+    )
     return qs[:last_n]
 
 

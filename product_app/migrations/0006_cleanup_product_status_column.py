@@ -15,7 +15,9 @@ def drop_status_if_exists(apps, schema_editor):
         return
     try:
         if vendor == "mysql":
-            schema_editor.execute("ALTER TABLE `product_app_product` DROP COLUMN `status`")
+            schema_editor.execute(
+                "ALTER TABLE `product_app_product` DROP COLUMN `status`"
+            )
         elif vendor == "postgresql":
             schema_editor.execute(
                 'ALTER TABLE "product_app_product" DROP COLUMN IF EXISTS "status"'

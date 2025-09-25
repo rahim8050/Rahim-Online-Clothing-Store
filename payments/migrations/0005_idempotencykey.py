@@ -4,7 +4,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("payments", "0004_refund"),
     ]
@@ -16,18 +15,28 @@ class Migration(migrations.Migration):
                 (
                     "id",
                     models.BigAutoField(
-                        auto_created=True, primary_key=True, serialize=False, verbose_name="ID"
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
                     ),
                 ),
                 ("scope", models.CharField(db_index=True, max_length=64)),
                 ("key", models.CharField(max_length=128)),
-                ("response_hash", models.CharField(blank=True, default="", max_length=64)),
+                (
+                    "response_hash",
+                    models.CharField(blank=True, default="", max_length=64),
+                ),
                 ("created_at", models.DateTimeField(auto_now_add=True)),
             ],
             options={
-                "indexes": [models.Index(fields=["created_at"], name="idem_created_idx")],
+                "indexes": [
+                    models.Index(fields=["created_at"], name="idem_created_idx")
+                ],
                 "constraints": [
-                    models.UniqueConstraint(fields=("scope", "key"), name="uniq_idem_scope_key")
+                    models.UniqueConstraint(
+                        fields=("scope", "key"), name="uniq_idem_scope_key"
+                    )
                 ],
             },
         ),

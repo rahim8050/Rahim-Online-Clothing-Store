@@ -22,5 +22,7 @@ class VendorOrgScopedRateThrottle(ScopedRateThrottle):
         if hasattr(view, "kwargs"):
             org_id = view.kwargs.get("org_id") or view.kwargs.get("pk")
         if org_id is None and hasattr(request, "query_params"):
-            org_id = request.query_params.get("org_id") or request.query_params.get("org")
+            org_id = request.query_params.get("org_id") or request.query_params.get(
+                "org"
+            )
         return f"{base}:org:{org_id}" if org_id else base

@@ -28,8 +28,12 @@ class Order(models.Model):
     address = models.CharField(max_length=250)
 
     # (Optional) caller-provided coords — keep nullable
-    latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
-    longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    latitude = models.DecimalField(
+        max_digits=9, decimal_places=6, null=True, blank=True
+    )
+    longitude = models.DecimalField(
+        max_digits=9, decimal_places=6, null=True, blank=True
+    )
     location_address = models.TextField(null=True, blank=True)
     coords_locked = models.BooleanField(default=False)
     coords_source = models.CharField(max_length=20, blank=True, default="")
@@ -63,12 +67,14 @@ class Order(models.Model):
         constraints = [
             # latitude in range or NULL
             CheckConstraint(
-                check=(Q(latitude__gte=-90) & Q(latitude__lte=90)) | Q(latitude__isnull=True),
+                check=(Q(latitude__gte=-90) & Q(latitude__lte=90))
+                | Q(latitude__isnull=True),
                 name="order_lat_range",
             ),
             # longitude in range or NULL
             CheckConstraint(
-                check=(Q(longitude__gte=-180) & Q(longitude__lte=180)) | Q(longitude__isnull=True),
+                check=(Q(longitude__gte=-180) & Q(longitude__lte=180))
+                | Q(longitude__isnull=True),
                 name="order_lng_range",
             ),
             # both set & valid OR both NULL
@@ -127,7 +133,9 @@ class OrderItem(models.Model):
     ]
 
     order = models.ForeignKey(Order, related_name="items", on_delete=models.CASCADE)
-    product = models.ForeignKey(Product, related_name="order_items", on_delete=models.CASCADE)
+    product = models.ForeignKey(
+        Product, related_name="order_items", on_delete=models.CASCADE
+    )
     product_version = models.PositiveIntegerField(default=1)
     price = models.DecimalField(
         max_digits=10,
@@ -135,7 +143,9 @@ class OrderItem(models.Model):
         validators=[MinValueValidator(Decimal("0"))],
     )
     quantity = models.PositiveIntegerField(default=1)
-    warehouse = models.ForeignKey(Warehouse, null=True, blank=True, on_delete=models.SET_NULL)
+    warehouse = models.ForeignKey(
+        Warehouse, null=True, blank=True, on_delete=models.SET_NULL
+    )
     delivery_status = models.CharField(
         max_length=20,
         choices=DELIVERY_STATUS_CHOICES,
@@ -174,7 +184,9 @@ class Delivery(models.Model):
         DELIVERED = "delivered", "Delivered"
         CANCELLED = "cancelled", "Cancelled"
 
-    order = models.ForeignKey("orders.Order", related_name="deliveries", on_delete=models.CASCADE)
+    order = models.ForeignKey(
+        "orders.Order", related_name="deliveries", on_delete=models.CASCADE
+    )
     driver = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         null=True,
@@ -195,42 +207,60 @@ class Delivery(models.Model):
         decimal_places=6,
         null=True,
         blank=True,
-        validators=[MinValueValidator(Decimal("-90")), MaxValueValidator(Decimal("90"))],
+        validators=[
+            MinValueValidator(Decimal("-90")),
+            MaxValueValidator(Decimal("90")),
+        ],
     )
     origin_lng = models.DecimalField(
         max_digits=9,
         decimal_places=6,
         null=True,
         blank=True,
-        validators=[MinValueValidator(Decimal("-180")), MaxValueValidator(Decimal("180"))],
+        validators=[
+            MinValueValidator(Decimal("-180")),
+            MaxValueValidator(Decimal("180")),
+        ],
     )
     dest_lat = models.DecimalField(
         max_digits=9,
         decimal_places=6,
         null=True,
         blank=True,
-        validators=[MinValueValidator(Decimal("-90")), MaxValueValidator(Decimal("90"))],
+        validators=[
+            MinValueValidator(Decimal("-90")),
+            MaxValueValidator(Decimal("90")),
+        ],
     )
     dest_lng = models.DecimalField(
         max_digits=9,
         decimal_places=6,
         null=True,
         blank=True,
-        validators=[MinValueValidator(Decimal("-180")), MaxValueValidator(Decimal("180"))],
+        validators=[
+            MinValueValidator(Decimal("-180")),
+            MaxValueValidator(Decimal("180")),
+        ],
     )
     last_lat = models.DecimalField(
         max_digits=9,
         decimal_places=6,
         null=True,
         blank=True,
-        validators=[MinValueValidator(Decimal("-90")), MaxValueValidator(Decimal("90"))],
+        validators=[
+            MinValueValidator(Decimal("-90")),
+            MaxValueValidator(Decimal("90")),
+        ],
     )
     last_lng = models.DecimalField(
         max_digits=9,
         decimal_places=6,
         null=True,
         blank=True,
-        validators=[MinValueValidator(Decimal("-180")), MaxValueValidator(Decimal("180"))],
+        validators=[
+            MinValueValidator(Decimal("-180")),
+            MaxValueValidator(Decimal("180")),
+        ],
     )
     last_ping_at = models.DateTimeField(null=True, blank=True)
 
@@ -245,19 +275,23 @@ class Delivery(models.Model):
         constraints = [
             CheckConstraint(
                 name="delivery_driver_required_when_moving",
-                check=Q(status__in=["pending", "delivered", "cancelled"]) | Q(driver__isnull=False),
+                check=Q(status__in=["pending", "delivered", "cancelled"])
+                | Q(driver__isnull=False),
             ),
             CheckConstraint(
                 name="delivery_dest_lat_range_or_null",
-                check=Q(dest_lat__isnull=True) | (Q(dest_lat__gte=-90) & Q(dest_lat__lte=90)),
+                check=Q(dest_lat__isnull=True)
+                | (Q(dest_lat__gte=-90) & Q(dest_lat__lte=90)),
             ),
             CheckConstraint(
                 name="delivery_dest_lng_range_or_null",
-                check=Q(dest_lng__isnull=True) | (Q(dest_lng__gte=-180) & Q(dest_lng__lte=180)),
+                check=Q(dest_lng__isnull=True)
+                | (Q(dest_lng__gte=-180) & Q(dest_lng__lte=180)),
             ),
             CheckConstraint(
                 name="delivery_origin_lat_range",
-                check=Q(origin_lat__isnull=True) | (Q(origin_lat__gte=-90) & Q(origin_lat__lte=90)),
+                check=Q(origin_lat__isnull=True)
+                | (Q(origin_lat__gte=-90) & Q(origin_lat__lte=90)),
             ),
             CheckConstraint(
                 name="delivery_origin_lng_range",
@@ -322,7 +356,11 @@ class Delivery(models.Model):
     def mark_en_route(self, by=None, when=None):
         """assigned/picked_up -> en_route; set picked_up_at if missing."""
         when = when or timezone.now()
-        if self.status not in {self.Status.ASSIGNED, self.Status.PICKED_UP, self.Status.EN_ROUTE}:
+        if self.status not in {
+            self.Status.ASSIGNED,
+            self.Status.PICKED_UP,
+            self.Status.EN_ROUTE,
+        }:
             raise ValueError("Can only go EN_ROUTE from ASSIGNED/PICKED_UP")
         if not self.picked_up_at:
             self.picked_up_at = when
@@ -333,14 +371,20 @@ class Delivery(models.Model):
     def mark_delivered(self, by=None, when=None):
         """picked_up/en_route -> delivered (idempotent)."""
         when = when or timezone.now()
-        if self.status not in {self.Status.PICKED_UP, self.Status.EN_ROUTE, self.Status.DELIVERED}:
+        if self.status not in {
+            self.Status.PICKED_UP,
+            self.Status.EN_ROUTE,
+            self.Status.DELIVERED,
+        }:
             raise ValueError("Can only DELIVER from PICKED_UP/EN_ROUTE")
         if not self.picked_up_at:
             self.picked_up_at = when
         if not self.delivered_at:
             self.delivered_at = when
         self.status = self.Status.DELIVERED
-        self.save(update_fields=["picked_up_at", "delivered_at", "status", "updated_at"])
+        self.save(
+            update_fields=["picked_up_at", "delivered_at", "status", "updated_at"]
+        )
 
     # ---------- location hygiene ----------
     def _norm_pair(self, lat, lng):
@@ -361,7 +405,9 @@ class Delivery(models.Model):
         return lat, lng
 
     def save(self, *args, **kwargs):
-        self.origin_lat, self.origin_lng = self._norm_pair(self.origin_lat, self.origin_lng)
+        self.origin_lat, self.origin_lng = self._norm_pair(
+            self.origin_lat, self.origin_lng
+        )
         self.dest_lat, self.dest_lng = self._norm_pair(self.dest_lat, self.dest_lng)
         self.last_lat, self.last_lng = self._norm_pair(self.last_lat, self.last_lng)
         super().save(*args, **kwargs)
@@ -371,7 +417,9 @@ class Delivery(models.Model):
 # Delivery history (optional trail)
 # =========================
 class DeliveryPing(models.Model):
-    delivery = models.ForeignKey(Delivery, related_name="pings", on_delete=models.CASCADE)
+    delivery = models.ForeignKey(
+        Delivery, related_name="pings", on_delete=models.CASCADE
+    )
     lat = models.DecimalField(max_digits=9, decimal_places=6)
     lng = models.DecimalField(max_digits=9, decimal_places=6)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -400,7 +448,9 @@ class DeliveryEvent(models.Model):
         ("delivered", "Delivered"),
         ("position", "Position"),
     )
-    delivery = models.ForeignKey("orders.Delivery", on_delete=models.CASCADE, related_name="events")
+    delivery = models.ForeignKey(
+        "orders.Delivery", on_delete=models.CASCADE, related_name="events"
+    )
     actor = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True
     )
@@ -449,7 +499,9 @@ class Transaction(models.Model):
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     method = models.CharField(max_length=10, choices=METHOD_CHOICES)
     gateway = models.CharField(max_length=10, choices=GATEWAY_CHOICES)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="initialized")
+    status = models.CharField(
+        max_length=20, choices=STATUS_CHOICES, default="initialized"
+    )
     callback_received = models.BooleanField(default=False)
     verified = models.BooleanField(default=False)
     email_sent = models.BooleanField(default=False)

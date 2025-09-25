@@ -17,7 +17,11 @@ log = logging.getLogger(__name__)
 
 
 def emit_once(
-    event_key: str, user, channel: str, send_fn: Callable[[], None], payload: dict | None = None
+    event_key: str,
+    user,
+    channel: str,
+    send_fn: Callable[[], None],
+    payload: dict | None = None,
 ) -> bool:
     """
     Insert a NotificationEvent with a unique event_key.
@@ -46,12 +50,16 @@ def _safe_send(send_fn: Callable[[], None]) -> None:
         log.exception("Notification send failed: %s", e)
 
 
-def _send_html_email(subject: str, to_email: str, text_body: str, html_body: str) -> None:
+def _send_html_email(
+    subject: str, to_email: str, text_body: str, html_body: str
+) -> None:
     from_email = getattr(
-        settings, "DEFAULT_FROM_EMAIL", f"no-reply@{settings.SITE_DOMAIN.split(":")[0]}"
+        settings, "DEFAULT_FROM_EMAIL", f"no-reply@{settings.SITE_DOMAIN.split(':')[0]}"
     )
     reply_to = [getattr(settings, "SUPPORT_EMAIL", from_email)]
-    msg = EmailMultiAlternatives(subject, text_body, from_email, [to_email], reply_to=reply_to)
+    msg = EmailMultiAlternatives(
+        subject, text_body, from_email, [to_email], reply_to=reply_to
+    )
     msg.attach_alternative(html_body, "text/html")
     msg.send()
 
@@ -112,18 +120,18 @@ def send_refund_email(
           <tr><td style="padding:12px 16px;width:40%;color:#6b7280;">Amount</td>
               <td style="padding:12px 16px;">{currency} {amount}</td></tr>
           <tr><td style="padding:12px 16px;width:40%;color:#6b7280;">Payment method</td>
-              <td style="padding:12px 16px;">{gateway or '—'}</td></tr>
+              <td style="padding:12px 16px;">{gateway or "—"}</td></tr>
           <tr><td style="padding:12px 16px;width:40%;color:#6b7280;">Transaction ref</td>
               <td style="padding:12px 16px;">{reference}</td></tr>
-          {f'<tr><td style="padding:12px 16px;width:40%;color:#6b7280;">Refund id</td><td style="padding:12px 16px;">{refund_id}</td></tr>' if refund_id else ''}
+          {f'<tr><td style="padding:12px 16px;width:40%;color:#6b7280;">Refund id</td><td style="padding:12px 16px;">{refund_id}</td></tr>' if refund_id else ""}
           <tr><td style="padding:12px 16px;width:40%;color:#6b7280;">Processed at</td>
               <td style="padding:12px 16px;">{processed}</td></tr>
         </table>
       </td></tr>
-      {f'<tr><td style="padding:0 24px 16px 24px;"><a href="{order_url}" style="display:inline-block;background:#111827;color:#ffffff;text-decoration:none;padding:10px 14px;border-radius:8px;font-size:14px;">View your order</a></td></tr>' if order_url else ''}
+      {f'<tr><td style="padding:0 24px 16px 24px;"><a href="{order_url}" style="display:inline-block;background:#111827;color:#ffffff;text-decoration:none;padding:10px 14px;border-radius:8px;font-size:14px;">View your order</a></td></tr>' if order_url else ""}
       <tr><td style="padding:0 24px 24px 24px;">
         <p style="font-size:12px;color:#6b7280;margin:0;">It can take a short time to reflect depending on your bank or wallet.
-        {' If you didn’t request this, contact support at ' + support_email if support_email else ' If you didn’t request this, contact support.'}</p>
+        {" If you didn’t request this, contact support at " + support_email if support_email else " If you didn’t request this, contact support."}</p>
       </td></tr>
     </table>
     <div style="max-width:640px;margin:12px auto 0;text-align:center;font-size:11px;color:#9ca3af;">{site_name}</div>
@@ -185,16 +193,16 @@ def send_payment_email(
           <tr><td style="padding:12px 16px;width:40%;color:#6b7280;">Amount</td>
               <td style="padding:12px 16px;">{currency} {amount}</td></tr>
           <tr><td style="padding:12px 16px;width:40%;color:#6b7280;">Payment method</td>
-              <td style="padding:12px 16px;">{gateway or '—'}</td></tr>
+              <td style="padding:12px 16px;">{gateway or "—"}</td></tr>
           <tr><td style="padding:12px 16px;width:40%;color:#6b7280;">Transaction ref</td>
               <td style="padding:12px 16px;">{reference}</td></tr>
           <tr><td style="padding:12px 16px;width:40%;color:#6b7280;">Processed at</td>
               <td style="padding:12px 16px;">{processed}</td></tr>
         </table>
       </td></tr>
-      {f'<tr><td style="padding:0 24px 16px 24px;"><a href="{order_url}" style="display:inline-block;background:#111827;color:#ffffff;text-decoration:none;padding:10px 14px;border-radius:8px;font-size:14px;">View your order</a></td></tr>' if order_url else ''}
+      {f'<tr><td style="padding:0 24px 16px 24px;"><a href="{order_url}" style="display:inline-block;background:#111827;color:#ffffff;text-decoration:none;padding:10px 14px;border-radius:8px;font-size:14px;">View your order</a></td></tr>' if order_url else ""}
       <tr><td style="padding:0 24px 24px 24px;">
-        <p style="font-size:12px;color:#6b7280;margin:0;">If you didn’t request this, contact support{(' at ' + support_email) if support_email else ''}.</p>
+        <p style="font-size:12px;color:#6b7280;margin:0;">If you didn’t request this, contact support{(" at " + support_email) if support_email else ""}.</p>
       </td></tr>
     </table>
     <div style="max-width:640px;margin:12px auto 0;text-align:center;font-size:11px;color:#9ca3af;">{site_name}</div>

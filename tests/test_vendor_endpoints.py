@@ -11,9 +11,13 @@ def test_vendor_kpis_scoped(client):
     User = get_user_model()
     g_vendor, _ = Group.objects.get_or_create(name="Vendor")
 
-    owner = User.objects.create_user(username="owner1", email="o1@example.com", password="x")
+    owner = User.objects.create_user(
+        username="owner1", email="o1@example.com", password="x"
+    )
     owner.groups.add(g_vendor)
-    other = User.objects.create_user(username="owner2", email="o2@example.com", password="x")
+    other = User.objects.create_user(
+        username="owner2", email="o2@example.com", password="x"
+    )
     other.groups.add(g_vendor)
 
     # Category

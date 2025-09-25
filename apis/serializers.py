@@ -20,6 +20,7 @@ from users.models import VendorApplication, VendorStaff
 from users.utils import resolve_vendor_owner_for
 from payments.enums import Gateway
 import logging
+
 logger = logging.getLogger(__name__)
 
 User = get_user_model()
@@ -52,7 +53,11 @@ class WhoAmISerializer(serializers.Serializer):
     @extend_schema_field(serializers.CharField())
     def get_role(self, obj) -> str:
         try:
-            return getattr(obj, "effective_role", None) or getattr(obj, "role", None) or "customer"
+            return (
+                getattr(obj, "effective_role", None)
+                or getattr(obj, "role", None)
+                or "customer"
+            )
         except Exception:
             return "customer"
 
@@ -137,7 +142,9 @@ class ProductOutSerializer(serializers.ModelSerializer):
         ]
 
     def get_stocks(self, obj):
-        return list(ProductStock.objects.filter(product=obj).values("warehouse_id", "quantity"))
+        return list(
+            ProductStock.objects.filter(product=obj).values("warehouse_id", "quantity")
+        )
 
 
 # -----------------------
@@ -186,7 +193,12 @@ class DeliveryStatusSerializer(serializers.Serializer):
                 if getattr(field, "choices", None):
                     choices = [c[0] for c in field.choices]
             except (AttributeError, TypeError, ValueError) as e:
-                logger.debug("Could not derive choices from field %r: %s", field, e, exc_info=True)
+                logger.debug(
+                    "Could not derive choices from field %r: %s",
+                    field,
+                    e,
+                    exc_info=True,
+                )
             if (
                 not choices
                 and hasattr(DeliveryModel, "Status")
@@ -213,7 +225,9 @@ class VendorProductCreateSerializer(serializers.ModelSerializer):
     sku = serializers.CharField(required=False, write_only=True, allow_blank=True)
     stock = serializers.IntegerField(required=False, write_only=True, min_value=0)
     warehouse_id = serializers.IntegerField(required=False, write_only=True)
-    stock_allocations = _StockAllocationInput(many=True, required=False, write_only=True)
+    stock_allocations = _StockAllocationInput(
+        many=True, required=False, write_only=True
+    )
     slug = serializers.SlugField(required=False, allow_blank=True)
 
     class Meta:
@@ -237,7 +251,9 @@ class VendorProductCreateSerializer(serializers.ModelSerializer):
 
     # --- helpers ---
     @staticmethod
-    def _normalize_slug(provided_slug: str, provided_sku: str, provided_name: str) -> str:
+    def _normalize_slug(
+        provided_slug: str, provided_sku: str, provided_name: str
+    ) -> str:
         if provided_slug:
             return slugify(provided_slug)
         if provided_sku:
@@ -250,7 +266,9 @@ class VendorProductCreateSerializer(serializers.ModelSerializer):
         # resolve acting owner
         owner_hint = attrs.pop("owner_id", None)
         try:
-            attrs["_acting_owner_id"] = resolve_vendor_owner_for(request.user, owner_hint)
+            attrs["_acting_owner_id"] = resolve_vendor_owner_for(
+                request.user, owner_hint
+            )
         except ValueError as e:
             raise serializers.ValidationError({"owner_id": str(e)})
 
@@ -264,7 +282,9 @@ class VendorProductCreateSerializer(serializers.ModelSerializer):
                 {"slug": "Slug (or sku/name to derive it) is required."}
             )
         if Product.objects.filter(slug=slug_final).exists():
-            raise serializers.ValidationError({"slug": "A product with this slug already exists."})
+            raise serializers.ValidationError(
+                {"slug": "A product with this slug already exists."}
+            )
         attrs["slug"] = slug_final
 
         # stock inputs
@@ -296,7 +316,9 @@ class VendorProductCreateSerializer(serializers.ModelSerializer):
                     {"warehouse_id": "Required when providing 'stock'."}
                 )
             if not Warehouse.objects.filter(id=wh_id).exists():
-                raise serializers.ValidationError({"warehouse_id": f"Warehouse {wh_id} not found."})
+                raise serializers.ValidationError(
+                    {"warehouse_id": f"Warehouse {wh_id} not found."}
+                )
             attrs["_allocations"] = [{"warehouse": int(wh_id), "quantity": int(stock)}]
         else:
             attrs["_allocations"] = []
@@ -395,12 +417,18 @@ class VendorStaffInviteSerializer(serializers.Serializer):
             email = attrs["staff_email"].strip().lower()
             staff = User.objects.filter(email__iexact=email).first()
             if not staff:
-                raise serializers.ValidationError({"staff_email": "No user with that email."})
+                raise serializers.ValidationError(
+                    {"staff_email": "No user with that email."}
+                )
         else:
-            raise serializers.ValidationError({"staff": "Provide staff_id or staff_email."})
+            raise serializers.ValidationError(
+                {"staff": "Provide staff_id or staff_email."}
+            )
 
         if staff.id == owner_id:
-            raise serializers.ValidationError({"owner_id": "You cannot invite yourself."})
+            raise serializers.ValidationError(
+                {"owner_id": "You cannot invite yourself."}
+            )
 
         attrs["owner_id"] = owner_id
         attrs["staff"] = staff
@@ -414,7 +442,9 @@ class VendorStaffRemoveSerializer(serializers.Serializer):
     def save(self, **kwargs):
         request = self.context["request"]
         try:
-            owner_id = resolve_vendor_owner_for(request.user, self.validated_data.get("owner_id"))
+            owner_id = resolve_vendor_owner_for(
+                request.user, self.validated_data.get("owner_id")
+            )
         except ValueError as e:
             raise serializers.ValidationError({"owner_id": str(e)})
 
@@ -437,7 +467,9 @@ KRA_PIN_RE = re.compile(r"^[A-Z]\d{9}[A-Z]$", re.I)
 
 
 class VendorApplicationCreateSerializer(serializers.ModelSerializer):
-    company_name = serializers.CharField(max_length=120, allow_blank=False, required=True)
+    company_name = serializers.CharField(
+        max_length=120, allow_blank=False, required=True
+    )
     phone = serializers.CharField(max_length=32, allow_blank=False, required=True)
     kra_pin = serializers.CharField(max_length=32, allow_blank=False, required=True)
     national_id = serializers.CharField(max_length=32, allow_blank=False, required=True)
@@ -477,6 +509,7 @@ class VendorApplicationCreateSerializer(serializers.ModelSerializer):
         if getattr(f, "size", 0) > 5 * 1024 * 1024:
             raise serializers.ValidationError("File too large (max 5MB).")
         return f
+
 
 # -----------------------
 # Payments reconciliation
