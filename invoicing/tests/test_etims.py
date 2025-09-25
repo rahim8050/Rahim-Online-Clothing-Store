@@ -13,7 +13,9 @@ pytestmark = pytest.mark.django_db
 
 def mk_user(username: str):
     User = get_user_model()
-    return User.objects.create_user(username=username, email=f"{username}@ex.com", password="x")
+    return User.objects.create_user(
+        username=username, email=f"{username}@ex.com", password="x"
+    )
 
 
 def mk_order():
@@ -31,7 +33,9 @@ def mk_order():
 
 def mk_org():
     owner = mk_user("owner2")
-    org = VendorOrg.objects.create(name="Org2", slug="org2", owner=owner, kra_pin="A123456789B")
+    org = VendorOrg.objects.create(
+        name="Org2", slug="org2", owner=owner, kra_pin="A123456789B"
+    )
     VendorMember.objects.create(org=org, user=owner, role=VendorMember.Role.OWNER)
     VendorProfile.objects.create(user=owner, org=org)
     return org

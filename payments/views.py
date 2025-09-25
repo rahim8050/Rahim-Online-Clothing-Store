@@ -43,10 +43,19 @@ class CheckoutView(View):
         except json.JSONDecodeError:
             return JsonResponse({"ok": False, "error": "invalid_json"}, status=400)
 
-        required = ["order_id", "amount", "currency", "gateway", "method", "idempotency_key"]
+        required = [
+            "order_id",
+            "amount",
+            "currency",
+            "gateway",
+            "method",
+            "idempotency_key",
+        ]
         for key in required:
             if key not in data:
-                return JsonResponse({"ok": False, "error": f"missing_{key}"}, status=400)
+                return JsonResponse(
+                    {"ok": False, "error": f"missing_{key}"}, status=400
+                )
 
         from orders.models import Order
 
@@ -94,7 +103,9 @@ class StripeWebhookView(View):
         try:
             event = verify_stripe(request)
         except ValidationError as e:
-            AuditLog.log(event="WEBHOOK_SIGNATURE_INVALID", request_id=request_id, message=str(e))
+            AuditLog.log(
+                event="WEBHOOK_SIGNATURE_INVALID", request_id=request_id, message=str(e)
+            )
             return JsonResponse({"ok": False}, status=400)
 
         # 2) Idempotency (provider retries)
@@ -105,7 +116,9 @@ class StripeWebhookView(View):
         obj = (event.get("data") or {}).get("object", {}) or {}
 
         # Prefer explicit reference (metadata / client_reference_id)
-        reference = (obj.get("metadata") or {}).get("reference") or obj.get("client_reference_id")
+        reference = (obj.get("metadata") or {}).get("reference") or obj.get(
+            "client_reference_id"
+        )
 
         # For success, capture gateway payment intent id
         payment_intent = obj.get("payment_intent") or obj.get("id")
@@ -115,7 +128,9 @@ class StripeWebhookView(View):
             txn = None
             if reference:
                 try:
-                    txn = Transaction.objects.select_for_update().get(reference=reference)
+                    txn = Transaction.objects.select_for_update().get(
+                        reference=reference
+                    )
                 except Transaction.DoesNotExist:
                     txn = None
 
@@ -140,14 +155,21 @@ class StripeWebhookView(View):
             txn.signature_valid = True
             txn.raw_event = event
             txn.save(
-                update_fields=["callback_received", "signature_valid", "raw_event", "updated_at"]
+                update_fields=[
+                    "callback_received",
+                    "signature_valid",
+                    "raw_event",
+                    "updated_at",
+                ]
             )
 
             if event_type in ("payment_intent.succeeded", "checkout.session.completed"):
                 txn = process_success(
                     txn=txn, gateway_reference=payment_intent, request_id=request_id
                 )
-                apply_org_settlement(txn, provider="stripe", raw_body=request.body, payload=event)
+                apply_org_settlement(
+                    txn, provider="stripe", raw_body=request.body, payload=event
+                )
                 to_email = getattr(getattr(txn, "user", None), "email", None)
                 if to_email:
                     emit_once(
@@ -156,7 +178,11 @@ class StripeWebhookView(View):
                         channel="email",
                         payload={"order_id": txn.order_id, "amount": str(txn.amount)},
                         send_fn=lambda: send_payment_email(
-                            to_email, txn.order_id, txn.amount, txn.reference, "received"
+                            to_email,
+                            txn.order_id,
+                            txn.amount,
+                            txn.reference,
+                            "received",
                         ),
                     )
                 if (
@@ -170,10 +196,17 @@ class StripeWebhookView(View):
                         channel="email",
                         payload={"order_id": txn.order_id, "amount": str(txn.amount)},
                         send_fn=lambda: send_refund_email(
-                            to_email, txn.order_id, txn.amount, txn.refund_reference, "completed"
+                            to_email,
+                            txn.order_id,
+                            txn.amount,
+                            txn.refund_reference,
+                            "completed",
                         ),
                     )
-            elif event_type in ("payment_intent.payment_failed", "checkout.session.expired"):
+            elif event_type in (
+                "payment_intent.payment_failed",
+                "checkout.session.expired",
+            ):
                 txn = process_failure(txn=txn, request_id=request_id)
                 to_email = getattr(getattr(txn, "user", None), "email", None)
                 if to_email:
@@ -241,15 +274,24 @@ class PaystackWebhookView(View):
             txn.signature_valid = True  # verify_paystack passed => valid
             txn.raw_event = data
             txn.save(
-                update_fields=["callback_received", "signature_valid", "raw_event", "updated_at"]
+                update_fields=[
+                    "callback_received",
+                    "signature_valid",
+                    "raw_event",
+                    "updated_at",
+                ]
             )
 
             status_ = (data.get("data") or {}).get("status")
             gateway_ref = (data.get("data") or {}).get("id") or ref
 
             if status_ == "success":
-                txn = process_success(txn=txn, gateway_reference=gateway_ref, request_id=request_id)
-                apply_org_settlement(txn, provider="paystack", raw_body=request.body, payload=data)
+                txn = process_success(
+                    txn=txn, gateway_reference=gateway_ref, request_id=request_id
+                )
+                apply_org_settlement(
+                    txn, provider="paystack", raw_body=request.body, payload=data
+                )
                 to_email = getattr(getattr(txn, "user", None), "email", None)
                 if to_email:
                     emit_once(
@@ -258,7 +300,11 @@ class PaystackWebhookView(View):
                         channel="email",
                         payload={"order_id": txn.order_id, "amount": str(txn.amount)},
                         send_fn=lambda: send_payment_email(
-                            to_email, txn.order_id, txn.amount, txn.reference, "received"
+                            to_email,
+                            txn.order_id,
+                            txn.amount,
+                            txn.reference,
+                            "received",
                         ),
                     )
                 if (
@@ -272,7 +318,11 @@ class PaystackWebhookView(View):
                         channel="email",
                         payload={"order_id": txn.order_id, "amount": str(txn.amount)},
                         send_fn=lambda: send_refund_email(
-                            to_email, txn.order_id, txn.amount, txn.refund_reference, "completed"
+                            to_email,
+                            txn.order_id,
+                            txn.amount,
+                            txn.refund_reference,
+                            "completed",
                         ),
                     )
             else:
@@ -305,7 +355,9 @@ class MPesaWebhookView(View):
         try:
             data = verify_mpesa(request)
         except ValidationError as e:
-            AuditLog.log(event="WEBHOOK_SIGNATURE_INVALID", request_id=request_id, message=str(e))
+            AuditLog.log(
+                event="WEBHOOK_SIGNATURE_INVALID", request_id=request_id, message=str(e)
+            )
             return JsonResponse({"ok": False}, status=400)
 
         # 1) Idempotency (provider retries)
@@ -337,15 +389,24 @@ class MPesaWebhookView(View):
             txn.signature_valid = True  # verify_mpesa passed
             txn.raw_event = data
             txn.save(
-                update_fields=["callback_received", "signature_valid", "raw_event", "updated_at"]
+                update_fields=[
+                    "callback_received",
+                    "signature_valid",
+                    "raw_event",
+                    "updated_at",
+                ]
             )
 
             result_code = callback.get("ResultCode")
             gateway_ref = meta.get("MpesaReceiptNumber")
 
             if result_code == 0:
-                txn = process_success(txn=txn, gateway_reference=gateway_ref, request_id=request_id)
-                apply_org_settlement(txn, provider="mpesa", raw_body=request.body, payload=data)
+                txn = process_success(
+                    txn=txn, gateway_reference=gateway_ref, request_id=request_id
+                )
+                apply_org_settlement(
+                    txn, provider="mpesa", raw_body=request.body, payload=data
+                )
                 to_email = getattr(getattr(txn, "user", None), "email", None)
                 if to_email:
                     emit_once(
@@ -354,7 +415,11 @@ class MPesaWebhookView(View):
                         channel="email",
                         payload={"order_id": txn.order_id, "amount": str(txn.amount)},
                         send_fn=lambda: send_payment_email(
-                            to_email, txn.order_id, txn.amount, txn.reference, "received"
+                            to_email,
+                            txn.order_id,
+                            txn.amount,
+                            txn.reference,
+                            "received",
                         ),
                     )
                 if (
@@ -368,7 +433,11 @@ class MPesaWebhookView(View):
                         channel="email",
                         payload={"order_id": txn.order_id, "amount": str(txn.amount)},
                         send_fn=lambda: send_refund_email(
-                            to_email, txn.order_id, txn.amount, txn.refund_reference, "completed"
+                            to_email,
+                            txn.order_id,
+                            txn.amount,
+                            txn.refund_reference,
+                            "completed",
                         ),
                     )
             else:

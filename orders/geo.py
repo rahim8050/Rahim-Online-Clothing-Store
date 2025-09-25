@@ -26,12 +26,16 @@ def haversine_km(a_lat: float, a_lng: float, b_lat: float, b_lng: float) -> floa
     dLng = math.radians(b_lng - a_lng)
     s1 = (
         math.sin(dLat / 2) ** 2
-        + math.cos(math.radians(a_lat)) * math.cos(math.radians(b_lat)) * math.sin(dLng / 2) ** 2
+        + math.cos(math.radians(a_lat))
+        * math.cos(math.radians(b_lat))
+        * math.sin(dLng / 2) ** 2
     )
     return 2 * R * math.asin(math.sqrt(s1))
 
 
-def best_orientation(lat, lng, refs: Iterable[tuple[float, float]]) -> tuple[float, float]:
+def best_orientation(
+    lat, lng, refs: Iterable[tuple[float, float]]
+) -> tuple[float, float]:
     """
     Choose between (lat,lng) and (lng,lat) by whichever is closer to the nearest ref point.
     refs: iterable of (lat,lng), e.g., warehouse coords.
@@ -47,5 +51,7 @@ def best_orientation(lat, lng, refs: Iterable[tuple[float, float]]) -> tuple[flo
         return min(haversine_km(p[0], p[1], r[0], r[1]) for r in refs) if refs else 0.0
 
     return (
-        (a_lat, a_lng) if min_dist((a_lat, a_lng)) <= min_dist((b_lat, b_lng)) else (b_lat, b_lng)
+        (a_lat, a_lng)
+        if min_dist((a_lat, a_lng)) <= min_dist((b_lat, b_lng))
+        else (b_lat, b_lng)
     )

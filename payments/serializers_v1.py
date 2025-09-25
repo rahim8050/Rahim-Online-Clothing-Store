@@ -10,7 +10,9 @@ class CheckoutInitV1Serializer(serializers.Serializer):
     idempotency_key = serializers.CharField(max_length=64)
 
 
-class CheckoutInitV1ResponseSerializer(serializers.Serializer):  # guessed; refine as needed
+class CheckoutInitV1ResponseSerializer(
+    serializers.Serializer
+):  # guessed; refine as needed
     ok = serializers.BooleanField()
     order_id = serializers.IntegerField()
     amount = serializers.DecimalField(max_digits=10, decimal_places=2)

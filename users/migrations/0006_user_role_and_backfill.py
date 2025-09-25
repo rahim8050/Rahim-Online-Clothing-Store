@@ -24,7 +24,9 @@ def backfill_roles(apps, schema_editor):
             group_names[name] = None
 
     # Admins
-    User.objects.filter(models.Q(is_superuser=True) | models.Q(is_staff=True)).update(role="admin")
+    User.objects.filter(models.Q(is_superuser=True) | models.Q(is_staff=True)).update(
+        role="admin"
+    )
 
     # Vendors (via Group membership)
     if group_names.get("Vendor"):
@@ -32,24 +34,32 @@ def backfill_roles(apps, schema_editor):
         try:
             vendor_group = Group.objects.get(pk=group_names["Vendor"])  # re-fetch
             for u in vendor_group.user_set.only("id").iterator(chunk_size=2000):
-                User.objects.filter(pk=u.pk, role__in=[None, "", "customer"]).update(role="vendor")
+                User.objects.filter(pk=u.pk, role__in=[None, "", "customer"]).update(
+                    role="vendor"
+                )
         except Exception:
             pass
 
     # Vendor Staff (via relation if present)
     try:
         staff_ids = (
-            VendorStaff.objects.filter(is_active=True).values_list("staff_id", flat=True).distinct()
+            VendorStaff.objects.filter(is_active=True)
+            .values_list("staff_id", flat=True)
+            .distinct()
         )
         # Use batched updates to avoid IN too large
         batch = []
         for sid in staff_ids:
             batch.append(sid)
             if len(batch) >= 1000:
-                User.objects.filter(pk__in=batch).exclude(role="admin").update(role="vendor_staff")
+                User.objects.filter(pk__in=batch).exclude(role="admin").update(
+                    role="vendor_staff"
+                )
                 batch = []
         if batch:
-            User.objects.filter(pk__in=batch).exclude(role="admin").update(role="vendor_staff")
+            User.objects.filter(pk__in=batch).exclude(role="admin").update(
+                role="vendor_staff"
+            )
     except Exception:
         pass
 
@@ -66,13 +76,17 @@ def backfill_roles(apps, schema_editor):
             pass
 
     # Remaining users -> ensure at least 'customer'
-    User.objects.filter(models.Q(role__isnull=True) | models.Q(role="")).update(role="customer")
+    User.objects.filter(models.Q(role__isnull=True) | models.Q(role="")).update(
+        role="customer"
+    )
 
 
 def unbackfill_roles(apps, schema_editor):
     User = apps.get_model("users", "CustomUser")
     # Safe fallback on reverse: set any blank/invalid to 'customer'
-    User.objects.filter(models.Q(role__isnull=True) | models.Q(role="")).update(role="customer")
+    User.objects.filter(models.Q(role__isnull=True) | models.Q(role="")).update(
+        role="customer"
+    )
 
 
 class Migration(migrations.Migration):

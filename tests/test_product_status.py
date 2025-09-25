@@ -10,7 +10,9 @@ from product_app.models import Category, Product
 @pytest.mark.django_db
 def test_product_status_default_model():
     cat = Category.objects.create(name="Cat", slug="cat")
-    p = Product.objects.create(category=cat, name="X", slug="x-1", price=Decimal("1.00"))
+    p = Product.objects.create(
+        category=cat, name="X", slug="x-1", price=Decimal("1.00")
+    )
     assert p.status in (Product.Status.ACTIVE, "active")
 
 

@@ -13,4 +13,6 @@ class Command(BaseCommand):
         site, _created = Site.objects.update_or_create(
             id=site_id, defaults={"domain": domain, "name": name}
         )
-        self.stdout.write(self.style.SUCCESS(f"Site {site.id} => {site.domain} ({site.name})"))
+        self.stdout.write(
+            self.style.SUCCESS(f"Site {site.id} => {site.domain} ({site.name})")
+        )

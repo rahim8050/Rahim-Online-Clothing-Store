@@ -20,7 +20,12 @@ from django.core.cache import cache
 from django.core.exceptions import FieldError, ImproperlyConfigured
 from django.db import transaction
 from django.db.models import Count, OuterRef, Prefetch, Q, Subquery
-from django.http import HttpResponse, HttpResponseForbidden, HttpResponseRedirect, JsonResponse
+from django.http import (
+    HttpResponse,
+    HttpResponseForbidden,
+    HttpResponseRedirect,
+    JsonResponse,
+)
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse_lazy
 from django.utils.encoding import force_str
@@ -78,9 +83,13 @@ def after_login(request):
     def _current_vendor_app_status(user):
         if not getattr(user, "is_authenticated", False):
             return "none"
-        if VendorApplication.objects.filter(user=user, status=VendorApplication.PENDING).exists():
+        if VendorApplication.objects.filter(
+            user=user, status=VendorApplication.PENDING
+        ).exists():
             return "pending"
-        last = VendorApplication.objects.filter(user=user).order_by("-created_at").first()
+        last = (
+            VendorApplication.objects.filter(user=user).order_by("-created_at").first()
+        )
         return (last and last.status) or "none"
 
     user_is_vendor = u.groups.filter(name="Vendor").exists()
@@ -98,7 +107,9 @@ def after_login(request):
 def my_orders(request):
     # Latest transaction per order (id via subquery)
     latest_tx_id = Subquery(
-        Transaction.objects.filter(order_id=OuterRef("pk")).order_by("-id").values("id")[:1]
+        Transaction.objects.filter(order_id=OuterRef("pk"))
+        .order_by("-id")
+        .values("id")[:1]
     )
 
     orders_qs = (
@@ -109,7 +120,10 @@ def my_orders(request):
             last_tx_id=latest_tx_id,
         )
         .prefetch_related(
-            Prefetch("items", queryset=OrderItem.objects.select_related("product", "warehouse")),
+            Prefetch(
+                "items",
+                queryset=OrderItem.objects.select_related("product", "warehouse"),
+            ),
             "deliveries",
         )
     )
@@ -147,8 +161,16 @@ def debug_ws_push(request, delivery_id: int):
     msg_type = (request.GET.get("type") or "status").strip()
     status_val = (request.GET.get("status") or "en_route").strip()
     try:
-        lat = float(request.GET.get("lat")) if request.GET.get("lat") is not None else None
-        lng = float(request.GET.get("lng")) if request.GET.get("lng") is not None else None
+        lat = (
+            float(request.GET.get("lat"))
+            if request.GET.get("lat") is not None
+            else None
+        )
+        lng = (
+            float(request.GET.get("lng"))
+            if request.GET.get("lng") is not None
+            else None
+        )
     except Exception:
         lat = lng = None
 
@@ -163,10 +185,11 @@ def debug_ws_push(request, delivery_id: int):
     )
     try:
         async_to_sync(layer.group_send)(
-            f"delivery.track.{int(delivery_id)}", {"type": "broadcast", "payload": payload_legacy}
+            f"delivery.track.{int(delivery_id)}",
+            {"type": "broadcast", "payload": payload_legacy},
         )
     except Exception as e:
-          logger.debug("non-critical operation failed: %s", e, exc_info=True)
+        logger.debug("non-critical operation failed: %s", e, exc_info=True)
 
     payload_new = (
         {"type": "delivery.event", "kind": "position_update", "lat": lat, "lng": lng}
@@ -175,8 +198,8 @@ def debug_ws_push(request, delivery_id: int):
     )
     try:
         async_to_sync(layer.group_send)(f"delivery.{int(delivery_id)}", payload_new)
-    except Exception as e :
-          logger.debug("non-critical operation failed: %s", e, exc_info=True)
+    except Exception as e:
+        logger.debug("non-critical operation failed: %s", e, exc_info=True)
 
     return JsonResponse({"ok": True, "delivery": int(delivery_id), "type": msg_type})
 
@@ -208,7 +231,9 @@ class CustomLoginView(LoginView):
         return super().form_valid(form)
 
     def form_invalid(self, form):
-        logger.warning("Login failed for %s: %s", self.request.POST.get("username"), form.errors)
+        logger.warning(
+            "Login failed for %s: %s", self.request.POST.get("username"), form.errors
+        )
         return super().form_invalid(form)
 
     def get_success_url(self):
@@ -286,7 +311,9 @@ class ResendActivationEmailView(View):
     COOLDOWN_SECONDS = 300  # 5 minutes
 
     def get(self, request):
-        return render(request, self.template_name, {"form": ResendActivationEmailForm()})
+        return render(
+            request, self.template_name, {"form": ResendActivationEmailForm()}
+        )
 
     def post(self, request):
         form = ResendActivationEmailForm(request.POST)
@@ -317,7 +344,8 @@ class ResendActivationEmailView(View):
             send_activation_email(request, user)
         except Exception:
             messages.error(
-                request, "We couldn’t send the email right now. Please try again shortly."
+                request,
+                "We couldn’t send the email right now. Please try again shortly.",
             )
             return redirect("users:resend_activation")
 
@@ -331,7 +359,9 @@ class ResendActivationEmailView(View):
 def profile_view(request):
     if request.method == "POST":
         if "update_profile" in request.POST:
-            profile_form = UserUpdateForm(request.POST, request.FILES, instance=request.user)
+            profile_form = UserUpdateForm(
+                request.POST, request.FILES, instance=request.user
+            )
             password_form = CustomPasswordChangeForm(user=request.user)
             if profile_form.is_valid():
                 profile_form.save()
@@ -339,7 +369,9 @@ def profile_view(request):
                 return redirect("users:profile")
             messages.error(request, "Please correct the errors in your profile form.")
         elif "change_password" in request.POST:
-            password_form = CustomPasswordChangeForm(user=request.user, data=request.POST)
+            password_form = CustomPasswordChangeForm(
+                user=request.user, data=request.POST
+            )
             profile_form = UserUpdateForm(instance=request.user)
             if password_form.is_valid():
                 user = password_form.save()
@@ -370,7 +402,9 @@ def profile_settings_view(request):
     else:
         form = UserUpdateForm(instance=request.user)
 
-    return render(request, "users/accounts/profile_settings.html", {"profile_form": form})
+    return render(
+        request, "users/accounts/profile_settings.html", {"profile_form": form}
+    )
 
 
 @login_required
@@ -386,7 +420,9 @@ def change_password_view(request):
     else:
         form = CustomPasswordChangeForm(user=request.user)
 
-    return render(request, "users/accounts/change_password.html", {"password_form": form})
+    return render(
+        request, "users/accounts/change_password.html", {"password_form": form}
+    )
 
 
 # -------------------- Dashboards --------------------
@@ -432,7 +468,15 @@ def vendor_dashboard(request):
             .order_by("-id")
         )
         status = (request.GET.get("status") or "all").strip().lower()
-        allowed = {"all", "pending", "assigned", "picked_up", "en_route", "delivered", "cancelled"}
+        allowed = {
+            "all",
+            "pending",
+            "assigned",
+            "picked_up",
+            "en_route",
+            "delivered",
+            "cancelled",
+        }
         if status not in allowed:
             status = "all"
         deliveries = base_qs if status == "all" else base_qs.filter(status=status)
@@ -463,7 +507,9 @@ def driver_dashboard(request):
 
     DeliveryModel = apps.get_model("orders", "Delivery")
     deliveries = (
-        DeliveryModel.objects.filter(driver=request.user).select_related("order").order_by("-id")
+        DeliveryModel.objects.filter(driver=request.user)
+        .select_related("order")
+        .order_by("-id")
     )
     return render(request, "dash/driver.html", {"deliveries": deliveries})
 
@@ -532,7 +578,6 @@ class VendorApplyAPI(generics.CreateAPIView):
         serializer.save(user=self.request.user)
 
 
-
 class VendorApplicationApproveAPI(generics.UpdateAPIView):
     """
     PATCH /users/vendor-applications/{id}/approve/
@@ -551,7 +596,9 @@ class VendorApplicationApproveAPI(generics.UpdateAPIView):
         status_new = self.request.data.get("status")
         if status_new not in (VendorApplication.APPROVED, VendorApplication.REJECTED):
             raise ValidationError({"status": "Must be approved or rejected"})
-        app = serializer.save(status=status_new, decided_by=self.request.user, decided_at=now())
+        app = serializer.save(
+            status=status_new, decided_by=self.request.user, decided_at=now()
+        )
         if status_new == VendorApplication.APPROVED:
             # add vendor group & self-staff link
             from django.contrib.auth.models import Group

@@ -11,10 +11,16 @@ import notifications.routing as notif_routing
 
 @pytest.mark.asyncio
 async def test_ws_connect_and_group_send(db, settings):
-    settings.CHANNEL_LAYERS = {"default": {"BACKEND": "channels.layers.InMemoryChannelLayer"}}
+    settings.CHANNEL_LAYERS = {
+        "default": {"BACKEND": "channels.layers.InMemoryChannelLayer"}
+    }
     # Build a minimal ASGI app for tests to avoid importing project ASGI
     application = ProtocolTypeRouter(
-        {"websocket": AuthMiddlewareStack(URLRouter(notif_routing.websocket_urlpatterns))}
+        {
+            "websocket": AuthMiddlewareStack(
+                URLRouter(notif_routing.websocket_urlpatterns)
+            )
+        }
     )
     # Anonymous socket joins 'anon' group in our consumer; we test broadcast path
     communicator = WebsocketCommunicator(application, "/ws/notifications/")

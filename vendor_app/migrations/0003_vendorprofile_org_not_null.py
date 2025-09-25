@@ -33,7 +33,6 @@ def ensure_profiles_have_orgs(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("vendor_app", "0002_backfill_vendor_orgs"),
     ]

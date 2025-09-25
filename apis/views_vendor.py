@@ -23,13 +23,17 @@ class VendorKPIsProductsSerializer(serializers.Serializer):  # guessed; refine a
     live = serializers.IntegerField()
 
 
-class VendorKPIsSeriesEntrySerializer(serializers.Serializer):  # guessed; refine as needed
+class VendorKPIsSeriesEntrySerializer(
+    serializers.Serializer
+):  # guessed; refine as needed
     date = serializers.DateField()
     orders = serializers.IntegerField()
     revenue = serializers.FloatField()
 
 
-class VendorKPIsLastPayoutSerializer(serializers.Serializer):  # guessed; refine as needed
+class VendorKPIsLastPayoutSerializer(
+    serializers.Serializer
+):  # guessed; refine as needed
     amount = serializers.FloatField()
     created_at = serializers.DateTimeField()
 
@@ -59,7 +63,9 @@ class VendorKPIAPI(APIView):
         Transaction = apps.get_model("orders", "Transaction")
 
         try:
-            owner_id = resolve_vendor_owner_for(request.user, request.query_params.get("owner_id"))
+            owner_id = resolve_vendor_owner_for(
+                request.user, request.query_params.get("owner_id")
+            )
         except ValueError as e:
             return Response({"owner_id": str(e)}, status=400)
 
@@ -75,7 +81,9 @@ class VendorKPIAPI(APIView):
 
         # Orders in last 30 days: distinct orders that include at least one vendor product
         vendor_item_q = Q(**{f"items__product__{field}_id": owner_id})
-        orders_30_qs = Order.objects.filter(vendor_item_q, created_at__gte=since_30).distinct()
+        orders_30_qs = Order.objects.filter(
+            vendor_item_q, created_at__gte=since_30
+        ).distinct()
         orders_30d = orders_30_qs.count()
 
         # Revenue in last 30 days: sum successful transactions for those orders
@@ -117,7 +125,11 @@ class VendorKPIAPI(APIView):
             d = today - timedelta(days=i - 1)
             k = str(d)
             series_14d.append(
-                {"date": k, "orders": orders_by_day.get(k, 0), "revenue": rev_by_day.get(k, 0.0)}
+                {
+                    "date": k,
+                    "orders": orders_by_day.get(k, 0),
+                    "revenue": rev_by_day.get(k, 0.0),
+                }
             )
 
         # Optional: last payout (if a payouts app/model exists)

@@ -28,7 +28,9 @@ def absolute_url(path: str, request=None) -> str:
         return request.build_absolute_uri(path)
 
     scheme = getattr(
-        settings, "SITE_SCHEME", "https" if getattr(settings, "IS_PROD", False) else "http"
+        settings,
+        "SITE_SCHEME",
+        "https" if getattr(settings, "IS_PROD", False) else "http",
     )
     domain = current_domain(None)
     base = f"{scheme}://{domain}".rstrip("/") + "/"

@@ -82,7 +82,7 @@ _ROUTE_TTL = 60  # seconds
 
 def _route_cache_key(a_lat, a_lng, b_lat, b_lng) -> str:
     # round to ~11m precision to improve hit rate
-    return f"{round(a_lat,5)},{round(a_lng,5)}:{round(b_lat,5)},{round(b_lng,5)}"
+    return f"{round(a_lat, 5)},{round(a_lng, 5)}:{round(b_lat, 5)},{round(b_lng, 5)}"
 
 
 def _cache_get(k: str):
@@ -120,7 +120,9 @@ def _haversine_km(a_lat, a_lng, b_lat, b_lng):
     dLng = math.radians(b_lng - a_lng)
     s1 = (
         math.sin(dLat / 2) ** 2
-        + math.cos(math.radians(a_lat)) * math.cos(math.radians(b_lat)) * math.sin(dLng / 2) ** 2
+        + math.cos(math.radians(a_lat))
+        * math.cos(math.radians(b_lat))
+        * math.sin(dLng / 2) ** 2
     )
     return 2 * R * math.asin(math.sqrt(s1))
 
@@ -154,7 +156,9 @@ def _geoapify_route(a_lat, a_lng, b_lat, b_lng, api_key: str):
 def _osrm_route(a_lat, a_lng, b_lat, b_lng):
     base = "https://router.project-osrm.org/route/v1/driving"
     url = f"{base}/{a_lng},{a_lat};{b_lng},{b_lat}"
-    r = requests.get(url, params={"overview": "full", "geometries": "geojson"}, timeout=10)
+    r = requests.get(
+        url, params={"overview": "full", "geometries": "geojson"}, timeout=10
+    )
     r.raise_for_status()
     j = r.json()
     route = (j.get("routes") or [None])[0]
@@ -180,15 +184,21 @@ def driver_deliveries_page(request):
 @require_GET
 def driver_deliveries_api(request):
     qs = (
-        Delivery.objects.filter(driver=request.user).select_related("order").order_by("-updated_at")
+        Delivery.objects.filter(driver=request.user)
+        .select_related("order")
+        .order_by("-updated_at")
     )
     data = [
         {
             "id": d.id,
             "order_id": d.order_id,
             "status": d.status,
-            "dest_lat": float(d.order.dest_lat) if d.order.dest_lat is not None else None,
-            "dest_lng": float(d.order.dest_lng) if d.order.dest_lng is not None else None,
+            "dest_lat": float(d.order.dest_lat)
+            if d.order.dest_lat is not None
+            else None,
+            "dest_lng": float(d.order.dest_lng)
+            if d.order.dest_lng is not None
+            else None,
             "last_lat": float(d.last_lat) if d.last_lat is not None else None,
             "last_lng": float(d.last_lng) if d.last_lng is not None else None,
             "last_ping_at": d.last_ping_at.isoformat() if d.last_ping_at else None,
@@ -221,8 +231,12 @@ def driver_location_api(request):
     d.last_ping_at = timezone.now()
     if d.status == d.Status.ASSIGNED:
         d.status = d.Status.EN_ROUTE
-    d.save(update_fields=["last_lat", "last_lng", "last_ping_at", "status", "updated_at"])
-    return JsonResponse({"ok": True, "status": d.status, "ts": d.last_ping_at.isoformat()})
+    d.save(
+        update_fields=["last_lat", "last_lng", "last_ping_at", "status", "updated_at"]
+    )
+    return JsonResponse(
+        {"ok": True, "status": d.status, "ts": d.last_ping_at.isoformat()}
+    )
 
 
 # ---------- DRIVER: action ----------
@@ -252,7 +266,15 @@ def driver_action_api(request):
         d.delivered_at = now
         if d.dest_lat is not None and d.dest_lng is not None:
             d.last_lat, d.last_lng = d.dest_lat, d.dest_lng
-            d.save(update_fields=["status", "delivered_at", "last_lat", "last_lng", "updated_at"])
+            d.save(
+                update_fields=[
+                    "status",
+                    "delivered_at",
+                    "last_lat",
+                    "last_lng",
+                    "updated_at",
+                ]
+            )
         else:
             d.save(update_fields=["status", "delivered_at", "updated_at"])
     elif action == "cancel":
@@ -297,7 +319,9 @@ def driver_route_api(request, delivery_id: int):
 
     try:
         if getattr(settings, "GEOAPIFY_API_KEY", None):
-            payload = _geoapify_route(a_lat, a_lng, b_lat, b_lng, settings.GEOAPIFY_API_KEY)
+            payload = _geoapify_route(
+                a_lat, a_lng, b_lat, b_lng, settings.GEOAPIFY_API_KEY
+            )
         else:
             payload = _osrm_route(a_lat, a_lng, b_lat, b_lng)
     except Exception:
@@ -392,7 +416,9 @@ def order_create(request):
                 ):
                     raise ValueError
             except Exception:
-                messages.error(request, "Please select a valid delivery address from suggestions.")
+                messages.error(
+                    request, "Please select a valid delivery address from suggestions."
+                )
                 return redirect("orders:order_create")
 
             with transaction.atomic():
@@ -440,7 +466,9 @@ def order_create(request):
     cart_items = cart.items.filter(is_selected=True)
     if not cart_items.exists():
         cart_items = cart.items.all()
-    selected_total = q2(sum((i.product.price * i.quantity for i in cart_items), Decimal("0.00")))
+    selected_total = q2(
+        sum((i.product.price * i.quantity for i in cart_items), Decimal("0.00"))
+    )
 
     return render(
         request,
@@ -480,15 +508,20 @@ def order_edit(request, order_id: int):
 
     if request.method == "POST":
         try:
-            txt = (request.POST.get("dest_address_text") or order.dest_address_text or "").strip()
+            txt = (
+                request.POST.get("dest_address_text") or order.dest_address_text or ""
+            ).strip()
             lat = _parse_coord(request.POST.get("dest_lat") or order.dest_lat)
             lng = _parse_coord(request.POST.get("dest_lng") or order.dest_lng)
             if not (
-                Decimal("-90") <= lat <= Decimal("90") and Decimal("-180") <= lng <= Decimal("180")
+                Decimal("-90") <= lat <= Decimal("90")
+                and Decimal("-180") <= lng <= Decimal("180")
             ):
                 raise ValueError
         except Exception:
-            messages.error(request, "Please select a valid delivery address from suggestions.")
+            messages.error(
+                request, "Please select a valid delivery address from suggestions."
+            )
             return redirect("orders:order_edit", order.id)
 
         form = OrderForm(request.POST, instance=order)
@@ -567,7 +600,9 @@ def paystack_checkout(request, order_id: int):
 
     # channel resolution
     payment_method = (
-        request.GET.get("payment_method") or request.POST.get("payment_method") or "card"
+        request.GET.get("payment_method")
+        or request.POST.get("payment_method")
+        or "card"
     ).lower()
     if payment_method not in {"card", "mpesa"}:
         messages.error(request, "Invalid payment method")
@@ -589,7 +624,9 @@ def paystack_checkout(request, order_id: int):
         "email": payer_email,
         "amount": to_minor_units(total_dec),  # integer minor units
         "currency": getattr(settings, "PAYSTACK_CURRENCY", "KES"),
-        "callback_url": request.build_absolute_uri(reverse("orders:paystack_payment_confirm")),
+        "callback_url": request.build_absolute_uri(
+            reverse("orders:paystack_payment_confirm")
+        ),
         "metadata": {"order_id": order.id, "payment_method": payment_method},
         "channels": [channel],
     }
@@ -635,7 +672,9 @@ def paystack_webhook(request):
 
     # 1) Verify signature using raw request body
     raw = request.body  # bytes
-    signature = (request.META.get("HTTP_X_PAYSTACK_SIGNATURE", "") or "").strip().lower()
+    signature = (
+        (request.META.get("HTTP_X_PAYSTACK_SIGNATURE", "") or "").strip().lower()
+    )
     expected = (
         hmac.new(
             getattr(settings, "PAYSTACK_SECRET_KEY", "").encode("utf-8"),
@@ -658,7 +697,9 @@ def paystack_webhook(request):
     # 3) Validate schema
     ser = PaystackWebhookSerializer(data=event)
     if not ser.is_valid():
-        return JsonResponse({"detail": "invalid payload", "errors": ser.errors}, status=400)
+        return JsonResponse(
+            {"detail": "invalid payload", "errors": ser.errors}, status=400
+        )
 
     data = event.get("data", {}) or {}
     reference = data.get("reference")
@@ -825,7 +866,9 @@ def paystack_payment_confirm(request):
     reference = request.GET.get("reference")
     if not reference:
         return render(request, "payment_result.html", {"error": "Missing reference"})
-    transaction = get_object_or_404(Transaction, reference=reference, gateway="paystack")
+    transaction = get_object_or_404(
+        Transaction, reference=reference, gateway="paystack"
+    )
     return redirect("orders:payment_success", transaction.order.id)
 
 
@@ -854,7 +897,9 @@ def send_payment_receipt_email(transaction: Transaction, order: Order):
 def stripe_checkout(request, order_id):
     order = get_object_or_404(Order, id=order_id, user=request.user)
     amount_kes = q2(order.get_total_cost())
-    unit_amount = int((amount_kes * Decimal("100")).to_integral_value(rounding=ROUND_HALF_UP))
+    unit_amount = int(
+        (amount_kes * Decimal("100")).to_integral_value(rounding=ROUND_HALF_UP)
+    )
 
     session = stripe.checkout.Session.create(
         payment_method_types=["card"],
@@ -874,7 +919,9 @@ def stripe_checkout(request, order_id):
             reverse("orders:stripe_payment_success", args=[order.id])
         )
         + "?session_id={CHECKOUT_SESSION_ID}",
-        cancel_url=request.build_absolute_uri(reverse("orders:payment_cancel", args=[order.id])),
+        cancel_url=request.build_absolute_uri(
+            reverse("orders:payment_cancel", args=[order.id])
+        ),
     )
     return redirect(session.url)
 
@@ -883,12 +930,20 @@ def stripe_checkout(request, order_id):
 def Stripe_payment_success(request, order_id):
     session_id = request.GET.get("session_id")
     if not session_id:
-        return render(request, "orders/payment_failed.html", {"message": "No session ID provided."})
+        return render(
+            request,
+            "orders/payment_failed.html",
+            {"message": "No session ID provided."},
+        )
     try:
         session = stripe.checkout.Session.retrieve(session_id)
         payment_intent = stripe.PaymentIntent.retrieve(session.payment_intent)
     except Exception as e:
-        return render(request, "orders/payment_failed.html", {"message": f"Stripe error: {str(e)}"})
+        return render(
+            request,
+            "orders/payment_failed.html",
+            {"message": f"Stripe error: {str(e)}"},
+        )
 
     order = get_object_or_404(Order, id=order_id, user=request.user)
     order.payment_status = "paid"
@@ -928,7 +983,9 @@ def stripe_webhook(request):
                 order.payment_status = "paid"
                 order.paid = True
                 order.payment_intent_id = session.get("payment_intent")
-                order.save(update_fields=["payment_status", "paid", "payment_intent_id"])
+                order.save(
+                    update_fields=["payment_status", "paid", "payment_intent_id"]
+                )
             except Order.DoesNotExist:
                 pass
     elif event.get("type") == "payment_intent.payment_failed":
@@ -1186,7 +1243,10 @@ def track_order(request, order_id: int):
     delivery = DeliveryModel.objects.filter(order=order).order_by("-id").first()
     warehouse = None
     if delivery and delivery.origin_lat is not None and delivery.origin_lng is not None:
-        warehouse = {"lat": float(delivery.origin_lat), "lng": float(delivery.origin_lng)}
+        warehouse = {
+            "lat": float(delivery.origin_lat),
+            "lng": float(delivery.origin_lng),
+        }
     else:
         item = order.items.select_related("warehouse").first()
         wh = getattr(item, "warehouse", None)

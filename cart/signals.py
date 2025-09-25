@@ -15,7 +15,9 @@ def merge_guest_cart_on_login(sender, user, request, **kwargs):
         cid = get_signed_cookie(request)
         if not cid:
             return
-        guest = Cart.objects.filter(pk=cid, user__isnull=True, status=Cart.Status.ACTIVE).first()
+        guest = Cart.objects.filter(
+            pk=cid, user__isnull=True, status=Cart.Status.ACTIVE
+        ).first()
         if not guest:
             return
         user_cart, _ = Cart.objects.get_or_create(user=user, status=Cart.Status.ACTIVE)

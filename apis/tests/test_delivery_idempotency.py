@@ -39,7 +39,9 @@ def test_idempotent_accept_assign_unassign_status(client):
         dest_lng=0,
         user=owner,
     )
-    d = Delivery.objects.create(order=order, dest_lat=0, dest_lng=0, status=Delivery.Status.PENDING)
+    d = Delivery.objects.create(
+        order=order, dest_lat=0, dest_lng=0, status=Delivery.Status.PENDING
+    )
 
     # Accept is idempotent for the same driver:
     client.force_login(driver)
@@ -56,13 +58,17 @@ def test_idempotent_accept_assign_unassign_status(client):
     assert d.assigned_at == assigned_at_1
 
     # Status picked_up is idempotent (re-post doesn't bump timestamp)
-    r3 = client.post(f"/apis/deliveries/{d.id}/status/", {"status": Delivery.Status.PICKED_UP})
+    r3 = client.post(
+        f"/apis/deliveries/{d.id}/status/", {"status": Delivery.Status.PICKED_UP}
+    )
     assert r3.status_code == 200
     d.refresh_from_db()
     ts1 = d.picked_up_at
     assert ts1 is not None
 
-    r4 = client.post(f"/apis/deliveries/{d.id}/status/", {"status": Delivery.Status.PICKED_UP})
+    r4 = client.post(
+        f"/apis/deliveries/{d.id}/status/", {"status": Delivery.Status.PICKED_UP}
+    )
     assert r4.status_code == 200
     d.refresh_from_db()
     assert d.picked_up_at == ts1  # unchanged
@@ -73,12 +79,20 @@ def test_idempotent_accept_assign_unassign_status(client):
     u1 = client.post(f"/apis/deliveries/{d.id}/unassign/")
     assert u1.status_code == 200
     d.refresh_from_db()
-    assert d.driver_id is None and d.status == Delivery.Status.PENDING and d.assigned_at is None
+    assert (
+        d.driver_id is None
+        and d.status == Delivery.Status.PENDING
+        and d.assigned_at is None
+    )
 
     u2 = client.post(f"/apis/deliveries/{d.id}/unassign/")  # repeat
     assert u2.status_code == 200
     d.refresh_from_db()
-    assert d.driver_id is None and d.status == Delivery.Status.PENDING and d.assigned_at is None
+    assert (
+        d.driver_id is None
+        and d.status == Delivery.Status.PENDING
+        and d.assigned_at is None
+    )
 
     # Vendor re-assign same driver → idempotent
     a1 = client.post(f"/apis/deliveries/{d.id}/assign/", {"driver_id": driver.id})

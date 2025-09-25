@@ -15,7 +15,9 @@ class PaymentTestCase(TestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user(username="u", password="p")
         category = Category.objects.create(name="c", slug="c")
-        self.product = Product.objects.create(category=category, name="p", slug="p", price=10)
+        self.product = Product.objects.create(
+            category=category, name="p", slug="p", price=10
+        )
         self.order = Order.objects.create(
             full_name="x",
             email="x@example.com",
@@ -25,7 +27,9 @@ class PaymentTestCase(TestCase):
             dest_lng=0,
             user=self.user,
         )
-        OrderItem.objects.create(order=self.order, product=self.product, price=10, quantity=1)
+        OrderItem.objects.create(
+            order=self.order, product=self.product, price=10, quantity=1
+        )
 
     def test_checkout_idempotency(self):
         self.client.login(username="u", password="p")
@@ -60,7 +64,10 @@ class PaymentTestCase(TestCase):
         event = {
             "type": "payment_intent.succeeded",
             "data": {
-                "object": {"metadata": {"reference": txn.reference}, "payment_intent": "pi_1"}
+                "object": {
+                    "metadata": {"reference": txn.reference},
+                    "payment_intent": "pi_1",
+                }
             },
         }
         mock_verify.return_value = event
@@ -74,7 +81,9 @@ class PaymentTestCase(TestCase):
         txn.refresh_from_db()
         self.assertEqual(txn.status, TxnStatus.SUCCESS)
         self.assertTrue(
-            AuditLog.objects.filter(event="WEBHOOK_REPLAY_BLOCKED", transaction=txn).exists()
+            AuditLog.objects.filter(
+                event="WEBHOOK_REPLAY_BLOCKED", transaction=txn
+            ).exists()
         )
 
     @patch("payments.services.issue_refund")
@@ -105,7 +114,10 @@ class PaymentTestCase(TestCase):
         event = {
             "type": "payment_intent.succeeded",
             "data": {
-                "object": {"metadata": {"reference": txn2.reference}, "payment_intent": "pi_2"}
+                "object": {
+                    "metadata": {"reference": txn2.reference},
+                    "payment_intent": "pi_2",
+                }
             },
         }
         mock_verify.return_value = event
@@ -114,12 +126,16 @@ class PaymentTestCase(TestCase):
             t.refund_reference = "rr1"
 
         mock_refund.side_effect = fake_refund
-        self.client.post("/webhook/stripe/", json.dumps(event), content_type="application/json")
+        self.client.post(
+            "/webhook/stripe/", json.dumps(event), content_type="application/json"
+        )
         txn2.refresh_from_db()
         self.assertEqual(txn2.status, TxnStatus.REFUNDED)
         self.assertEqual(txn2.refund_reference, "rr1")
         self.assertTrue(
-            AuditLog.objects.filter(event="DUPLICATE_REFUND_ISSUED", transaction=txn2).exists()
+            AuditLog.objects.filter(
+                event="DUPLICATE_REFUND_ISSUED", transaction=txn2
+            ).exists()
         )
 
     @patch("payments.views.verify_mpesa")
@@ -151,12 +167,16 @@ class PaymentTestCase(TestCase):
                 "stkCallback": {
                     "MerchantRequestID": txn2.reference,
                     "ResultCode": 0,
-                    "CallbackMetadata": {"Item": [{"Name": "MpesaReceiptNumber", "Value": "xyz"}]},
+                    "CallbackMetadata": {
+                        "Item": [{"Name": "MpesaReceiptNumber", "Value": "xyz"}]
+                    },
                 }
             }
         }
         mock_verify.return_value = event
-        self.client.post("/webhook/mpesa/", json.dumps(event), content_type="application/json")
+        self.client.post(
+            "/webhook/mpesa/", json.dumps(event), content_type="application/json"
+        )
         txn2.refresh_from_db()
         self.assertEqual(txn2.status, TxnStatus.DUPLICATE_SUCCESS)
         self.assertTrue(

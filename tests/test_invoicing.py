@@ -12,7 +12,9 @@ pytestmark = pytest.mark.django_db
 
 def mk_user(username: str):
     User = get_user_model()
-    return User.objects.create_user(username=username, email=f"{username}@ex.com", password="x")
+    return User.objects.create_user(
+        username=username, email=f"{username}@ex.com", password="x"
+    )
 
 
 def mk_order():

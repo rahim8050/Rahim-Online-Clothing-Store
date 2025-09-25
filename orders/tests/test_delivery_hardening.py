@@ -33,7 +33,9 @@ def order(driver):
 
 @pytest.mark.django_db
 def test_transitions_idempotent(order, driver):
-    d = Delivery.objects.create(order=order, driver=driver, status=Delivery.Status.ASSIGNED)
+    d = Delivery.objects.create(
+        order=order, driver=driver, status=Delivery.Status.ASSIGNED
+    )
     when = timezone.now()
     d.mark_picked_up(by=driver, when=when)
     d.save()
@@ -46,14 +48,18 @@ def test_transitions_idempotent(order, driver):
 
 @pytest.mark.django_db
 def test_invalid_transition_rejected(order, driver):
-    d = Delivery.objects.create(order=order, driver=driver, status=Delivery.Status.PENDING)
+    d = Delivery.objects.create(
+        order=order, driver=driver, status=Delivery.Status.PENDING
+    )
     with pytest.raises(ValueError):
         d.mark_delivered(by=driver)
 
 
 @pytest.mark.django_db
 def test_driver_viewset_permissions(client, order, driver):
-    d = Delivery.objects.create(order=order, driver=driver, status=Delivery.Status.ASSIGNED)
+    d = Delivery.objects.create(
+        order=order, driver=driver, status=Delivery.Status.ASSIGNED
+    )
     client.force_login(driver)
     # list only returns driver's deliveries
     r = client.get("/apis/deliveries/")

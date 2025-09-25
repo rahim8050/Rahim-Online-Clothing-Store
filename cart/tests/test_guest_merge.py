@@ -19,13 +19,17 @@ def api():
 
 @pytest.fixture()
 def user(db):
-    return User.objects.create_user(username="u1", email="u1@example.com", password="pass")
+    return User.objects.create_user(
+        username="u1", email="u1@example.com", password="pass"
+    )
 
 
 @pytest.fixture()
 def product(db):
     cat = Category.objects.create(name="Shirts", slug="shirts")
-    return Product.objects.create(category=cat, name="Blue Shirt", slug="blue-shirt", price="10.00")
+    return Product.objects.create(
+        category=cat, name="Blue Shirt", slug="blue-shirt", price="10.00"
+    )
 
 
 @pytest.mark.django_db
@@ -46,7 +50,9 @@ def test_guest_add_and_merge_on_login(api, user, product):
     r = api.post(v2_guest("/carts/my_active/"))
     cid = r.json()["id"]
     api.post(
-        v2_guest(f"/carts/{cid}/add_item/"), {"product": product.id, "quantity": 2}, format="json"
+        v2_guest(f"/carts/{cid}/add_item/"),
+        {"product": product.id, "quantity": 2},
+        format="json",
     )
 
     # simulate login signal to trigger merge

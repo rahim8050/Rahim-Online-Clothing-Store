@@ -12,7 +12,11 @@ class Migration(migrations.Migration):
             name="status",
             field=models.CharField(
                 max_length=20,
-                choices=[("draft", "Draft"), ("active", "Active"), ("archived", "Archived")],
+                choices=[
+                    ("draft", "Draft"),
+                    ("active", "Active"),
+                    ("archived", "Archived"),
+                ],
                 default="active",
                 db_index=True,
             ),

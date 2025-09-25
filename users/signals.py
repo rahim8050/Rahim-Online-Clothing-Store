@@ -100,7 +100,10 @@ def vendor_application_status_push(sender, instance, created, **kwargs):
     except Exception:
         return
     # Decide whether to emit
-    changed = created or getattr(instance, "_old_status", None) not in (None, instance.status)
+    changed = created or getattr(instance, "_old_status", None) not in (
+        None,
+        instance.status,
+    )
 
     if not changed:
         return

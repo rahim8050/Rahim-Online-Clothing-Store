@@ -5,7 +5,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("payments", "0003_alter_notificationevent_options_and_more"),
     ]
@@ -17,13 +16,19 @@ class Migration(migrations.Migration):
                 (
                     "id",
                     models.BigAutoField(
-                        auto_created=True, primary_key=True, serialize=False, verbose_name="ID"
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
                     ),
                 ),
                 ("amount", models.DecimalField(decimal_places=2, max_digits=12)),
                 ("gateway", models.CharField(max_length=32)),
                 ("reason", models.CharField(default="duplicate", max_length=64)),
-                ("refund_reference", models.CharField(blank=True, max_length=128, null=True)),
+                (
+                    "refund_reference",
+                    models.CharField(blank=True, max_length=128, null=True),
+                ),
                 ("raw_response", models.JSONField(blank=True, null=True)),
                 (
                     "status",

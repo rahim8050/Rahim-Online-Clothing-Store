@@ -8,7 +8,9 @@ from .serializers_v1 import CartItemV1WriteSerializer, CartV1Serializer
 
 
 class CartV1ViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = Cart.objects.prefetch_related("items__product").all().order_by("-updated_at")
+    queryset = (
+        Cart.objects.prefetch_related("items__product").all().order_by("-updated_at")
+    )
     serializer_class = CartV1Serializer
     permission_classes = [permissions.IsAuthenticated]
 

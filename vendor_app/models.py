@@ -121,7 +121,9 @@ class VendorOrg(models.Model):
         role = (role or "").upper()
         if role not in VendorMember.Role.values:
             return False
-        return VendorMember.objects.filter(org=self, user=user, role=role, is_active=True).exists()
+        return VendorMember.objects.filter(
+            org=self, user=user, role=role, is_active=True
+        ).exists()
 
     def save(self, *args, **kwargs):
         # keep slug normalized and unique
@@ -142,7 +144,9 @@ class VendorOrg(models.Model):
 
             pin = (self.kra_pin or "").strip().upper()
             if not re.match(r"^[A-Z]{1}[0-9]{9}[A-Z]{1}$", pin):
-                raise ValidationError({"kra_pin": "KRA PIN must look like A123456789B."})
+                raise ValidationError(
+                    {"kra_pin": "KRA PIN must look like A123456789B."}
+                )
 
 
 class VendorMember(models.Model):
@@ -167,7 +171,10 @@ class VendorMember(models.Model):
         VendorOrg, related_name="members", on_delete=models.CASCADE, db_index=True
     )
     user = models.ForeignKey(
-        UserRef, related_name="vendor_memberships", on_delete=models.CASCADE, db_index=True
+        UserRef,
+        related_name="vendor_memberships",
+        on_delete=models.CASCADE,
+        db_index=True,
     )
     role = models.CharField(max_length=16, choices=Role.choices, db_index=True)
     is_active: bool = models.BooleanField(default=True)
@@ -176,14 +183,18 @@ class VendorMember(models.Model):
 
     class Meta:
         constraints = [
-            models.UniqueConstraint(fields=["org", "user"], name="uniq_vendormember_org_user"),
+            models.UniqueConstraint(
+                fields=["org", "user"], name="uniq_vendormember_org_user"
+            ),
             # Enforce only one OWNER per org
             models.UniqueConstraint(
                 fields=["org"],
                 condition=Q(role="OWNER"),
                 name="uniq_owner_per_org",
             ),
-            models.CheckConstraint(check=~Q(role=""), name="vendormember_role_not_empty"),
+            models.CheckConstraint(
+                check=~Q(role=""), name="vendormember_role_not_empty"
+            ),
         ]
         indexes = [
             models.Index(fields=["role"], name="vendormember_role_idx"),
@@ -221,9 +232,15 @@ class VendorProfile(models.Model):
       Do not use it for staff membership queries; use `VendorMember` instead.
     """
 
-    user = models.OneToOneField(UserRef, on_delete=models.CASCADE, related_name="vendor_profile")
+    user = models.OneToOneField(
+        UserRef, on_delete=models.CASCADE, related_name="vendor_profile"
+    )
     org = models.ForeignKey(
-        VendorOrg, on_delete=models.PROTECT, null=False, blank=False, related_name="profiles"
+        VendorOrg,
+        on_delete=models.PROTECT,
+        null=False,
+        blank=False,
+        related_name="profiles",
     )
     is_active: bool = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -247,7 +264,9 @@ class VendorOrgAuditLog(models.Model):
         blank=True,
         related_name="vendor_org_audit_entries",
     )
-    org = models.ForeignKey(VendorOrg, on_delete=models.CASCADE, related_name="audit_entries")
+    org = models.ForeignKey(
+        VendorOrg, on_delete=models.CASCADE, related_name="audit_entries"
+    )
     field = models.CharField(max_length=64)
     old_value = models.TextField(blank=True, default="")
     new_value = models.TextField(blank=True, default="")
@@ -276,15 +295,22 @@ class VendorKPI(models.Model):
     net_revenue = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     orders = models.PositiveIntegerField(default=0)
     refunds = models.PositiveIntegerField(default=0)
-    success_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)  # percent 0-100
-    fulfillment_avg_mins = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    success_rate = models.DecimalField(
+        max_digits=5, decimal_places=2, default=0
+    )  # percent 0-100
+    fulfillment_avg_mins = models.DecimalField(
+        max_digits=10, decimal_places=2, default=0
+    )
 
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=["org", "window", "period_start"], name="uniq_vendor_kpi_window_start"
+                fields=["org", "window", "period_start"],
+                name="uniq_vendor_kpi_window_start",
             ),
         ]
         indexes = [
-            models.Index(fields=["org", "period_start", "window"], name="vendorkpi_org_date_idx"),
+            models.Index(
+                fields=["org", "period_start", "window"], name="vendorkpi_org_date_idx"
+            ),
         ]

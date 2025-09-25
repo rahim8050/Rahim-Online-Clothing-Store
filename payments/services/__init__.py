@@ -21,14 +21,18 @@ from payments.idempotency import idempotent
 from payments.models import AuditLog, PaymentEvent, Payout, Transaction
 from payments.selectors import safe_decrement_stock, set_order_paid
 import logging
+
 logger = logging.getLogger(__name__)
+
 
 # =========================================================
 #                           Helpers
 # =========================================================
 def compute_hmac_sha512(secret: str, body_bytes: bytes) -> str:
     """Lowercase hex HMAC-SHA512 of the raw request body."""
-    return hmac.new(secret.encode("utf-8"), body_bytes, hashlib.sha512).hexdigest().lower()
+    return (
+        hmac.new(secret.encode("utf-8"), body_bytes, hashlib.sha512).hexdigest().lower()
+    )
 
 
 # =========================================================
@@ -65,10 +69,14 @@ def init_checkout(
             },
         )
     except IntegrityError:
-        txn = Transaction.objects.select_for_update().get(idempotency_key=idempotency_key)
+        txn = Transaction.objects.select_for_update().get(
+            idempotency_key=idempotency_key
+        )
         created = False
 
-    if not created and (txn.order_id != order.id or txn.amount != amount or txn.gateway != gateway):
+    if not created and (
+        txn.order_id != order.id or txn.amount != amount or txn.gateway != gateway
+    ):
         raise ValidationError("Idempotency key reuse with mismatched parameters.")
 
     AuditLog.log(event="PAYMENT_INIT", transaction=txn, order=order)
@@ -94,8 +102,12 @@ def verify_stripe(request) -> Any:
 def verify_paystack(request) -> dict:
     """Validate Paystack webhook via raw-body HMAC SHA512; return parsed JSON dict or raise ValidationError."""
     body = request.body  # bytes
-    signature = (request.META.get("HTTP_X_PAYSTACK_SIGNATURE", "") or "").strip().lower()
-    expected = compute_hmac_sha512(getattr(settings, "PAYSTACK_SECRET_KEY", "") or "", body)
+    signature = (
+        (request.META.get("HTTP_X_PAYSTACK_SIGNATURE", "") or "").strip().lower()
+    )
+    expected = compute_hmac_sha512(
+        getattr(settings, "PAYSTACK_SECRET_KEY", "") or "", body
+    )
     if not signature or not hmac.compare_digest(expected, signature):
         raise ValidationError("Invalid Paystack signature")
     try:
@@ -138,7 +150,10 @@ def process_success(
         TxnStatus.REFUNDED,
     }:
         AuditLog.log(
-            event="WEBHOOK_REPLAY_BLOCKED", transaction=txn, order=txn.order, request_id=request_id
+            event="WEBHOOK_REPLAY_BLOCKED",
+            transaction=txn,
+            order=txn.order,
+            request_id=request_id,
         )
         return txn
 
@@ -153,7 +168,10 @@ def process_success(
     if already_paid:
         txn.mark_duplicate_success()
         AuditLog.log(
-            event="DUPLICATE_SUCCESS", transaction=txn, order=txn.order, request_id=request_id
+            event="DUPLICATE_SUCCESS",
+            transaction=txn,
+            order=txn.order,
+            request_id=request_id,
         )
 
         # Auto-refund only if supported and amounts match
@@ -168,7 +186,14 @@ def process_success(
                     or txn.reference
                 )
                 txn.refunded_at = timezone.now()
-                txn.save(update_fields=["status", "refund_reference", "refunded_at", "updated_at"])
+                txn.save(
+                    update_fields=[
+                        "status",
+                        "refund_reference",
+                        "refunded_at",
+                        "updated_at",
+                    ]
+                )
                 AuditLog.log(
                     event="DUPLICATE_REFUND_ISSUED",
                     transaction=txn,
@@ -196,7 +221,9 @@ def process_success(
     txn.mark_success(gateway_reference)
     safe_decrement_stock(txn.order, request_id=request_id)
     set_order_paid(txn.order, request_id=request_id)
-    AuditLog.log(event="PAYMENT_SUCCESS", transaction=txn, order=txn.order, request_id=request_id)
+    AuditLog.log(
+        event="PAYMENT_SUCCESS", transaction=txn, order=txn.order, request_id=request_id
+    )
     return txn
 
 
@@ -211,11 +238,16 @@ def process_failure(*, txn: Transaction, request_id: str) -> Transaction:
         TxnStatus.REFUNDED,
     }:
         AuditLog.log(
-            event="WEBHOOK_REPLAY_BLOCKED", transaction=txn, order=txn.order, request_id=request_id
+            event="WEBHOOK_REPLAY_BLOCKED",
+            transaction=txn,
+            order=txn.order,
+            request_id=request_id,
         )
         return txn
     txn.mark_failed()
-    AuditLog.log(event="PAYMENT_FAILED", transaction=txn, order=txn.order, request_id=request_id)
+    AuditLog.log(
+        event="PAYMENT_FAILED", transaction=txn, order=txn.order, request_id=request_id
+    )
     return txn
 
 
@@ -234,7 +266,12 @@ def issue_refund(txn: Transaction, request_id: str = "") -> None:
         )
         txn.refund_reference = getattr(r, "id", None)
         txn.save(update_fields=["refund_reference", "updated_at"])
-        AuditLog.log(event="REFUND_ISSUED", transaction=txn, order=txn.order, request_id=request_id)
+        AuditLog.log(
+            event="REFUND_ISSUED",
+            transaction=txn,
+            order=txn.order,
+            request_id=request_id,
+        )
         return
 
     if txn.gateway == Gateway.PAYSTACK:
@@ -245,8 +282,7 @@ def issue_refund(txn: Transaction, request_id: str = "") -> None:
 
         payload = {
             # prefer gateway_reference; fallback to init reference
-            "transaction": txn.gateway_reference
-            or txn.reference,
+            "transaction": txn.gateway_reference or txn.reference,
         }
         headers = {
             "Authorization": f"Bearer {secret}",
@@ -269,12 +305,20 @@ def issue_refund(txn: Transaction, request_id: str = "") -> None:
             ref = d.get("reference") or d.get("id") or d.get("refund_reference")
         txn.refund_reference = ref
         txn.save(update_fields=["refund_reference", "updated_at"])
-        AuditLog.log(event="REFUND_ISSUED", transaction=txn, order=txn.order, request_id=request_id)
+        AuditLog.log(
+            event="REFUND_ISSUED",
+            transaction=txn,
+            order=txn.order,
+            request_id=request_id,
+        )
         return
 
     # M-Pesa or others: usually manual reversal — record for ops
     AuditLog.log(
-        event="REFUND_ISSUE_MANUAL", transaction=txn, order=txn.order, request_id=request_id
+        event="REFUND_ISSUE_MANUAL",
+        transaction=txn,
+        order=txn.order,
+        request_id=request_id,
     )
 
 
@@ -372,6 +416,6 @@ def apply_org_settlement(
                 defaults={"vendor_org": org, "amount": net, "currency": txn.currency},
             )
     except Exception as e:
-          logger.debug("idempotency side-effect failed: %s", e, exc_info=True)
+        logger.debug("idempotency side-effect failed: %s", e, exc_info=True)
 
     return evt

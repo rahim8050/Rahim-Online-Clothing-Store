@@ -8,7 +8,9 @@ from .models import Cart, CartItem
 from .serializers_v2 import CartItemWriteSerializer, CartSerializer
 
 
-class CartViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet):
+class CartViewSet(
+    mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet
+):
     """Cart v2 API with strong ownership and safe concurrency.
 
     All endpoints require authentication and only expose the caller's carts.
@@ -90,11 +92,15 @@ class CartViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.Gen
             return Response({"quantity": "Must be >= 1."}, status=400)
 
         # Lock item row and set exact quantity
-        item = get_object_or_404(CartItem.objects.select_for_update(), pk=item_id, cart=cart)
+        item = get_object_or_404(
+            CartItem.objects.select_for_update(), pk=item_id, cart=cart
+        )
         item.quantity = qty
         item.save(
             update_fields=(
-                ["quantity", "updated_at"] if hasattr(item, "updated_at") else ["quantity"]
+                ["quantity", "updated_at"]
+                if hasattr(item, "updated_at")
+                else ["quantity"]
             )
         )
         return Response(CartSerializer(cart).data)

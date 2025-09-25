@@ -12,7 +12,11 @@ def _publish_vendor(owner_id: int, event: str, payload: dict | None = None):
     layer = get_channel_layer()
     if not layer:
         return
-    data = {"type": "vendor.event", "t": event, "rid": payload.get("rid") if payload else None}
+    data = {
+        "type": "vendor.event",
+        "t": event,
+        "rid": payload.get("rid") if payload else None,
+    }
     if payload:
         data.update(payload)
     async_to_sync(layer.group_send)(f"vendor.{owner_id}", data)

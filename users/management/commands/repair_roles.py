@@ -148,7 +148,10 @@ def compute_effective_role(u) -> str:
 
     # Try group membership for 'Vendor'
     try:
-        if getattr(u, "id", None) is not None and u.groups.filter(name=_VENDOR_GROUP_NAME).exists():
+        if (
+            getattr(u, "id", None) is not None
+            and u.groups.filter(name=_VENDOR_GROUP_NAME).exists()
+        ):
             return "vendor"
     except Exception:
         pass
@@ -157,7 +160,11 @@ def compute_effective_role(u) -> str:
     try:
         VendorStaff = _resolve_vendor_staff_model()
         if VendorStaff is not None and getattr(u, "id", None) is not None:
-            if VendorStaff.objects.filter(staff_id=u.id, is_active=True).only("id").exists():
+            if (
+                VendorStaff.objects.filter(staff_id=u.id, is_active=True)
+                .only("id")
+                .exists()
+            ):
                 return "vendor_staff"
     except Exception:
         pass
@@ -174,7 +181,10 @@ def compute_effective_role(u) -> str:
 
     # Try group membership for 'Driver'
     try:
-        if getattr(u, "id", None) is not None and u.groups.filter(name=_DRIVER_GROUP_NAME).exists():
+        if (
+            getattr(u, "id", None) is not None
+            and u.groups.filter(name=_DRIVER_GROUP_NAME).exists()
+        ):
             return "driver"
     except Exception:
         pass
@@ -258,7 +268,9 @@ def process_batch(qs, opts: dict) -> dict[str, int]:
                             u.save(update_fields=["role"])
                         except Exception as save_exc:  # capture and continue
                             stats["errors"] += 1
-                            print(f"[ERROR] user={getattr(u,'id',None)} save failed: {save_exc}")
+                            print(
+                                f"[ERROR] user={getattr(u, 'id', None)} save failed: {save_exc}"
+                            )
                             continue
                     stats["changed"] += 1
                 else:
@@ -266,7 +278,7 @@ def process_batch(qs, opts: dict) -> dict[str, int]:
                     stats["unchanged"] += 1
             except Exception as exc:
                 stats["errors"] += 1
-                print(f"[ERROR] user={getattr(u,'id',None)} compute failed: {exc}")
+                print(f"[ERROR] user={getattr(u, 'id', None)} compute failed: {exc}")
 
         # If skip_locked was used, some rows might be skipped implicitly; we don't count those.
         # processed_any helps detect the final empty slice without an extra COUNT.
@@ -287,8 +299,12 @@ class Command(BaseCommand):
             default=False,
             help="Do not write changes; only report.",
         )
-        parser.add_argument("--limit", type=int, default=None, help="Process at most N users.")
-        parser.add_argument("--offset", type=int, default=None, help="Skip first N users.")
+        parser.add_argument(
+            "--limit", type=int, default=None, help="Process at most N users."
+        )
+        parser.add_argument(
+            "--offset", type=int, default=None, help="Skip first N users."
+        )
         parser.add_argument(
             "--only-missing",
             action="store_true",
@@ -296,7 +312,10 @@ class Command(BaseCommand):
             help="Process only users whose role is NULL/empty/invalid.",
         )
         parser.add_argument(
-            "--verbose", action="store_true", default=False, help="Print per-user decisions."
+            "--verbose",
+            action="store_true",
+            default=False,
+            help="Print per-user decisions.",
         )
         parser.add_argument(
             "--batch-size",
@@ -317,12 +336,18 @@ class Command(BaseCommand):
         valid_roles = _get_valid_roles(User)
 
         # Build base queryset
-        base_qs = User.objects.all().only("id", "role", "is_staff", "is_superuser").order_by("id")
+        base_qs = (
+            User.objects.all()
+            .only("id", "role", "is_staff", "is_superuser")
+            .order_by("id")
+        )
 
         # Filter only missing/invalid roles if requested.
         if only_missing:
             base_qs = base_qs.filter(
-                Q(role__isnull=True) | Q(role__exact="") | ~Q(role__in=list(valid_roles))
+                Q(role__isnull=True)
+                | Q(role__exact="")
+                | ~Q(role__in=list(valid_roles))
             )
 
         # Apply offset/limit slicing in SQL where possible.

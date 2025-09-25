@@ -61,7 +61,9 @@ class CustomUser(AbstractUser):
                 pass
 
             try:
-                if VendorStaff.objects.filter(staff_id=self.id, is_active=True).exists():
+                if VendorStaff.objects.filter(
+                    staff_id=self.id, is_active=True
+                ).exists():
                     return self.Role.VENDOR_STAFF
             except Exception:
                 pass
@@ -89,16 +91,24 @@ class VendorApplication(models.Model):
     PENDING = "pending"
     APPROVED = "approved"
     REJECTED = "rejected"
-    STATUS_CHOICES = [(PENDING, "Pending"), (APPROVED, "Approved"), (REJECTED, "Rejected")]
+    STATUS_CHOICES = [
+        (PENDING, "Pending"),
+        (APPROVED, "Approved"),
+        (REJECTED, "Rejected"),
+    ]
 
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="vendor_applications")
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="vendor_applications"
+    )
     company_name = models.CharField(max_length=120)
     phone = models.CharField(max_length=32, blank=True)
     note = models.TextField(blank=True)
     kra_pin = models.CharField(max_length=32, blank=True)
     national_id = models.CharField(max_length=32, blank=True)
     document = models.FileField(upload_to="kyc/", blank=True)
-    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default=PENDING, db_index=True)
+    status = models.CharField(
+        max_length=16, choices=STATUS_CHOICES, default=PENDING, db_index=True
+    )
     decided_by = models.ForeignKey(
         User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
     )
@@ -142,7 +152,9 @@ class VendorStaff(models.Model):
         OWNER = "owner", "Owner"
         STAFF = "staff", "Staff"
 
-    owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name="vendor_staff_owned")
+    owner = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="vendor_staff_owned"
+    )
     staff = models.ForeignKey(
         User, on_delete=models.CASCADE, related_name="vendor_staff_memberships"
     )
@@ -155,9 +167,12 @@ class VendorStaff(models.Model):
 
     class Meta:
         constraints = [
-            models.UniqueConstraint(fields=["owner", "staff"], name="uniq_vendorstaff_owner_staff"),
+            models.UniqueConstraint(
+                fields=["owner", "staff"], name="uniq_vendorstaff_owner_staff"
+            ),
             models.CheckConstraint(
-                check=~models.Q(owner=models.F("staff")), name="vendorstaff_owner_not_staff"
+                check=~models.Q(owner=models.F("staff")),
+                name="vendorstaff_owner_not_staff",
             ),
         ]
 
@@ -165,4 +180,6 @@ class VendorStaff(models.Model):
         if self.owner_id == self.staff_id:
             # only valid when role is owner
             if self.role != self.Role.OWNER:
-                raise ValidationError("Owner cannot be added as staff unless role='owner'.")
+                raise ValidationError(
+                    "Owner cannot be added as staff unless role='owner'."
+                )

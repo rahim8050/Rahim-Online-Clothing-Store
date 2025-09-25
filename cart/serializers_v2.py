@@ -17,7 +17,9 @@ class CartItemReadSerializer(serializers.ModelSerializer):
         model = CartItem
         fields = ["id", "product", "quantity", "line_total", "created_at"]
 
-    @extend_schema_field(serializers.DecimalField(max_digits=12, decimal_places=2))  # guessed
+    @extend_schema_field(
+        serializers.DecimalField(max_digits=12, decimal_places=2)
+    )  # guessed
     def get_line_total(self, obj) -> str:
         return str(Decimal(obj.product.price) * obj.quantity)
 
@@ -43,9 +45,13 @@ class CartSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["id", "created_at", "updated_at", "items", "total_price"]
 
-    @extend_schema_field(serializers.DecimalField(max_digits=12, decimal_places=2))  # guessed
+    @extend_schema_field(
+        serializers.DecimalField(max_digits=12, decimal_places=2)
+    )  # guessed
     def get_total_price(self, obj) -> str:
         total = Decimal("0.00")
-        for item in getattr(obj, "_prefetched_items", obj.items.select_related("product").all()):
+        for item in getattr(
+            obj, "_prefetched_items", obj.items.select_related("product").all()
+        ):
             total += Decimal(item.product.price) * item.quantity
         return str(total)

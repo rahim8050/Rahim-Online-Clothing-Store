@@ -50,19 +50,23 @@ def _infer_order_binding():
             return "char", "order_id"
     except FieldDoesNotExist:
         pass
-    raise CommandError("Could not find 'order' FK or 'order_id' field on Transaction model.")
+    raise CommandError(
+        "Could not find 'order' FK or 'order_id' field on Transaction model."
+    )
 
 
 class Command(BaseCommand):
-    help = (
-        "Demo: create 2 successes for one order; auto-refund the later one and email the customer."
-    )
+    help = "Demo: create 2 successes for one order; auto-refund the later one and email the customer."
 
     def add_arguments(self, parser):
         parser.add_argument(
-            "--order", required=True, help="Order PK (int) or code (str), depending on schema"
+            "--order",
+            required=True,
+            help="Order PK (int) or code (str), depending on schema",
         )
-        parser.add_argument("--user-pk", type=int, help="Required if Transaction.user is NOT NULL")
+        parser.add_argument(
+            "--user-pk", type=int, help="Required if Transaction.user is NOT NULL"
+        )
         parser.add_argument("--amount", default="1500.00")
         parser.add_argument("--gateway", default="paystack")
         parser.add_argument("--method", default="card")
@@ -99,15 +103,22 @@ class Command(BaseCommand):
                 if not user_obj:
                     raise CommandError(f"No user found with pk={opts['user_pk']}")
             else:
-                user_obj = User.objects.filter(is_superuser=True).first() or User.objects.first()
+                user_obj = (
+                    User.objects.filter(is_superuser=True).first()
+                    or User.objects.first()
+                )
                 if not user_obj:
                     raise CommandError(
                         "Transaction.user is NOT NULL. Provide --user-pk pointing to an existing user."
                     )
 
-        self.stdout.write(self.style.WARNING(f"Schema detected: {mode} on '{field_name}'"))
         self.stdout.write(
-            self.style.WARNING(f"Creating two SUCCEEDED tx for {field_name}={order_val}...")
+            self.style.WARNING(f"Schema detected: {mode} on '{field_name}'")
+        )
+        self.stdout.write(
+            self.style.WARNING(
+                f"Creating two SUCCEEDED tx for {field_name}={order_val}..."
+            )
         )
         self.stdout.write(
             f"Resolved statuses -> SUCCEEDED='{STATUS_SUCCEEDED}', DUP_REFUND='{STATUS_REFUNDED_DUPLICATE}'"

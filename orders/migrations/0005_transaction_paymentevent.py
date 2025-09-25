@@ -3,7 +3,10 @@ from django.db import migrations, models
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("orders", "0004_rename_delivery_order_status_idx_orders_deli_order_i_2374e2_idx_and_more"),
+        (
+            "orders",
+            "0004_rename_delivery_order_status_idx_orders_deli_order_i_2374e2_idx_and_more",
+        ),
     ]
 
     operations = [
@@ -53,7 +56,8 @@ class Migration(migrations.Migration):
             options={
                 "indexes": [
                     models.Index(
-                        fields=["provider", "reference"], name="orders_paym_provider_ref_idx"
+                        fields=["provider", "reference"],
+                        name="orders_paym_provider_ref_idx",
                     )
                 ],
             },

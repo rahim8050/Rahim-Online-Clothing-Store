@@ -17,8 +17,12 @@ pytestmark = pytest.mark.django_db
 
 def setup_org_environment(rate=Decimal("0.02")):
     User = get_user_model()
-    owner = User.objects.create_user(username="owner", email="o@example.com", password="x")
-    org = VendorOrg.objects.create(name="Org", slug="org", owner=owner, org_commission_rate=rate)
+    owner = User.objects.create_user(
+        username="owner", email="o@example.com", password="x"
+    )
+    org = VendorOrg.objects.create(
+        name="Org", slug="org", owner=owner, org_commission_rate=rate
+    )
     VendorMember.objects.create(org=org, user=owner, role=VendorMember.Role.OWNER)
     VendorProfile.objects.create(user=owner, org=org)
 
@@ -29,7 +33,9 @@ def setup_org_environment(rate=Decimal("0.02")):
     wh = Warehouse.objects.create(name="w", latitude=0.1, longitude=36.8, address="NBO")
     ProductStock.objects.create(product=product, warehouse=wh, quantity=3)
 
-    buyer = User.objects.create_user(username="buyer", email="b@example.com", password="x")
+    buyer = User.objects.create_user(
+        username="buyer", email="b@example.com", password="x"
+    )
     order = Order.objects.create(
         user=buyer,
         full_name="B",
@@ -65,7 +71,9 @@ def test_mpesa_webhook_idempotent_and_org_scoped(client):
             "stkCallback": {
                 "MerchantRequestID": txn.reference,
                 "ResultCode": 0,
-                "CallbackMetadata": {"Item": [{"Name": "MpesaReceiptNumber", "Value": "XYZ"}]},
+                "CallbackMetadata": {
+                    "Item": [{"Name": "MpesaReceiptNumber", "Value": "XYZ"}]
+                },
             }
         }
     }
@@ -87,7 +95,10 @@ def test_mpesa_webhook_idempotent_and_org_scoped(client):
     assert txn.vendor_org_id == org.id
 
     # PaymentEvent created once and scoped to org
-    assert PaymentEvent.objects.filter(reference=txn.reference, vendor_org=org).count() == 1
+    assert (
+        PaymentEvent.objects.filter(reference=txn.reference, vendor_org=org).count()
+        == 1
+    )
 
     # Payout created for org
     p = Payout.objects.get(transaction=txn)

@@ -24,7 +24,9 @@ class OpsTask(models.Model):
     kind = models.CharField(max_length=32, choices=KIND_CHOICES, default="restock")
     payload = models.JSONField(default=dict, blank=True)
     status = models.CharField(max_length=24, choices=STATUS_CHOICES, default="open")
-    created_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL)
+    created_by = models.ForeignKey(
+        User, null=True, blank=True, on_delete=models.SET_NULL
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

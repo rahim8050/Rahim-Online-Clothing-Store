@@ -9,7 +9,9 @@ from .ws import push_to_user
 
 def create_and_push(user, title, message, level="info", url=""):
     # Save in DB
-    Notification.objects.create(user=user, title=title, message=message, level=level, url=url)
+    Notification.objects.create(
+        user=user, title=title, message=message, level=level, url=url
+    )
 
     # Email (best-effort)
     if getattr(user, "email", None):
@@ -33,7 +35,13 @@ def create_and_push(user, title, message, level="info", url=""):
     try:
         push_to_user(
             user.id,
-            {"type": "notify", "title": title, "message": message, "level": level, "url": url},
+            {
+                "type": "notify",
+                "title": title,
+                "message": message,
+                "level": level,
+                "url": url,
+            },
         )
     except Exception:
         pass

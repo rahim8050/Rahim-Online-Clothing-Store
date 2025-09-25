@@ -5,7 +5,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("payments", "0005_idempotencykey"),
         ("vendor_app", "0004_vendororg_org_commission_rate_and_more"),
@@ -49,7 +48,10 @@ class Migration(migrations.Migration):
                 (
                     "id",
                     models.BigAutoField(
-                        auto_created=True, primary_key=True, serialize=False, verbose_name="ID"
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
                     ),
                 ),
                 ("amount", models.DecimalField(decimal_places=2, max_digits=12)),
@@ -93,16 +95,28 @@ class Migration(migrations.Migration):
                 (
                     "id",
                     models.BigAutoField(
-                        auto_created=True, primary_key=True, serialize=False, verbose_name="ID"
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
                     ),
                 ),
                 ("provider", models.CharField(max_length=24)),
                 ("reference", models.CharField(db_index=True, max_length=128)),
                 ("body_sha256", models.CharField(max_length=64, unique=True)),
                 ("body", models.JSONField(blank=True, null=True)),
-                ("gross_amount", models.DecimalField(decimal_places=2, default=0, max_digits=12)),
-                ("fees_amount", models.DecimalField(decimal_places=2, default=0, max_digits=12)),
-                ("net_to_vendor", models.DecimalField(decimal_places=2, default=0, max_digits=12)),
+                (
+                    "gross_amount",
+                    models.DecimalField(decimal_places=2, default=0, max_digits=12),
+                ),
+                (
+                    "fees_amount",
+                    models.DecimalField(decimal_places=2, default=0, max_digits=12),
+                ),
+                (
+                    "net_to_vendor",
+                    models.DecimalField(decimal_places=2, default=0, max_digits=12),
+                ),
                 ("created_at", models.DateTimeField(auto_now_add=True)),
                 (
                     "vendor_org",
@@ -118,7 +132,8 @@ class Migration(migrations.Migration):
             options={
                 "indexes": [
                     models.Index(
-                        fields=["reference", "created_at"], name="payments_pa_referen_03b5ff_idx"
+                        fields=["reference", "created_at"],
+                        name="payments_pa_referen_03b5ff_idx",
                     )
                 ],
             },

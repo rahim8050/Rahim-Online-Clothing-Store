@@ -93,7 +93,9 @@ class OrderItemViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         u = self.request.user
-        qs = OrderItem.objects.select_related("order", "product", "warehouse").order_by("-id")
+        qs = OrderItem.objects.select_related("order", "product", "warehouse").order_by(
+            "-id"
+        )
         if u and (u.is_staff or u.is_superuser):
             return qs
         if u and u.is_authenticated:

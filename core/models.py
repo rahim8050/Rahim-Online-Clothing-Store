@@ -23,7 +23,12 @@ class AuditLog(models.Model):
 
 @transaction.atomic
 def log_action(
-    actor, owner_id: int | None, action: str, target_type: str, target_id, meta: dict | None = None
+    actor,
+    owner_id: int | None,
+    action: str,
+    target_type: str,
+    target_id,
+    meta: dict | None = None,
 ) -> AuditLog:
     return AuditLog.objects.create(
         actor=actor if getattr(actor, "pk", None) else None,

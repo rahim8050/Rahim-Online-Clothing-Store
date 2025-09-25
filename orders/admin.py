@@ -118,7 +118,14 @@ class DeliveryAdminForm(forms.ModelForm):
 
     def clean(self):
         cleaned = super().clean()
-        for f in ("origin_lat", "origin_lng", "dest_lat", "dest_lng", "last_lat", "last_lng"):
+        for f in (
+            "origin_lat",
+            "origin_lng",
+            "dest_lat",
+            "dest_lng",
+            "last_lat",
+            "last_lng",
+        ):
             v = cleaned.get(f)
             if v is not None:
                 cleaned[f] = Decimal(v).quantize(Q6, rounding=ROUND_HALF_UP)
@@ -150,11 +157,17 @@ class OrderAdmin(admin.ModelAdmin):
             except Exception:
                 errors += 1
         if success:
-            messages.success(request, f"Assigned + reserved stock for {success} order(s).")
+            messages.success(
+                request, f"Assigned + reserved stock for {success} order(s)."
+            )
         if errors:
-            messages.warning(request, f"{errors} order(s) failed to reserve stock (see logs).")
+            messages.warning(
+                request, f"{errors} order(s) failed to reserve stock (see logs)."
+            )
 
-    action_assign_and_reserve_stock.short_description = "Assign warehouses + reserve stock"
+    action_assign_and_reserve_stock.short_description = (
+        "Assign warehouses + reserve stock"
+    )
 
 
 @admin.register(Delivery)
@@ -173,8 +186,20 @@ class DeliveryAdmin(admin.ModelAdmin):
         "last_ping_at",
         "updated_at",
     )
-    list_filter = ("status", "assigned_at", "picked_up_at", "delivered_at", "last_ping_at")
-    search_fields = ("=id", "=order__id", "order__full_name", "driver__username", "driver__email")
+    list_filter = (
+        "status",
+        "assigned_at",
+        "picked_up_at",
+        "delivered_at",
+        "last_ping_at",
+    )
+    search_fields = (
+        "=id",
+        "=order__id",
+        "order__full_name",
+        "driver__username",
+        "driver__email",
+    )
     autocomplete_fields = ("order", "driver")
     readonly_fields = ("created_at", "updated_at", "channel_key")
     list_select_related = ("order", "driver")

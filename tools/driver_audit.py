@@ -18,10 +18,12 @@ os.environ.setdefault("SECRET_KEY", "dummy")
 
 django.setup()
 
+
 # --------------- helpers ---------------
 def read_text(rel):
     p = BASE_DIR / rel
     return p.read_text(encoding="utf-8", errors="ignore") if p.exists() else ""
+
 
 def grep_lines(rel, pattern):
     out = []
@@ -35,21 +37,22 @@ def grep_lines(rel, pattern):
                 out.append((rel, i, line.rstrip()))
     return out
 
+
 def find_def_line(rel, name):
     hits = grep_lines(rel, rf"^\s*(class|def)\s+{re.escape(name)}\b")
     return hits[0][:2] if hits else (rel, None)
+
 
 def iter_patterns(patterns, prefix=""):
     for p in patterns:
         if isinstance(p, URLPattern):
             path = prefix + str(p.pattern)
             cb = p.callback
-            view_name = (
-                f"{cb.__module__}.{getattr(cb, '__qualname__', getattr(cb, '__name__', repr(cb)))}"
-            )
+            view_name = f"{cb.__module__}.{getattr(cb, '__qualname__', getattr(cb, '__name__', repr(cb)))}"
             yield path, view_name
         elif isinstance(p, URLResolver):
             yield from iter_patterns(p.url_patterns, prefix + str(p.pattern))
+
 
 def model_fields_sheet(model):
     rows = []
@@ -63,10 +66,13 @@ def model_fields_sheet(model):
             "blank": getattr(f, "blank", None),
             "choices": getattr(f, "choices", None),
             "db_index": getattr(f, "db_index", None),
-            "related_name": getattr(getattr(f, "remote_field", None), "related_name", None),
+            "related_name": getattr(
+                getattr(f, "remote_field", None), "related_name", None
+            ),
         }
         rows.append(entry)
     return rows
+
 
 def model_constraints(model):
     out = []
@@ -76,11 +82,13 @@ def model_constraints(model):
         out.append({"kind": kind, "name": c.name, "expr": str(expr)})
     return out
 
+
 def model_indexes(model):
     return [
         {"name": getattr(ix, "name", None), "fields": getattr(ix, "fields", None)}
         for ix in model._meta.indexes
     ]
+
 
 # --------------- inputs / scanning ---------------
 Delivery = apps.get_model("orders", "Delivery")
@@ -114,17 +122,25 @@ defline_consumer = find_def_line(files_to_scan["consumers"], "DeliveryConsumer")
 
 # URL patterns
 all_urls = list(iter_patterns(get_resolver().url_patterns))
-url_filter = re.compile(r"(driver|deliver|assign|unassign|status|location|track|ws/)", re.I)
+url_filter = re.compile(
+    r"(driver|deliver|assign|unassign|status|location|track|ws/)", re.I
+)
 filtered_urls = [(u, v) for (u, v) in all_urls if url_filter.search(u)]
 
 # consumers: methods & events
 consumer_methods = {
-    "delivery_event": grep_lines(files_to_scan["consumers"], r"^\s*async\s+def\s+delivery_event\b"),
+    "delivery_event": grep_lines(
+        files_to_scan["consumers"], r"^\s*async\s+def\s+delivery_event\b"
+    ),
     "position_update": grep_lines(
         files_to_scan["consumers"], r"^\s*async\s+def\s+position_update\b"
     ),
-    "status_update": grep_lines(files_to_scan["consumers"], r"^\s*async\s+def\s+status_update\b"),
-    "receive_json": grep_lines(files_to_scan["consumers"], r"^\s*async\s+def\s+receive_json\b"),
+    "status_update": grep_lines(
+        files_to_scan["consumers"], r"^\s*async\s+def\s+status_update\b"
+    ),
+    "receive_json": grep_lines(
+        files_to_scan["consumers"], r"^\s*async\s+def\s+receive_json\b"
+    ),
 }
 event_sends = {
     "group_send_delivery_event": grep_lines(
@@ -152,7 +168,9 @@ for name in [
 
 # serializers present?
 serializer_hits = {
-    "DeliverySerializer": grep_lines(files_to_scan["serializers"], r"class\s+DeliverySerializer\b"),
+    "DeliverySerializer": grep_lines(
+        files_to_scan["serializers"], r"class\s+DeliverySerializer\b"
+    ),
     "DeliveryAssignSerializer": grep_lines(
         files_to_scan["serializers"], r"class\s+DeliveryAssignSerializer\b"
     ),
@@ -278,8 +296,12 @@ for k, v in serializer_hits.items():
         md.append(f"- {k}: {f}:{ln}\n")
 
 md.append("\n## Frontend Listeners\n")
-md.append(f"- `{files_to_scan['track_js']}` WebSocket constructors found: {len(ws_new_socket)}\n")
-md.append(f"- `{files_to_scan['track_tpl']}` wsUrl/route_ctx hits: {len(ws_url_injection)}\n")
+md.append(
+    f"- `{files_to_scan['track_js']}` WebSocket constructors found: {len(ws_new_socket)}\n"
+)
+md.append(
+    f"- `{files_to_scan['track_tpl']}` wsUrl/route_ctx hits: {len(ws_url_injection)}\n"
+)
 
 md.append("\n## Admin & Tests\n")
 md.append(
@@ -302,7 +324,9 @@ md.append("\n## Gaps & Risks (detected heuristically)\n")
 if not admin_registered:
     md.append("- Delivery not registered in admin (reduced ops visibility).\n")
 if not consumer_methods["delivery_event"]:
-    md.append("- consumer missing delivery_event() (RESTâ†’WS bridge relies on this).\n")
+    md.append(
+        "- consumer missing delivery_event() (RESTâ†’WS bridge relies on this).\n"
+    )
 if not event_sends["group_send_delivery_event"]:
     md.append("- views may not publish WS events (`delivery.event`).\n")
 if not serializer_hits["DeliverySerializer"]:
