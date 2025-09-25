@@ -6,7 +6,9 @@ class NotificationsConsumer(AsyncJsonWebsocketConsumer):
         user = self.scope.get("user")
         # Join per-user group when authenticated; otherwise fall back to a noop group
         self.group_name = (
-            f"user_{user.pk}" if (user and getattr(user, "is_authenticated", False)) else "anon"
+            f"user_{user.pk}"
+            if (user and getattr(user, "is_authenticated", False))
+            else "anon"
         )
         await self.channel_layer.group_add(self.group_name, self.channel_name)
         await self.accept()

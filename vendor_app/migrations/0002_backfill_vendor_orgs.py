@@ -30,7 +30,9 @@ def backfill_vendor_orgs(apps, schema_editor):
 
     # 1) VendorStaff self-ownership rows (legacy owner marker)
     if VendorStaff is not None:
-        for vs in VendorStaff.objects.all().only("owner_id", "staff_id", "role", "is_active"):
+        for vs in VendorStaff.objects.all().only(
+            "owner_id", "staff_id", "role", "is_active"
+        ):
             try:
                 if vs.is_active and vs.role == "owner" and vs.owner_id == vs.staff_id:
                     owner_ids.add(vs.owner_id)
@@ -38,7 +40,11 @@ def backfill_vendor_orgs(apps, schema_editor):
                 continue
 
     # 2) Users who own at least one Product
-    for row in Product.objects.exclude(owner_id=None).values_list("owner_id", flat=True).distinct():
+    for row in (
+        Product.objects.exclude(owner_id=None)
+        .values_list("owner_id", flat=True)
+        .distinct()
+    ):
         if row:
             owner_ids.add(int(row))
 
@@ -60,13 +66,17 @@ def backfill_vendor_orgs(apps, schema_editor):
                     "name": (user.username or user.email or f"Vendor {uid}")[:120],
                     "owner_id": uid,
                 }
-                org, org_created = VendorOrg.objects.get_or_create(slug=slug, defaults=defaults)
+                org, org_created = VendorOrg.objects.get_or_create(
+                    slug=slug, defaults=defaults
+                )
                 if org_created:
                     created_orgs += 1
 
                 # Ensure OWNER membership (uppercase for new model)
                 vm, vm_created = VendorMember.objects.get_or_create(
-                    org_id=org.id, user_id=uid, defaults={"role": "OWNER", "is_active": True}
+                    org_id=org.id,
+                    user_id=uid,
+                    defaults={"role": "OWNER", "is_active": True},
                 )
                 if not vm_created:
                     # Make sure role is OWNER and active
@@ -101,7 +111,6 @@ def noop_reverse(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("vendor_app", "0001_initial"),
         ("product_app", "0010_backfill_product_version"),

@@ -70,7 +70,10 @@ class OrgViewSet(viewsets.ModelViewSet):
     def get_permissions(self):  # type: ignore[override]
         if self.action in {"list", "create"}:
             return [IsAuthenticated()]
-        if self.action in {"partial_update", "update"}:  # owner/manager can update tax fields
+        if self.action in {
+            "partial_update",
+            "update",
+        }:  # owner/manager can update tax fields
             return [IsOrgManager()]
         if self.action in {"invite"}:
             return [IsOrgManager()]
@@ -91,7 +94,9 @@ class OrgViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"], url_path="invite")
     def invite(self, request, pk=None):
         org = self.get_object()
-        ser = InviteSerializer(data=request.data, context={"org": org, "request": request})
+        ser = InviteSerializer(
+            data=request.data, context={"org": org, "request": request}
+        )
         ser.is_valid(raise_exception=True)
         member = ser.save()
         return Response(MemberSerializer(member).data, status=status.HTTP_201_CREATED)
@@ -158,7 +163,9 @@ class OrgViewSet(viewsets.ModelViewSet):
         from django.conf import settings
 
         if not getattr(settings, "KPIS_ENABLED", False):
-            return Response({"detail": "KPIs disabled"}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"detail": "KPIs disabled"}, status=status.HTTP_404_NOT_FOUND
+            )
         # OWNER/MANAGER only
         if not IsOrgManager().has_permission(request, self):
             return Response({"detail": "Forbidden"}, status=status.HTTP_403_FORBIDDEN)
@@ -202,7 +209,9 @@ class OrgViewSet(viewsets.ModelViewSet):
         from django.conf import settings
 
         if not getattr(settings, "KPIS_ENABLED", False):
-            return Response({"detail": "KPIs disabled"}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"detail": "KPIs disabled"}, status=status.HTTP_404_NOT_FOUND
+            )
         if not IsOrgManager().has_permission(request, self):
             return Response({"detail": "Forbidden"}, status=status.HTTP_403_FORBIDDEN)
         snap = get_realtime(int(pk))
@@ -215,7 +224,9 @@ class OrgViewSet(viewsets.ModelViewSet):
     retrieve=extend_schema(tags=["Vendor Members"], summary="Get member"),
     destroy=extend_schema(tags=["Vendor Members"], summary="Deactivate member"),
 )
-class MemberViewSet(mixins.DestroyModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet):
+class MemberViewSet(
+    mixins.DestroyModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet
+):
     serializer_class = MemberSerializer
     pagination_class = DefaultPage
     throttle_classes = [VendorOrgScopedRateThrottle]
@@ -225,7 +236,9 @@ class MemberViewSet(mixins.DestroyModelMixin, mixins.RetrieveModelMixin, viewset
         if not user.is_authenticated:
             return VendorMember.objects.none()
         return (
-            VendorMember.objects.filter(org__members__user=user, org__members__is_active=True)
+            VendorMember.objects.filter(
+                org__members__user=user, org__members__is_active=True
+            )
             .select_related("org", "user")
             .order_by("id")
         )
@@ -244,7 +257,8 @@ class MemberViewSet(mixins.DestroyModelMixin, mixins.RetrieveModelMixin, viewset
         if member.role == VendorMember.Role.OWNER:
             # Disallow deactivating the sole owner
             return Response(
-                {"detail": "Cannot deactivate an OWNER."}, status=status.HTTP_400_BAD_REQUEST
+                {"detail": "Cannot deactivate an OWNER."},
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         member.is_active = False

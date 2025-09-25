@@ -24,5 +24,7 @@ class Command(BaseCommand):
             return
         res = submit_invoice(invoice=inv, idempotency_key=f"invoice:submit:{inv.id}")
         self.stdout.write(
-            self.style.SUCCESS(f"Submitted invoice {inv.id}: {res.status} {res.irn or ''}")
+            self.style.SUCCESS(
+                f"Submitted invoice {inv.id}: {res.status} {res.irn or ''}"
+            )
         )

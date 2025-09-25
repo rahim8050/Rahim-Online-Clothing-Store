@@ -6,7 +6,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("orders", "0008_deliveryping"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
@@ -19,7 +18,10 @@ class Migration(migrations.Migration):
                 (
                     "id",
                     models.BigAutoField(
-                        auto_created=True, primary_key=True, serialize=False, verbose_name="ID"
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
                     ),
                 ),
                 (
@@ -58,7 +60,9 @@ class Migration(migrations.Migration):
             ],
             options={
                 "indexes": [
-                    models.Index(fields=["delivery", "at"], name="orders_deli_deliver_bdaf63_idx"),
+                    models.Index(
+                        fields=["delivery", "at"], name="orders_deli_deliver_bdaf63_idx"
+                    ),
                     models.Index(fields=["at"], name="orders_deli_at_1a879c_idx"),
                 ],
             },

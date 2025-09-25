@@ -5,7 +5,12 @@ from django.db import models
 
 
 class Notification(models.Model):
-    LEVELS = (("info", "Info"), ("success", "Success"), ("warning", "Warning"), ("error", "Error"))
+    LEVELS = (
+        ("info", "Info"),
+        ("success", "Success"),
+        ("warning", "Warning"),
+        ("error", "Error"),
+    )
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="notifications"
     )

@@ -15,7 +15,9 @@ pytestmark = pytest.mark.django_db
 
 def mk_user(username: str):
     User = get_user_model()
-    return User.objects.create_user(username=username, email=f"{username}@ex.com", password="x")
+    return User.objects.create_user(
+        username=username, email=f"{username}@ex.com", password="x"
+    )
 
 
 def seed_invoice():
@@ -72,10 +74,14 @@ def test_etims_webhook_updates_state_idempotently(settings, client):
     raw = json.dumps(payload).encode("utf-8")
     sig = hmac.new(b"sek", raw, hashlib.sha256).hexdigest()
     url = "/apis/v1/invoicing/etims/webhook"
-    r1 = client.post(url, data=raw, content_type="application/json", HTTP_X_ETIMS_SIGNATURE=sig)
+    r1 = client.post(
+        url, data=raw, content_type="application/json", HTTP_X_ETIMS_SIGNATURE=sig
+    )
     assert r1.status_code == 200
     inv.refresh_from_db()
     assert inv.status == "accepted" and inv.irn
     # Replay is idempotent and returns 200
-    r2 = client.post(url, data=raw, content_type="application/json", HTTP_X_ETIMS_SIGNATURE=sig)
+    r2 = client.post(
+        url, data=raw, content_type="application/json", HTTP_X_ETIMS_SIGNATURE=sig
+    )
     assert r2.status_code == 200

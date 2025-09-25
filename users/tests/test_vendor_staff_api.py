@@ -32,7 +32,9 @@ class VendorStaffAPITests(TestCase):
         )
 
         VendorStaff.objects.create(owner=self.owner, staff=self.staff1, is_active=True)
-        VendorStaff.objects.create(owner=self.other_owner, staff=self.staff2, is_active=True)
+        VendorStaff.objects.create(
+            owner=self.other_owner, staff=self.staff2, is_active=True
+        )
 
     def auth(self, user):
         self.client.force_login(user)
@@ -64,7 +66,9 @@ class VendorStaffAPITests(TestCase):
         self.assertEqual(data["staff"], self.staff2.id)
         self.assertTrue(data["is_active"])
         self.assertTrue(
-            VendorStaff.objects.filter(owner=self.owner, staff=self.staff2, is_active=True).exists()
+            VendorStaff.objects.filter(
+                owner=self.owner, staff=self.staff2, is_active=True
+            ).exists()
         )
         self.assertTrue(self.staff2.groups.filter(name=VENDOR_STAFF).exists())
 
@@ -76,7 +80,9 @@ class VendorStaffAPITests(TestCase):
         self.assertIn("staff_id", resp.json())
 
         # non existent staff
-        resp = self.client.post(url, {"staff_id": 9999, "owner_id": self.owner.id}, format="json")
+        resp = self.client.post(
+            url, {"staff_id": 9999, "owner_id": self.owner.id}, format="json"
+        )
         self.assertEqual(resp.status_code, 400)
         self.assertEqual(resp.json()["staff_id"][0], "User not found.")
 

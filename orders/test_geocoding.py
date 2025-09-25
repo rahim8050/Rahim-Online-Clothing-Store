@@ -13,7 +13,9 @@ class GeocodeAddressTests(SimpleTestCase):
     @patch("orders.services.geocoding.httpx.Client.get")
     def test_fallback_to_nominatim(self, mock_get):
         geo_resp = Mock(status_code=500, json=Mock(return_value={}))
-        nom_resp = Mock(status_code=200, json=Mock(return_value=[{"lat": "1", "lon": "2"}]))
+        nom_resp = Mock(
+            status_code=200, json=Mock(return_value=[{"lat": "1", "lon": "2"}])
+        )
         mock_get.side_effect = [geo_resp, nom_resp]
         coords = geocode_address("addr")
         self.assertEqual(coords, (1.0, 2.0))
@@ -24,7 +26,10 @@ class EnsureOrderCoordsTests(TestCase):
     def setUp(self):
         User = get_user_model()
         from django.utils.crypto import get_random_string
-        self.user = User.objects.create_user(username="u", password=get_random_string(12))  # nosec B106
+
+        self.user = User.objects.create_user(
+            username="u", password=get_random_string(12)
+        )  # nosec B106
 
     @patch("orders.services.destinations.geocode_address")
     def test_updates_missing_coords(self, mock_geo):

@@ -24,7 +24,9 @@ def make_order(product, qty=1):
         address="Nairobi",
         # optional coords fields omitted
     )
-    OrderItem.objects.create(order=o, product=product, quantity=qty, unit_price=product.price)
+    OrderItem.objects.create(
+        order=o, product=product, quantity=qty, unit_price=product.price
+    )
     return o
 
 
@@ -46,7 +48,9 @@ class TestStockDecrement(TestCase):
 
         for i in range(8):
             order = make_order(product, qty=1)
-            process_success(order_id=order.id, request_id=f"req-{i}", paid_at=timezone.now())
+            process_success(
+                order_id=order.id, request_id=f"req-{i}", paid_at=timezone.now()
+            )
 
         stock.refresh_from_db()
         self.assertEqual(stock.quantity, 0)
@@ -54,7 +58,9 @@ class TestStockDecrement(TestCase):
         # 9th purchase must raise and not go negative
         order9 = make_order(product, qty=1)
         with self.assertRaises(ValidationError):
-            process_success(order_id=order9.id, request_id="req-9", paid_at=timezone.now())
+            process_success(
+                order_id=order9.id, request_id="req-9", paid_at=timezone.now()
+            )
 
         stock.refresh_from_db()
         self.assertEqual(stock.quantity, 0)
@@ -63,7 +69,9 @@ class TestStockDecrement(TestCase):
         """n=8, buy 8 → 0."""
         product, stock, _ = make_product_with_stock(8)
         order = make_order(product, qty=8)
-        process_success(order_id=order.id, request_id="req-bulk", paid_at=timezone.now())
+        process_success(
+            order_id=order.id, request_id="req-bulk", paid_at=timezone.now()
+        )
 
         stock.refresh_from_db()
         self.assertEqual(stock.quantity, 0)
@@ -73,7 +81,9 @@ class TestStockDecrement(TestCase):
         product, stock, _ = make_product_with_stock(1)
         order = make_order(product, qty=2)
         with self.assertRaises(ValidationError):
-            process_success(order_id=order.id, request_id="req-over", paid_at=timezone.now())
+            process_success(
+                order_id=order.id, request_id="req-over", paid_at=timezone.now()
+            )
         stock.refresh_from_db()
         self.assertEqual(stock.quantity, 1)
 

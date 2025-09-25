@@ -78,7 +78,9 @@ def vendor_dashboard(request):
     stats = {
         "products_total": products_qs.count(),
         "active_products": products_qs.filter(available=True).count(),
-        "order_items_total": OrderItem.objects.filter(product__owner_id=vendor_id).count(),
+        "order_items_total": OrderItem.objects.filter(
+            product__owner_id=vendor_id
+        ).count(),
     }
 
     # Lists (limited + narrow field selection)

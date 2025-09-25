@@ -8,7 +8,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     initial = True
 
     dependencies = [
@@ -23,7 +22,10 @@ class Migration(migrations.Migration):
                 (
                     "id",
                     models.BigAutoField(
-                        auto_created=True, primary_key=True, serialize=False, verbose_name="ID"
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
                     ),
                 ),
                 ("buyer_name", models.CharField(max_length=255)),
@@ -34,7 +36,9 @@ class Migration(migrations.Migration):
                         decimal_places=2,
                         default=Decimal("0.00"),
                         max_digits=14,
-                        validators=[django.core.validators.MinValueValidator(Decimal("0.00"))],
+                        validators=[
+                            django.core.validators.MinValueValidator(Decimal("0.00"))
+                        ],
                     ),
                 ),
                 (
@@ -43,7 +47,9 @@ class Migration(migrations.Migration):
                         decimal_places=2,
                         default=Decimal("0.00"),
                         max_digits=14,
-                        validators=[django.core.validators.MinValueValidator(Decimal("0.00"))],
+                        validators=[
+                            django.core.validators.MinValueValidator(Decimal("0.00"))
+                        ],
                     ),
                 ),
                 (
@@ -52,7 +58,9 @@ class Migration(migrations.Migration):
                         decimal_places=2,
                         default=Decimal("0.00"),
                         max_digits=14,
-                        validators=[django.core.validators.MinValueValidator(Decimal("0.00"))],
+                        validators=[
+                            django.core.validators.MinValueValidator(Decimal("0.00"))
+                        ],
                     ),
                 ),
                 ("currency", models.CharField(default="KES", max_length=10)),
@@ -97,7 +105,10 @@ class Migration(migrations.Migration):
                 (
                     "id",
                     models.BigAutoField(
-                        auto_created=True, primary_key=True, serialize=False, verbose_name="ID"
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
                     ),
                 ),
                 ("sku", models.CharField(blank=True, default="", max_length=64)),
@@ -107,7 +118,9 @@ class Migration(migrations.Migration):
                     models.DecimalField(
                         decimal_places=2,
                         max_digits=10,
-                        validators=[django.core.validators.MinValueValidator(Decimal("0.00"))],
+                        validators=[
+                            django.core.validators.MinValueValidator(Decimal("0.00"))
+                        ],
                     ),
                 ),
                 (
@@ -115,7 +128,9 @@ class Migration(migrations.Migration):
                     models.DecimalField(
                         decimal_places=2,
                         max_digits=12,
-                        validators=[django.core.validators.MinValueValidator(Decimal("0.00"))],
+                        validators=[
+                            django.core.validators.MinValueValidator(Decimal("0.00"))
+                        ],
                     ),
                 ),
                 (
@@ -124,7 +139,9 @@ class Migration(migrations.Migration):
                         decimal_places=4,
                         default=Decimal("0.00"),
                         max_digits=5,
-                        validators=[django.core.validators.MinValueValidator(Decimal("0.00"))],
+                        validators=[
+                            django.core.validators.MinValueValidator(Decimal("0.00"))
+                        ],
                     ),
                 ),
                 (
@@ -133,7 +150,9 @@ class Migration(migrations.Migration):
                         decimal_places=2,
                         default=Decimal("0.00"),
                         max_digits=14,
-                        validators=[django.core.validators.MinValueValidator(Decimal("0.00"))],
+                        validators=[
+                            django.core.validators.MinValueValidator(Decimal("0.00"))
+                        ],
                     ),
                 ),
                 (
@@ -142,7 +161,9 @@ class Migration(migrations.Migration):
                         decimal_places=2,
                         default=Decimal("0.00"),
                         max_digits=14,
-                        validators=[django.core.validators.MinValueValidator(Decimal("0.00"))],
+                        validators=[
+                            django.core.validators.MinValueValidator(Decimal("0.00"))
+                        ],
                     ),
                 ),
                 (

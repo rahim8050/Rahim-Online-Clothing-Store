@@ -13,6 +13,7 @@ from django.contrib import messages
 from django.core.management.utils import get_random_secret_key
 from django.db import models
 from django.db.models.functions import Length
+
 SECRET_KEY = os.environ.get("DJANGO_TYPECHECK_SECRET_KEY", "typecheck")  # nosec B105
 # at top of Rahim_Online_ClothesStore/settings.py
 try:
@@ -42,7 +43,9 @@ if not SECRET_KEY:
 # ---------------------------------------------------------------------
 # Hosts / CSRF / CORS
 # ---------------------------------------------------------------------
-ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["codealpa-online-clothesstore.onrender.com"])
+ALLOWED_HOSTS = env.list(
+    "ALLOWED_HOSTS", default=["codealpa-online-clothesstore.onrender.com"]
+)
 if DEBUG:
     ALLOWED_HOSTS += ["127.0.0.1", "localhost", "[::1]"]
 
@@ -51,7 +54,12 @@ RENDER_HOST = os.getenv("RENDER_EXTERNAL_HOSTNAME")
 if RENDER_HOST and RENDER_HOST not in ALLOWED_HOSTS:
     ALLOWED_HOSTS.append(RENDER_HOST)
 
-REQUIRED_HOSTS = ["127.0.0.1", "localhost", "[::1]", "codealpa-online-clothesstore.onrender.com"]
+REQUIRED_HOSTS = [
+    "127.0.0.1",
+    "localhost",
+    "[::1]",
+    "codealpa-online-clothesstore.onrender.com",
+]
 for _host in REQUIRED_HOSTS:
     if _host not in ALLOWED_HOSTS:
         ALLOWED_HOSTS.append(_host)
@@ -220,7 +228,9 @@ if DATABASES["default"].get("ENGINE") == "django.db.backends.mysql":
 
 # In-tests: in-memory sqlite
 if os.environ.get("PYTEST_CURRENT_TEST"):
-    DATABASES = {"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": ":memory:"}}
+    DATABASES = {
+        "default": {"ENGINE": "django.db.backends.sqlite3", "NAME": ":memory:"}
+    }
 
 # ---------------------------------------------------------------------
 # Sessions
@@ -312,7 +322,9 @@ CELERY_BEAT_SCHEDULE = {
 # ------------------------- Auth / API -------------------------
 
 REST_FRAMEWORK = {
-    "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticatedOrReadOnly"],
+    "DEFAULT_PERMISSION_CLASSES": [
+        "rest_framework.permissions.IsAuthenticatedOrReadOnly"
+    ],
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "core.authentication.HMACAuthentication",
         "rest_framework_simplejwt.authentication.JWTAuthentication",
@@ -341,7 +353,9 @@ SITE_NAME = os.getenv("SITE_NAME", "Rahim Online Shop")
 LOGOUT_REDIRECT_URL = "/accounts/login/"
 
 AUTH_PASSWORD_VALIDATORS = [
-    {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
+    {
+        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"
+    },
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
     {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
@@ -480,7 +494,9 @@ EMAIL_HOST_USER = _env_str("EMAIL_HOST_USER")
 EMAIL_HOST_PASSWORD = _env_str("EMAIL_HOST_PASSWORD")
 EMAIL_TIMEOUT = int(os.getenv("EMAIL_TIMEOUT", "10"))
 
-DEFAULT_FROM_EMAIL = _env_str("DEFAULT_FROM_EMAIL", f"no-reply@{SITE_DOMAIN.split(':')[0]}")
+DEFAULT_FROM_EMAIL = _env_str(
+    "DEFAULT_FROM_EMAIL", f"no-reply@{SITE_DOMAIN.split(':')[0]}"
+)
 SUPPORT_EMAIL = _env_str("SUPPORT_EMAIL", f"support@{SITE_DOMAIN.split(':')[0]}")
 SERVER_EMAIL = _env_str("SERVER_EMAIL") or DEFAULT_FROM_EMAIL
 EMAIL_SUBJECT_PREFIX = _env_str("EMAIL_SUBJECT_PREFIX", "[Rahim Online] ")
@@ -488,7 +504,9 @@ EMAIL_SUBJECT_PREFIX = _env_str("EMAIL_SUBJECT_PREFIX", "[Rahim Online] ")
 if DEBUG and not EMAIL_HOST:
     EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 if IS_PROD and EMAIL_BACKEND.endswith("smtp.EmailBackend"):
-    need = [k for k in ("EMAIL_HOST_USER", "EMAIL_HOST_PASSWORD") if not globals().get(k)]
+    need = [
+        k for k in ("EMAIL_HOST_USER", "EMAIL_HOST_PASSWORD") if not globals().get(k)
+    ]
     if need:
         raise RuntimeError(f"Missing required email envs: {', '.join(need)}")
 
@@ -506,7 +524,12 @@ CONTENT_SECURITY_POLICY = {
     "DIRECTIVES": {
         "default-src": [SELF],
         "connect-src": [SELF, "ws:", "wss:", "https://api.cloudinary.com"],
-        "font-src": [SELF, "https://fonts.gstatic.com", "https://cdnjs.cloudflare.com", "data:"],
+        "font-src": [
+            SELF,
+            "https://fonts.gstatic.com",
+            "https://cdnjs.cloudflare.com",
+            "data:",
+        ],
         "frame-ancestors": [SELF],
         "frame-src": [
             "https://js.stripe.com",
@@ -611,6 +634,7 @@ REST_FRAMEWORK = {
 # >>> BEGIN: auto-csp-guard
 try:
     import csp  # noqa: F401
+
     _CSP_AVAILABLE = True
 except Exception:
     _CSP_AVAILABLE = False
@@ -622,22 +646,22 @@ except NameError:
 
 if _CSP_AVAILABLE:
     _mw = list(MIDDLEWARE)
-    _csp = 'csp.middleware.CSPMiddleware'
+    _csp = "csp.middleware.CSPMiddleware"
     if _csp not in _mw:
         try:
-            idx = _mw.index('django.middleware.security.SecurityMiddleware') + 1
+            idx = _mw.index("django.middleware.security.SecurityMiddleware") + 1
         except ValueError:
             idx = 0
         _mw.insert(idx, _csp)
     MIDDLEWARE = tuple(_mw) if isinstance(MIDDLEWARE, tuple) else _mw
 
 if _CSP_AVAILABLE:
-    _policy = globals().get('CONTENT_SECURITY_POLICY')
+    _policy = globals().get("CONTENT_SECURITY_POLICY")
     if not isinstance(_policy, dict):
-        _policy = {'DIRECTIVES': {}}
-    _directives = _policy.setdefault('DIRECTIVES', {})
-    _directives.setdefault('default-src', ("'self'",))
-    _directives.setdefault('frame-ancestors', ("'self'",))
+        _policy = {"DIRECTIVES": {}}
+    _directives = _policy.setdefault("DIRECTIVES", {})
+    _directives.setdefault("default-src", ("'self'",))
+    _directives.setdefault("frame-ancestors", ("'self'",))
     CONTENT_SECURITY_POLICY = _policy
 
 # >>> END: auto-csp-guard

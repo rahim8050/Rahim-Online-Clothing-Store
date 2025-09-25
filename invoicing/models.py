@@ -17,8 +17,12 @@ class Invoice(models.Model):
         ACCEPTED = "accepted", "Accepted"
         REJECTED = "rejected", "Rejected"
 
-    org = models.ForeignKey(VendorOrg, on_delete=models.PROTECT, related_name="invoices")
-    order = models.OneToOneField("orders.Order", on_delete=models.PROTECT, related_name="invoice")
+    org = models.ForeignKey(
+        VendorOrg, on_delete=models.PROTECT, related_name="invoices"
+    )
+    order = models.OneToOneField(
+        "orders.Order", on_delete=models.PROTECT, related_name="invoice"
+    )
     buyer_name = models.CharField(max_length=255)
     buyer_pin = models.CharField(max_length=12, blank=True, default="")
     subtotal = models.DecimalField(
@@ -53,7 +57,9 @@ class Invoice(models.Model):
 
     class Meta:
         indexes = [
-            models.Index(fields=["org", "status", "issued_at"], name="invoice_org_status_idx"),
+            models.Index(
+                fields=["org", "status", "issued_at"], name="invoice_org_status_idx"
+            ),
         ]
 
     def __str__(self) -> str:
@@ -73,7 +79,9 @@ class Invoice(models.Model):
     def save(self, *args, **kwargs):
         # Quantize stored totals
         self.subtotal = Decimal(self.subtotal or 0).quantize(Q2, rounding=ROUND_HALF_UP)
-        self.tax_amount = Decimal(self.tax_amount or 0).quantize(Q2, rounding=ROUND_HALF_UP)
+        self.tax_amount = Decimal(self.tax_amount or 0).quantize(
+            Q2, rounding=ROUND_HALF_UP
+        )
         self.total = Decimal(self.total or 0).quantize(Q2, rounding=ROUND_HALF_UP)
         if self.pk:
             sub, tax, tot = self.compute_totals()
@@ -119,7 +127,9 @@ class InvoiceLine(models.Model):
         return f"{self.name} x {self.qty}"
 
     def compute(self) -> tuple[Decimal, Decimal]:
-        lt = (Decimal(self.qty) * Decimal(self.unit_price)).quantize(Q2, rounding=ROUND_HALF_UP)
+        lt = (Decimal(self.qty) * Decimal(self.unit_price)).quantize(
+            Q2, rounding=ROUND_HALF_UP
+        )
         tt = (lt * Decimal(self.tax_rate)).quantize(Q2, rounding=ROUND_HALF_UP)
         return lt, tt
 

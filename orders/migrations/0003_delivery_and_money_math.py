@@ -33,7 +33,9 @@ class Migration(migrations.Migration):
         ),
         migrations.AddIndex(
             model_name="orderitem",
-            index=models.Index(fields=["order", "product"], name="orderitem_order_product_idx"),
+            index=models.Index(
+                fields=["order", "product"], name="orderitem_order_product_idx"
+            ),
         ),
         migrations.CreateModel(
             name="Delivery",
@@ -41,7 +43,10 @@ class Migration(migrations.Migration):
                 (
                     "id",
                     models.BigAutoField(
-                        auto_created=True, primary_key=True, serialize=False, verbose_name="ID"
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
                     ),
                 ),
                 (
@@ -65,18 +70,25 @@ class Migration(migrations.Migration):
                 ("delivered_at", models.DateTimeField(blank=True, null=True)),
                 (
                     "origin_lat",
-                    models.DecimalField(blank=True, decimal_places=6, max_digits=9, null=True),
+                    models.DecimalField(
+                        blank=True, decimal_places=6, max_digits=9, null=True
+                    ),
                 ),
                 (
                     "origin_lng",
-                    models.DecimalField(blank=True, decimal_places=6, max_digits=9, null=True),
+                    models.DecimalField(
+                        blank=True, decimal_places=6, max_digits=9, null=True
+                    ),
                 ),
                 ("dest_lat", models.DecimalField(decimal_places=6, max_digits=9)),
                 ("dest_lng", models.DecimalField(decimal_places=6, max_digits=9)),
                 ("last_lat", models.FloatField(blank=True, null=True)),
                 ("last_lng", models.FloatField(blank=True, null=True)),
                 ("last_ping_at", models.DateTimeField(blank=True, null=True)),
-                ("channel_key", models.CharField(default=uuid_hex, max_length=64, unique=True)),
+                (
+                    "channel_key",
+                    models.CharField(default=uuid_hex, max_length=64, unique=True),
+                ),
                 ("created_at", models.DateTimeField(auto_now_add=True)),
                 ("updated_at", models.DateTimeField(auto_now=True)),
                 (
@@ -100,8 +112,12 @@ class Migration(migrations.Migration):
             ],
             options={
                 "indexes": [
-                    models.Index(fields=["order", "status"], name="delivery_order_status_idx"),
-                    models.Index(fields=["driver", "status"], name="delivery_driver_status_idx"),
+                    models.Index(
+                        fields=["order", "status"], name="delivery_order_status_idx"
+                    ),
+                    models.Index(
+                        fields=["driver", "status"], name="delivery_driver_status_idx"
+                    ),
                 ],
             },
         ),
@@ -109,7 +125,8 @@ class Migration(migrations.Migration):
             model_name="delivery",
             constraint=models.CheckConstraint(
                 name="delivery_driver_required_when_moving",
-                check=Q(status__in=["pending", "delivered", "cancelled"]) | Q(driver__isnull=False),
+                check=Q(status__in=["pending", "delivered", "cancelled"])
+                | Q(driver__isnull=False),
             ),
         ),
         migrations.AddConstraint(
@@ -130,7 +147,8 @@ class Migration(migrations.Migration):
             model_name="delivery",
             constraint=models.CheckConstraint(
                 name="delivery_origin_lat_range",
-                check=Q(origin_lat__isnull=True) | (Q(origin_lat__gte=-90) & Q(origin_lat__lte=90)),
+                check=Q(origin_lat__isnull=True)
+                | (Q(origin_lat__gte=-90) & Q(origin_lat__lte=90)),
             ),
         ),
         migrations.AddConstraint(

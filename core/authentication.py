@@ -64,7 +64,9 @@ class HMACAuthentication(authentication.BaseAuthentication):
 
         body = request.body or b""
         body_sha = hashlib.sha256(body).hexdigest()
-        canonical = "\n".join([ts_raw, request.method.upper(), request.get_full_path(), body_sha])
+        canonical = "\n".join(
+            [ts_raw, request.method.upper(), request.get_full_path(), body_sha]
+        )
         # secret may be base64/hex/plain; try best-effort decode
         key = _coerce_secret_bytes(secret)
         expect = hmac.new(key, canonical.encode("utf-8"), hashlib.sha256).hexdigest()

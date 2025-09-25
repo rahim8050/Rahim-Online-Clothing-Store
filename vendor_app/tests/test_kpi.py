@@ -6,7 +6,11 @@ from rest_framework.test import APIClient
 
 from orders.models import Order
 from payments.models import Transaction
-from vendor_app.kpi import aggregate_kpis_daily, bump_realtime_on_success, get_realtime_kpi_snapshot
+from vendor_app.kpi import (
+    aggregate_kpis_daily,
+    bump_realtime_on_success,
+    get_realtime_kpi_snapshot,
+)
 from vendor_app.models import VendorMember, VendorOrg, VendorProfile
 
 pytestmark = pytest.mark.django_db
@@ -14,7 +18,9 @@ pytestmark = pytest.mark.django_db
 
 def mk_user(username: str):
     User = get_user_model()
-    return User.objects.create_user(username=username, email=f"{username}@ex.com", password="x")
+    return User.objects.create_user(
+        username=username, email=f"{username}@ex.com", password="x"
+    )
 
 
 def seed_org():
@@ -60,6 +66,7 @@ def test_kpi_daily_aggregation_consistency():
         processed_at=timezone.now(),
     )
     from decimal import Decimal as D
+
     assert txn.vendor_org == org
 
     kpi = aggregate_kpis_daily(org.id)
@@ -71,7 +78,9 @@ def test_realtime_snapshot_monotonicity():
     snap1 = get_realtime_kpi_snapshot(org.id)
     bump_realtime_on_success(org.id, Decimal("10.00"), Decimal("9.00"))
     snap2 = get_realtime_kpi_snapshot(org.id)
-    assert Decimal(str(snap2["gross_revenue"])) >= Decimal(str(snap1.get("gross_revenue", "0.00")))
+    assert Decimal(str(snap2["gross_revenue"])) >= Decimal(
+        str(snap1.get("gross_revenue", "0.00"))
+    )
 
 
 def test_permissions_kpi_visibility():

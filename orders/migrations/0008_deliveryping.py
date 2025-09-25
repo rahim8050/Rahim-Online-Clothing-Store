@@ -5,7 +5,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("orders", "0007_remove_delivery_delivery_dest_lat_range_and_more"),
     ]
@@ -17,7 +16,10 @@ class Migration(migrations.Migration):
                 (
                     "id",
                     models.BigAutoField(
-                        auto_created=True, primary_key=True, serialize=False, verbose_name="ID"
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
                     ),
                 ),
                 ("lat", models.DecimalField(decimal_places=6, max_digits=9)),
@@ -35,9 +37,12 @@ class Migration(migrations.Migration):
             options={
                 "indexes": [
                     models.Index(
-                        fields=["delivery", "created_at"], name="orders_deli_deliver_2162d2_idx"
+                        fields=["delivery", "created_at"],
+                        name="orders_deli_deliver_2162d2_idx",
                     ),
-                    models.Index(fields=["created_at"], name="orders_deli_created_a4b160_idx"),
+                    models.Index(
+                        fields=["created_at"], name="orders_deli_created_a4b160_idx"
+                    ),
                 ],
             },
         ),

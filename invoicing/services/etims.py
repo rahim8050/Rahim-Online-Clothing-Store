@@ -31,7 +31,9 @@ class EtimsClient:
         )
         self.api_key = api_key or getattr(settings, "ETIMS_API_KEY", None)
 
-    def submit_invoice(self, invoice: Invoice) -> EtimsResult:  # pragma: no cover - abstract
+    def submit_invoice(
+        self, invoice: Invoice
+    ) -> EtimsResult:  # pragma: no cover - abstract
         raise NotImplementedError
 
 
@@ -40,7 +42,9 @@ class SandboxEtimsClient(EtimsClient):
         # Fake simple rule: if buyer_name contains 'REJECT' -> reject
         name = (invoice.buyer_name or "").upper()
         if "REJECT" in name:
-            return EtimsResult(status="rejected", errors={"message": "Sandbox rejection"})
+            return EtimsResult(
+                status="rejected", errors={"message": "Sandbox rejection"}
+            )
         irn = f"IRN-{uuid.uuid4().hex[:12].upper()}"
         return EtimsResult(status="accepted", irn=irn)
 
@@ -54,7 +58,9 @@ def get_client() -> EtimsClient:
         cls = import_string(cls_path)
         return cls()
     except Exception:  # fallback to sandbox
-        logging.getLogger(__name__).warning("Falling back to SandboxEtimsClient", exc_info=True)
+        logging.getLogger(__name__).warning(
+            "Falling back to SandboxEtimsClient", exc_info=True
+        )
         return SandboxEtimsClient()
 
 
@@ -70,10 +76,14 @@ class RealEtimsClient(EtimsClient):  # pragma: no cover - integration shim
         try:
             import requests  # type: ignore
         except Exception:  # requests not installed
-            return EtimsResult(status="rejected", errors={"message": "REAL_CLIENT_DEP_MISSING"})
+            return EtimsResult(
+                status="rejected", errors={"message": "REAL_CLIENT_DEP_MISSING"}
+            )
 
         if not self.api_key or not self.base_url:
-            return EtimsResult(status="rejected", errors={"message": "REAL_CLIENT_NOT_CONFIGURED"})
+            return EtimsResult(
+                status="rejected", errors={"message": "REAL_CLIENT_NOT_CONFIGURED"}
+            )
 
         # Minimal illustrative payload – adjust mapping when wiring real API
         payload = {
@@ -105,7 +115,9 @@ class RealEtimsClient(EtimsClient):  # pragma: no cover - integration shim
 
 
 @idempotent(scope="invoice:submit")
-def submit_invoice(*, invoice: Invoice, idempotency_key: str | None = None) -> EtimsResult:
+def submit_invoice(
+    *, invoice: Invoice, idempotency_key: str | None = None
+) -> EtimsResult:
     """Submit an invoice to eTIMS (sandbox adapter). Idempotent per invoice.
 
     - If invoice is already ACCEPTED, return immediately.
@@ -123,7 +135,9 @@ def submit_invoice(*, invoice: Invoice, idempotency_key: str | None = None) -> E
         kra_pin = (org.kra_pin or "").strip().upper()
         if not kra_pin or org.tax_status != VendorOrg.TaxStatus.VERIFIED:
             metrics.inc("invoices_rejected", reason="org_not_verified")
-            return EtimsResult(status="rejected", errors={"message": "ORG_NOT_VERIFIED"})
+            return EtimsResult(
+                status="rejected", errors={"message": "ORG_NOT_VERIFIED"}
+            )
     except Exception:  # defensive default
         metrics.inc("invoices_rejected", reason="org_check_failed")
         return EtimsResult(status="rejected", errors={"message": "ORG_CHECK_FAILED"})
@@ -152,7 +166,15 @@ def submit_invoice(*, invoice: Invoice, idempotency_key: str | None = None) -> E
             invoice.irn = result.irn or invoice.irn or ""
             invoice.accepted_at = timezone.now()
             invoice.last_error = ""
-            invoice.save(update_fields=["status", "irn", "accepted_at", "last_error", "updated_at"])
+            invoice.save(
+                update_fields=[
+                    "status",
+                    "irn",
+                    "accepted_at",
+                    "last_error",
+                    "updated_at",
+                ]
+            )
         else:
             invoice.status = Invoice.Status.REJECTED
             invoice.rejected_at = timezone.now()
@@ -163,7 +185,9 @@ def submit_invoice(*, invoice: Invoice, idempotency_key: str | None = None) -> E
             except Exception:
                 msg = ""
             invoice.last_error = msg
-            invoice.save(update_fields=["status", "rejected_at", "last_error", "updated_at"])
+            invoice.save(
+                update_fields=["status", "rejected_at", "last_error", "updated_at"]
+            )
 
         dt = time.perf_counter() - t0
         try:

@@ -54,7 +54,9 @@ class VendorApplicationAdmin(admin.ModelAdmin):
 
     @admin.action(description="Approve selected applications")
     def approve_selected(self, request, queryset):
-        qs = queryset.filter(status=VendorApplication.Status.PENDING).select_related("user")
+        qs = queryset.filter(status=VendorApplication.Status.PENDING).select_related(
+            "user"
+        )
         approved = 0
         for app in qs:
             app.approve(request.user)
@@ -73,13 +75,17 @@ class VendorApplicationAdmin(admin.ModelAdmin):
             )
         if skipped:
             self.message_user(
-                request, f"Skipped {skipped} non-pending application(s).", level=messages.WARNING
+                request,
+                f"Skipped {skipped} non-pending application(s).",
+                level=messages.WARNING,
             )
 
     @admin.action(description="Reject selected applications")
     def reject_selected(self, request, queryset):
         note = request.POST.get("note") or "Rejected via admin."
-        qs = queryset.filter(status=VendorApplication.Status.PENDING).select_related("user")
+        qs = queryset.filter(status=VendorApplication.Status.PENDING).select_related(
+            "user"
+        )
         rejected = 0
         for app in qs:
             app.reject(request.user, note=note)
@@ -98,7 +104,9 @@ class VendorApplicationAdmin(admin.ModelAdmin):
             )
         if skipped:
             self.message_user(
-                request, f"Skipped {skipped} non-pending application(s).", level=messages.INFO
+                request,
+                f"Skipped {skipped} non-pending application(s).",
+                level=messages.INFO,
             )
 
 
@@ -106,7 +114,12 @@ class VendorApplicationAdmin(admin.ModelAdmin):
 class VendorStaffAdmin(admin.ModelAdmin):
     list_display = ("id", "owner", "staff", "role", "is_active", "created_at")
     list_filter = ("role", "is_active")
-    search_fields = ("owner__username", "owner__email", "staff__username", "staff__email")
+    search_fields = (
+        "owner__username",
+        "owner__email",
+        "staff__username",
+        "staff__email",
+    )
     autocomplete_fields = ("owner", "staff")
 
     def save_model(self, request, obj, form, change):

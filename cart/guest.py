@@ -54,7 +54,9 @@ def merge_guest_into_user(guest_cart: Cart, user_cart: Cart) -> Cart:
         guest_cart = Cart.objects.select_for_update().get(pk=guest_cart.pk)
 
         for item in (
-            CartItem.objects.select_for_update().filter(cart=guest_cart).select_related("product")
+            CartItem.objects.select_for_update()
+            .filter(cart=guest_cart)
+            .select_related("product")
         ):
             target, created = CartItem.objects.select_for_update().get_or_create(
                 cart=user_cart,
@@ -62,7 +64,9 @@ def merge_guest_into_user(guest_cart: Cart, user_cart: Cart) -> Cart:
                 defaults={"quantity": item.quantity},
             )
             if not created:
-                CartItem.objects.filter(pk=target.pk).update(quantity=F("quantity") + item.quantity)
+                CartItem.objects.filter(pk=target.pk).update(
+                    quantity=F("quantity") + item.quantity
+                )
 
         # cleanup guest cart
         CartItem.objects.filter(cart=guest_cart).delete()

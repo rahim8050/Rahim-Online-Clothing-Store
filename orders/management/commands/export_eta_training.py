@@ -17,7 +17,9 @@ def haversine_km(a_lat, a_lng, b_lat, b_lng):
     dlng = math.radians(b_lng - a_lng)
     aa = (
         math.sin(dlat / 2) ** 2
-        + math.cos(math.radians(a_lat)) * math.cos(math.radians(b_lat)) * math.sin(dlng / 2) ** 2
+        + math.cos(math.radians(a_lat))
+        * math.cos(math.radians(b_lat))
+        * math.sin(dlng / 2) ** 2
     )
     return 2 * 6371.0 * math.asin(math.sqrt(aa))
 

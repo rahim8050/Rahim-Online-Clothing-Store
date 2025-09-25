@@ -41,12 +41,18 @@ urlpatterns = [
     path("save-location/", save_location, name="save_location"),
     # ----- Stripe (dedicated names/paths) -----
     path("stripe/<int:order_id>/", stripe_checkout, name="stripe_checkout"),
-    path("stripe/success/<int:order_id>/", Stripe_payment_success, name="stripe_payment_success"),
+    path(
+        "stripe/success/<int:order_id>/",
+        Stripe_payment_success,
+        name="stripe_payment_success",
+    ),
     path("webhook/stripe/", stripe_webhook, name="stripe_webhook"),
     # ----- Paystack -----
     path("paystack/<int:order_id>/", paystack_checkout, name="paystack_checkout"),
     # Client confirmation after verifying TX reference on your server
-    path("paystack/confirm/", paystack_payment_confirm, name="paystack_payment_confirm"),
+    path(
+        "paystack/confirm/", paystack_payment_confirm, name="paystack_payment_confirm"
+    ),
     # Stable webhook endpoint for Paystack events
     path("webhook/paystack/", paystack_webhook, name="paystack_webhook"),
     # ----- PayPal -----
@@ -59,10 +65,22 @@ urlpatterns = [
     path("payment/cancel/<int:order_id>/", payment_cancel, name="payment_cancel"),
     # ----- Order tracking & driver endpoints -----
     path("orders/<int:order_id>/track/", track_order, name="order-track"),
-    path("driver/deliveries/", driver_deliveries_page, name="driver-deliveries"),  # HTML
-    path("apis/driver/deliveries/", driver_deliveries_api, name="driver-deliveries-api"),  # JSON
+    path(
+        "driver/deliveries/", driver_deliveries_page, name="driver-deliveries"
+    ),  # HTML
+    path(
+        "apis/driver/deliveries/", driver_deliveries_api, name="driver-deliveries-api"
+    ),  # JSON
     path("apis/driver/location/", driver_location_api, name="driver-location-api"),
     path("apis/driver/action/", driver_action_api, name="driver-action-api"),
-    path("apis/driver/route/<int:delivery_id>/", driver_route_api, name="driver-route-api"),
-    path("apis/delivery/<int:delivery_id>/pings/", delivery_pings_api, name="delivery-pings-api"),
+    path(
+        "apis/driver/route/<int:delivery_id>/",
+        driver_route_api,
+        name="driver-route-api",
+    ),
+    path(
+        "apis/delivery/<int:delivery_id>/pings/",
+        delivery_pings_api,
+        name="delivery-pings-api",
+    ),
 ]

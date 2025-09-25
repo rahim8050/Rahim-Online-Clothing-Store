@@ -57,27 +57,47 @@ def refund_gateway_charge(tx):
         return _stripe_refund(tx)
     elif gw == "mpesa":
         return _mpesa_refund(tx)
-    return {"ok": False, "refund_id": None, "raw": None, "error": f"Unsupported gateway: {gw}"}
+    return {
+        "ok": False,
+        "refund_id": None,
+        "raw": None,
+        "error": f"Unsupported gateway: {gw}",
+    }
 
 
 # ---------- Paystack ----------
 def _paystack_refund(tx):
     if DEV_ALLOW_INSECURE_WEBHOOKS:
         # Dev stub: pretend refund succeeded
-        return {"ok": True, "refund_id": f"RF_{tx.reference}", "raw": {"dev": True}, "error": None}
+        return {
+            "ok": True,
+            "refund_id": f"RF_{tx.reference}",
+            "raw": {"dev": True},
+            "error": None,
+        }
     return _paystack_refund_live(tx)
 
 
 def _paystack_refund_live(tx):
     if not PAYSTACK_SECRET:
-        return {"ok": False, "refund_id": None, "raw": None, "error": "Missing PAYSTACK_SECRET_KEY"}
+        return {
+            "ok": False,
+            "refund_id": None,
+            "raw": None,
+            "error": "Missing PAYSTACK_SECRET_KEY",
+        }
 
     headers = {"Authorization": f"Bearer {PAYSTACK_SECRET}"}
     # amount in kobo using Decimal to avoid float rounding
     amount_kobo = int(
-        (Decimal(str(tx.amount)) * Decimal("100")).quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+        (Decimal(str(tx.amount)) * Decimal("100")).quantize(
+            Decimal("1"), rounding=ROUND_HALF_UP
+        )
     )
-    payload = {"transaction": tx.gateway_reference or tx.reference, "amount": amount_kobo}
+    payload = {
+        "transaction": tx.gateway_reference or tx.reference,
+        "amount": amount_kobo,
+    }
 
     try:
         r = requests.post(
@@ -85,11 +105,21 @@ def _paystack_refund_live(tx):
         )
         data = r.json() if r.content else {}
     except Exception as e:
-        return {"ok": False, "refund_id": None, "raw": {"exc": str(e)}, "error": "network"}
+        return {
+            "ok": False,
+            "refund_id": None,
+            "raw": {"exc": str(e)},
+            "error": "network",
+        }
 
     ok = r.status_code in (200, 201) and data.get("status") is True
     refund_id = (data.get("data") or {}).get("reference")
-    return {"ok": ok, "refund_id": refund_id, "raw": data, "error": None if ok else "api"}
+    return {
+        "ok": ok,
+        "refund_id": refund_id,
+        "raw": data,
+        "error": None if ok else "api",
+    }
 
 
 # ---------- Other gateways (stubs for now) ----------
@@ -101,13 +131,28 @@ def _stripe_refund(tx):
             "raw": {"dev": True},
             "error": None,
         }
-    return {"ok": False, "refund_id": None, "raw": None, "error": "Real refund not implemented"}
+    return {
+        "ok": False,
+        "refund_id": None,
+        "raw": None,
+        "error": "Real refund not implemented",
+    }
 
 
 def _mpesa_refund(tx):
     if DEV_ALLOW_INSECURE_WEBHOOKS:
-        return {"ok": True, "refund_id": f"MP_{tx.reference}", "raw": {"dev": True}, "error": None}
-    return {"ok": False, "refund_id": None, "raw": None, "error": "Reversal not implemented"}
+        return {
+            "ok": True,
+            "refund_id": f"MP_{tx.reference}",
+            "raw": {"dev": True},
+            "error": None,
+        }
+    return {
+        "ok": False,
+        "refund_id": None,
+        "raw": None,
+        "error": "Reversal not implemented",
+    }
 
 
 # ---------- Duplicate-success auto-refund ----------

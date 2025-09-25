@@ -7,7 +7,13 @@ from users.constants import ADMIN, ALL_GROUPS, CUSTOMER, DRIVER, VENDOR, VENDOR_
 
 ROLE_PERMS = {
     ADMIN: ["add_user", "change_user", "delete_user", "view_user"],
-    VENDOR: ["add_product", "change_product", "delete_product", "view_product", "view_order"],
+    VENDOR: [
+        "add_product",
+        "change_product",
+        "delete_product",
+        "view_product",
+        "view_order",
+    ],
     VENDOR_STAFF: ["add_product", "change_product", "view_product", "view_order"],
     DRIVER: ["view_order", "change_order"],
     CUSTOMER: ["view_product", "add_order"],
@@ -62,7 +68,9 @@ class Command(BaseCommand):
     help = "Create/normalize auth groups and permissions (safe to run repeatedly)."
 
     def add_arguments(self, parser):
-        parser.add_argument("--dry-run", action="store_true", help="Show actions without writing")
+        parser.add_argument(
+            "--dry-run", action="store_true", help="Show actions without writing"
+        )
 
     def handle(self, *args, **options):
         processed, missing = sync_roles(dry_run=options["dry_run"], stdout=self.stdout)
@@ -70,5 +78,7 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS(f"{tag}Processed {processed} groups"))
         if missing:
             self.stdout.write(
-                self.style.WARNING(f"Missing permission codenames: {', '.join(missing)}")
+                self.style.WARNING(
+                    f"Missing permission codenames: {', '.join(missing)}"
+                )
             )

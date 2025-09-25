@@ -9,7 +9,10 @@ from django.db import transaction
 from .models import AuditLog, IdempotencyKey
 
 import logging
+
 logger = logging.getLogger(__name__)
+
+
 def body_sha256(data: bytes) -> str:
     return hashlib.sha256(data or b"").hexdigest()
 
@@ -36,12 +39,16 @@ def idempotent(scope: str) -> Callable:
                         key = None
             if not key:
                 # derive from function + args hash (last resort)
-                raw = (str(func.__name__) + str(args) + str(sorted(kwargs.items()))).encode("utf-8")
+                raw = (
+                    str(func.__name__) + str(args) + str(sorted(kwargs.items()))
+                ).encode("utf-8")
                 key = body_sha256(raw)
 
             with transaction.atomic():
-                idem, created = IdempotencyKey.objects.select_for_update().get_or_create(
-                    scope=scope, key=key
+                idem, created = (
+                    IdempotencyKey.objects.select_for_update().get_or_create(
+                        scope=scope, key=key
+                    )
                 )
                 if not created:
                     AuditLog.log(event="IDEMPOTENT_REPLAY", message=f"{scope}:{key}")
@@ -54,7 +61,7 @@ def idempotent(scope: str) -> Callable:
                     idem.response_hash = body_sha256(rbytes)
                     idem.save(update_fields=["response_hash"])
                 except Exception as e:
-                   logger.debug("idempotency side-effect failed: %s", e, exc_info=True)
+                    logger.debug("idempotency side-effect failed: %s", e, exc_info=True)
                 return result
 
         return wrapper
@@ -76,7 +83,9 @@ def accept_once(*, scope: str, request=None, key: str | None = None) -> bool:
     if not key:
         return True  # fallback: cannot dedupe without a key
     with transaction.atomic():
-        _, created = IdempotencyKey.objects.select_for_update().get_or_create(scope=scope, key=key)
+        _, created = IdempotencyKey.objects.select_for_update().get_or_create(
+            scope=scope, key=key
+        )
         if not created:
             AuditLog.log(
                 event="IDEMPOTENT_REPLAY",

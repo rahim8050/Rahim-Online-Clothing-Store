@@ -6,7 +6,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("vendor_app", "0004_vendororg_org_commission_rate_and_more"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
@@ -27,7 +26,11 @@ class Migration(migrations.Migration):
             model_name="vendororg",
             name="tax_status",
             field=models.CharField(
-                choices=[("unknown", "Unknown"), ("verified", "Verified"), ("blocked", "Blocked")],
+                choices=[
+                    ("unknown", "Unknown"),
+                    ("verified", "Verified"),
+                    ("blocked", "Blocked"),
+                ],
                 default="unknown",
                 max_length=16,
             ),
@@ -38,7 +41,10 @@ class Migration(migrations.Migration):
                 (
                     "id",
                     models.BigAutoField(
-                        auto_created=True, primary_key=True, serialize=False, verbose_name="ID"
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
                     ),
                 ),
                 ("field", models.CharField(max_length=64)),
@@ -67,7 +73,11 @@ class Migration(migrations.Migration):
             options={
                 "verbose_name": "Vendor Org Audit Entry",
                 "verbose_name_plural": "Vendor Org Audit Entries",
-                "indexes": [models.Index(fields=["org", "created_at"], name="vendororg_audit_idx")],
+                "indexes": [
+                    models.Index(
+                        fields=["org", "created_at"], name="vendororg_audit_idx"
+                    )
+                ],
             },
         ),
     ]

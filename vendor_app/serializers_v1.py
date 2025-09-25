@@ -12,7 +12,9 @@ class OrgSerializer(serializers.ModelSerializer):
     owner = serializers.PrimaryKeyRelatedField(read_only=True)
     slug = serializers.SlugField(required=False, allow_blank=True)
     kra_pin = serializers.CharField(required=False, allow_blank=True)
-    tax_status = serializers.ChoiceField(choices=VendorOrg.TaxStatus.choices, required=False)
+    tax_status = serializers.ChoiceField(
+        choices=VendorOrg.TaxStatus.choices, required=False
+    )
 
     class Meta:
         model = VendorOrg
@@ -67,7 +69,9 @@ class OrgSerializer(serializers.ModelSerializer):
             if f in validated_data:
                 sensitive[f] = validated_data[f]
         if sensitive and not self._can_see_sensitive(user, instance):
-            raise serializers.ValidationError({"detail": "Not allowed to modify tax fields."})
+            raise serializers.ValidationError(
+                {"detail": "Not allowed to modify tax fields."}
+            )
 
         # Track old values for audit
         old_vals = {k: getattr(instance, k, None) for k in sensitive}
@@ -82,7 +86,9 @@ class OrgSerializer(serializers.ModelSerializer):
             if str(old_val) != str(new_val):
                 try:
                     VendorOrgAuditLog.objects.create(
-                        actor=user if getattr(user, "is_authenticated", False) else None,
+                        actor=user
+                        if getattr(user, "is_authenticated", False)
+                        else None,
                         org=obj,
                         field=field,
                         old_value=str(old_val or ""),

@@ -24,10 +24,13 @@ class Command(BaseCommand):
             order_lng = item.order.longitude
             nearest = min(
                 warehouses,
-                key=lambda w: (w.latitude - order_lat) ** 2 + (w.longitude - order_lng) ** 2,
+                key=lambda w: (w.latitude - order_lat) ** 2
+                + (w.longitude - order_lng) ** 2,
             )
             item.warehouse = nearest
             item.save(update_fields=["warehouse"])
             assigned += 1
 
-        self.stdout.write(self.style.SUCCESS(f"Assigned warehouses to {assigned} order items."))
+        self.stdout.write(
+            self.style.SUCCESS(f"Assigned warehouses to {assigned} order items.")
+        )

@@ -18,7 +18,9 @@ class AssistantApiTableTests(TestCase):
         }
         resp = self.client.post(
             "/api/assistant/ask/",
-            data=json.dumps({"session_key": "s1", "message": "list orders", "persona": "vendor"}),
+            data=json.dumps(
+                {"session_key": "s1", "message": "list orders", "persona": "vendor"}
+            ),
             content_type="application/json",
         )
         # Anon user should be unauthorized (per existing permissions)
@@ -29,7 +31,9 @@ class AssistantApiTableTests(TestCase):
     def test_list_orders_table_for_authed_user(self, mock_order_list, mock_table):
         from django.contrib.auth import get_user_model
 
-        u = get_user_model().objects.create_user(username="t", email="t@example.com", password="x")
+        u = get_user_model().objects.create_user(
+            username="t", email="t@example.com", password="x"
+        )
         self.client.force_login(u)
         mock_table.return_value = {
             "title": "Recent orders",
@@ -37,10 +41,14 @@ class AssistantApiTableTests(TestCase):
             "rows": [[57, "RAH57", "PENDING", "iphone:47"]],
             "footnote": "Showing latest 1.",
         }
-        mock_order_list.return_value = "Recent orders:\n57: RAH57 - PENDING ([iphone]:47)"
+        mock_order_list.return_value = (
+            "Recent orders:\n57: RAH57 - PENDING ([iphone]:47)"
+        )
         resp = self.client.post(
             "/api/assistant/ask/",
-            data=json.dumps({"session_key": "s1", "message": "list orders", "persona": "vendor"}),
+            data=json.dumps(
+                {"session_key": "s1", "message": "list orders", "persona": "vendor"}
+            ),
             content_type="application/json",
         )
         self.assertEqual(resp.status_code, 200)
@@ -60,7 +68,9 @@ class AssistantApiTableTests(TestCase):
         self.client.force_login(u)
         resp = self.client.post(
             "/api/assistant/ask/",
-            data=json.dumps({"session_key": "s1", "message": "hi", "persona": "customer"}),
+            data=json.dumps(
+                {"session_key": "s1", "message": "hi", "persona": "customer"}
+            ),
             content_type="application/json",
         )
         self.assertEqual(resp.status_code, 200)

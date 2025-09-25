@@ -60,9 +60,9 @@ def vendor_owner_ids_for(user) -> set[int]:
     # If the user is active staff, include those owners.
     from .models import VendorStaff
 
-    staff_owner_ids = VendorStaff.objects.filter(staff=user, is_active=True).values_list(
-        "owner_id", flat=True
-    )
+    staff_owner_ids = VendorStaff.objects.filter(
+        staff=user, is_active=True
+    ).values_list("owner_id", flat=True)
 
     owner_ids.update(staff_owner_ids)
     return owner_ids
@@ -123,7 +123,9 @@ def send_activation_email(request, user) -> None:
     try:
         uid = urlsafe_base64_encode(force_bytes(user.pk))
         token = account_activation_token.make_token(user)
-        activation_path = reverse("users:activate", kwargs={"uidb64": uid, "token": token})
+        activation_path = reverse(
+            "users:activate", kwargs={"uidb64": uid, "token": token}
+        )
         activation_url = absolute_url(activation_path, request=request)
         support_email = getattr(settings, "SUPPORT_EMAIL", settings.DEFAULT_FROM_EMAIL)
         site_name = getattr(settings, "SITE_NAME", "Rahim Online Shop")
@@ -138,7 +140,9 @@ def send_activation_email(request, user) -> None:
         }
 
         subject = "Activate your account"
-        html_body = render_to_string("users/accounts/acc_activate_email.html", ctx, request=request)
+        html_body = render_to_string(
+            "users/accounts/acc_activate_email.html", ctx, request=request
+        )
         text_body = strip_tags(html_body)
 
         msg = EmailMultiAlternatives(

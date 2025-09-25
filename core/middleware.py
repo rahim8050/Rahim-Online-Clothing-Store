@@ -33,7 +33,11 @@ def _get_header(resp, name: str, default: str = "") -> str:
         return resp.headers.get(name, default)
     except AttributeError:
         # Older Django: has_header + mapping access
-        return resp[name] if hasattr(resp, "has_header") and resp.has_header(name) else default
+        return (
+            resp[name]
+            if hasattr(resp, "has_header") and resp.has_header(name)
+            else default
+        )
 
 
 class RequestIDMiddleware:

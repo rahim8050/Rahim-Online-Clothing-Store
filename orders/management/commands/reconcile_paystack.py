@@ -65,7 +65,9 @@ class Command(BaseCommand):
 
             tx.save(update_fields=["status", "callback_received", "verified"])
 
-            self.stdout.write(self.style.SUCCESS(f"{tx.reference}: reconciled → {tx.status}"))
+            self.stdout.write(
+                self.style.SUCCESS(f"{tx.reference}: reconciled → {tx.status}")
+            )
 
             # If it succeeded, update order + queue email
             if tx.status == "success" and tx.verified:

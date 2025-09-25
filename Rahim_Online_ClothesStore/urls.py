@@ -6,7 +6,12 @@ from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 from core.views import healthz
-from payments.views import CheckoutView, MPesaWebhookView, PaystackWebhookView, StripeWebhookView
+from payments.views import (
+    CheckoutView,
+    MPesaWebhookView,
+    PaystackWebhookView,
+    StripeWebhookView,
+)
 from product_app import views as product_views
 from users import views as user_views
 from users.views import debug_ws_push
@@ -33,10 +38,18 @@ urlpatterns = [
     path("api/assistant/", include("assistant.urls")),
     # New versioned API (DRF-only), per-app mounts
     path("apis/v1/schema/", SpectacularAPIView.as_view(), name="v1-schema"),
-    path("apis/v1/docs/", SpectacularSwaggerView.as_view(url_name="v1-schema"), name="v1-docs"),
+    path(
+        "apis/v1/docs/",
+        SpectacularSwaggerView.as_view(url_name="v1-schema"),
+        name="v1-docs",
+    ),
     # JWT endpoints (dev-friendly paths)
-    path("apis/v1/auth/jwt/create/", TokenObtainPairView.as_view(), name="v1-jwt-create"),
-    path("apis/v1/auth/jwt/refresh/", TokenRefreshView.as_view(), name="v1-jwt-refresh"),
+    path(
+        "apis/v1/auth/jwt/create/", TokenObtainPairView.as_view(), name="v1-jwt-create"
+    ),
+    path(
+        "apis/v1/auth/jwt/refresh/", TokenRefreshView.as_view(), name="v1-jwt-refresh"
+    ),
     # Per-app v1 routers
     path("apis/v1/catalog/", include("product_app.urls_v1")),
     path("apis/v1/cart/", include("cart.urls_v1")),

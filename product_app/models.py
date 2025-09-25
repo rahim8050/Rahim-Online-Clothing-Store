@@ -22,7 +22,9 @@ class Product(models.Model):
         ACTIVE = "active", "Active"
         ARCHIVED = "archived", "Archived"
 
-    category = models.ForeignKey(Category, related_name="products", on_delete=models.CASCADE)
+    category = models.ForeignKey(
+        Category, related_name="products", on_delete=models.CASCADE
+    )
     owner = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         related_name="vendor_products",
@@ -52,7 +54,9 @@ class Product(models.Model):
         return self.name
 
     def get_absolute_url(self):
-        return reverse("product_app:product_detail", kwargs={"id": self.id, "slug": self.slug})
+        return reverse(
+            "product_app:product_detail", kwargs={"id": self.id, "slug": self.slug}
+        )
 
 
 class Warehouse(models.Model):
@@ -100,14 +104,20 @@ class Warehouse(models.Model):
 
 
 class ProductStock(models.Model):
-    product = models.ForeignKey(Product, related_name="stocks", on_delete=models.CASCADE)
-    warehouse = models.ForeignKey(Warehouse, related_name="stock_items", on_delete=models.CASCADE)
+    product = models.ForeignKey(
+        Product, related_name="stocks", on_delete=models.CASCADE
+    )
+    warehouse = models.ForeignKey(
+        Warehouse, related_name="stock_items", on_delete=models.CASCADE
+    )
     quantity = models.PositiveIntegerField(default=0)
 
     class Meta:
         unique_together = ("product", "warehouse")
         constraints = [
-            CheckConstraint(check=Q(quantity__gte=0), name="productstock_quantity_gte_0")
+            CheckConstraint(
+                check=Q(quantity__gte=0), name="productstock_quantity_gte_0"
+            )
         ]
 
     def __str__(self) -> str:

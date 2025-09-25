@@ -10,6 +10,7 @@ from orders.utils import derive_ui_payment_status
 
 from .models import ChatSession, ToolCallLog
 import logging
+
 logger = logging.getLogger(__name__)
 
 EMAIL_RE = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b", re.I)
@@ -99,7 +100,9 @@ def _order_number(o) -> str:
 def order_list(user, limit: int = 5, session: ChatSession | None = None) -> str:
     _log(session, "order_list", {"limit": limit})
     Order = apps.get_model("orders", "Order")
-    qs = Order.objects.filter(user=user).order_by("-created_at")[: max(1, min(20, int(limit)))]
+    qs = Order.objects.filter(user=user).order_by("-created_at")[
+        : max(1, min(20, int(limit)))
+    ]
     if not qs:
         return "You have no recent orders."
     lines = ["Recent orders:"]
@@ -173,7 +176,9 @@ def payment_status(user, token: str, session: ChatSession | None = None) -> str:
     tx = Transaction.objects.filter(order=o).order_by("-created_at").first()
     if not tx:
         status = derive_ui_payment_status(o)
-        return redact(f"Order {_order_number(o)}: payment status={status}. No gateway events yet.")
+        return redact(
+            f"Order {_order_number(o)}: payment status={status}. No gateway events yet."
+        )
     return redact(
         f"Order {_order_number(o)}: payment via {tx.gateway} is {tx.status} ({_fmt_dt(tx.created_at)})."
     )
@@ -189,7 +194,9 @@ def delivery_status(user, token: str, session: ChatSession | None = None) -> str
     if not d:
         return redact(f"Order {_order_number(o)}: no delivery has been assigned yet.")
     last = _fmt_dt(d.last_ping_at)
-    return redact(f"Order {_order_number(o)}: delivery status={d.status}, last update={last}.")
+    return redact(
+        f"Order {_order_number(o)}: delivery status={d.status}, last update={last}."
+    )
 
 
 FAQS = {

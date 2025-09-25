@@ -34,7 +34,9 @@ def test_kra_pin_validation_accept_reject():
     assert resp.status_code in (200, 202)
 
     # Reject invalid
-    resp = client.patch(f"/apis/v1/vendor/orgs/{org.id}/", {"kra_pin": "BADPIN"}, format="json")
+    resp = client.patch(
+        f"/apis/v1/vendor/orgs/{org.id}/", {"kra_pin": "BADPIN"}, format="json"
+    )
     assert resp.status_code == 400
     assert "KRA PIN" in str(resp.data)
 

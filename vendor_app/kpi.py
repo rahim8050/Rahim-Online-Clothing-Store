@@ -41,7 +41,9 @@ def aggregate_kpis_daily(org_id: int, for_date: date | None = None) -> VendorKPI
     gross = tx_qs.aggregate(s=Sum("amount"))["s"] or Decimal("0.00")
     success = tx_qs.filter(status="success").count()
     total = tx_qs.count()
-    success_rate = Decimal("0.00") if total == 0 else (Decimal(success) * 100 / Decimal(total))
+    success_rate = (
+        Decimal("0.00") if total == 0 else (Decimal(success) * 100 / Decimal(total))
+    )
 
     # Net revenue available on Transaction
     net = tx_qs.aggregate(s=Sum("net_to_vendor"))["s"] or Decimal("0.00")
