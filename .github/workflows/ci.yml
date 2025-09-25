@@ -38,15 +38,30 @@ jobs:
       DEBUG: 0
       PYTHONDONTWRITEBYTECODE: 1
       PYTHONUNBUFFERED: 1
+
       # Payment environment variables
       PAYSTACK_PUBLIC_KEY: pk_test_dummy_paystack_public_key
       PAYSTACK_SECRET_KEY: sk_test_dummy_paystack_secret_key
       STRIPE_PUBLIC_KEY: pk_test_dummy_stripe_public_key
       STRIPE_SECRET_KEY: sk_test_dummy_stripe_secret_key
       STRIPE_WEBHOOK_SECRET: whsec_dummy_stripe_webhook_secret
-      # Optional: Add any other required environment variables
-      ALLOWED_HOSTS: localhost,127.0.0.1
+
+      # Email environment variables
+      EMAIL_HOST: smtp.gmail.com
+      EMAIL_HOST_USER: dummy-email@example.com
+      EMAIL_HOST_PASSWORD: dummy-email-password
+      EMAIL_PORT: 587
+      EMAIL_USE_TLS: true
+      DEFAULT_FROM_EMAIL: dummy-email@example.com
+
+      # Django security settings
+      ALLOWED_HOSTS: localhost,127.0.0.1,0.0.0.0
       CSRF_TRUSTED_ORIGINS: http://localhost,http://127.0.0.1
+
+      # Additional common Django settings
+      CORS_ALLOWED_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
+      USE_X_FORWARDED_HOST: false
+      SECURE_SSL_REDIRECT: false
 
     steps:
       - uses: actions/checkout@v4
