@@ -1,11 +1,14 @@
-name: ci
+name: CI
+
 on:
-  push: { branches: [main, development] }
+  push:
+    branches: [main, development]
   pull_request:
 
 jobs:
   test:
     runs-on: ubuntu-latest
+
     services:
       postgres:
         image: postgres:16
@@ -17,39 +20,64 @@ jobs:
         options: >-
           --health-cmd="pg_isready -U postgres" --health-interval=10s
           --health-timeout=5s --health-retries=5
+
     env:
       DJANGO_SETTINGS_MODULE: Rahim_Online_ClothesStore.settings
       DATABASE_URL: postgres://postgres:postgres@localhost:5432/testdb
+      SECRET_KEY: dummy-key-for-testing
+      DEBUG: 0
       PYTHONDONTWRITEBYTECODE: 1
       PYTHONUNBUFFERED: 1
+
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v5
-        with: { python-version: "3.12" }
-      - run: pip install -U pip
-      - run: pip install -r requirements.txt || true
-      - run: pip install pre-commit ruff black isort mypy django-stubs djangorestframework-stubs pytest pytest-django pytest-cov radon xenon bandit dj-database-url
+        with:
+          python-version: "3.12"
+
+      - name: Upgrade pip
+        run: pip install -U pip
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt || true
+          pip install pre-commit ruff black isort mypy django-stubs djangorestframework-stubs pytest pytest-django pytest-cov radon xenon bandit dj-database-url
+
       - name: Lint & type-check
         run: |
-          ruff . && ruff format --check .
+          ruff check .
+          ruff format --check .
           black --check .
           isort --check-only .
           mypy .
-      - name: Run tests
+
+      - name: Setup test database
         run: |
           python manage.py migrate --noinput
-          pytest -q --disable-warnings --maxfail=1 --cov=. --cov-report=term-missing
-      - name: Complexity budgets
+          python manage.py check
+
+      - name: Run tests
+        run: |
+          pytest -v --disable-warnings --maxfail=1 --cov=. --cov-report=term-missing
+
+      - name: Complexity analysis
         run: |
           radon cc -s -a .
           xenon . --max-absolute B --max-modules B --max-average A
-      - name: Snapshot size (cloc)
+
+      - name: Security scan
+        run: bandit -r .
+
+      - name: Code size analysis
         run: |
-          pip install cloc
-          cloc --vcs=git --json --out cloc.json --include-ext=py,js,vue,html,css
-      - uses: actions/upload-artifact@v4
+          sudo apt-get update
+          sudo apt-get install -y cloc
+          cloc --vcs=git --by-file --exclude-dir=node_modules,dist,build .
+
+      - name: Upload reports
+        uses: actions/upload-artifact@v4
         with:
-          name: reports
+          name: test-reports
           path: |
-            cloc.json
-            ./.coverage
+            .coverage
