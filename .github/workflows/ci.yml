@@ -38,6 +38,15 @@ jobs:
       DEBUG: 0
       PYTHONDONTWRITEBYTECODE: 1
       PYTHONUNBUFFERED: 1
+      # Payment environment variables
+      PAYSTACK_PUBLIC_KEY: pk_test_dummy_paystack_public_key
+      PAYSTACK_SECRET_KEY: sk_test_dummy_paystack_secret_key
+      STRIPE_PUBLIC_KEY: pk_test_dummy_stripe_public_key
+      STRIPE_SECRET_KEY: sk_test_dummy_stripe_secret_key
+      STRIPE_WEBHOOK_SECRET: whsec_dummy_stripe_webhook_secret
+      # Optional: Add any other required environment variables
+      ALLOWED_HOSTS: localhost,127.0.0.1
+      CSRF_TRUSTED_ORIGINS: http://localhost,http://127.0.0.1
 
     steps:
       - uses: actions/checkout@v4
