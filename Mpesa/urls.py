@@ -1,6 +1,7 @@
 app_name = "Mpesa"
+from django.urls import URLPattern, URLResolver
 
-urlpatterns = [
+urlpatterns: list[URLPattern | URLResolver] = [
     # path('', views.mpesa, name='mpesa'),
     # path('trigger/', views.trigger, name='trigger-payment'),
     # path('mpesa/callback/', views.callback, name='mpesa-callback'),
