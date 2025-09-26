@@ -85,6 +85,7 @@ jobs:
         run: |
           pip install -r requirements.txt
           pip install pytest pytest-django pytest-cov pre-commit ruff black isort mypy psycopg2-binary
+          pip install django-stubs djangorestframework-stubs types-six types-requests mypy-extensions
 
       - name: Install Redis CLI and PostgreSQL client
         run: sudo apt-get update && sudo apt-get install -y redis-tools postgresql-client
