@@ -3,127 +3,63 @@
 <!doctype html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, shrink-to-fit=no" />
-    <meta http-equiv="X-UA-Compatible" content="ie=edge" />
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, shrink-to-fit=no" />
+  <meta http-equiv="X-UA-Compatible" content="ie=edge" />
+  <meta name="csrf-token" content="{{ csrf_token }}" />
 
+  <link rel="stylesheet" href="{% static 'dist/styles.css' %}">
+  <link rel="stylesheet" href="{% static 'css/app.css' %}">
+  <link rel="stylesheet" href="{% static 'dist/assets/main.css' %}">
 
-    <!-- Tailwind CSS (local build) -->
-    <link rel="stylesheet" href="{% static 'dist/styles.css' %}">
+  <link
+    rel="stylesheet"
+    href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
+    crossorigin="anonymous"
+    referrerpolicy="no-referrer"
+  />
 
-    <!-- Tailwind CSS -->
-    {% comment %} <script src="https://cdn.tailwindcss.com"></script> {% endcomment %}
-<link rel="stylesheet" href="{% static 'css/app.css' %}">
-<link rel="stylesheet" href="{% static 'dist/assets/main.css' %}">
-
-
-    <!-- Font Awesome -->
-<link
-  rel="stylesheet"
-  href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
-  crossorigin="anonymous"
-  referrerpolicy="no-referrer"
-/>
-
-
-
-
-   <script nonce="{{ request.csp_nonce }}">
-  window.CSRF_TOKEN = "{{ csrf_token }}";
-</script>
-
-    <title>{% block title %}Homepage{% endblock %}</title>
+  <title>{% block title %}Homepage{% endblock %}</title>
 </head>
+
 <body class="bg-gray-100 text-gray-800 flex flex-col min-h-screen">
+  <header class="shadow-md bg-white sticky top-0 z-50">
+    {% include 'includes/nav.html' %}
+  </header>
 
-    <!-- Header -->
-    <header class="shadow-md bg-white sticky top-0 z-50">
-        {% include 'includes/nav.html' %}
-    </header>
+  <div id="flash-messages" class="fixed bottom-4 right-4 z-50 space-y-4 w-80 max-w-full">
+    {% for message in messages %}
+      <div class="flash-message relative px-4 py-3 rounded-lg shadow-md text-sm font-medium border transition-opacity duration-500
+        {% if message.tags == 'success' %}
+          bg-green-100 text-green-800 border-green-300
+        {% elif message.tags == 'error' %}
+          bg-red-100 text-red-800 border-red-300
+        {% elif message.tags == 'warning' %}
+          bg-yellow-100 text-yellow-800 border-yellow-300
+        {% else %}
+          bg-blue-100 text-blue-800 border-blue-300
+        {% endif %}"
+        role="alert">
+        <span>{{ message }}</span>
+        <button type="button"
+                class="absolute top-1 right-2 text-xl leading-none text-gray-600 hover:text-black focus:outline-none close-btn">
+          &times;
+        </button>
+      </div>
+    {% endfor %}
+  </div>
 
-    <!-- Flash Messages -->
-    <div id="flash-messages" class="fixed bottom-4 right-4 z-50 space-y-4 w-80 max-w-full">
-        {% for message in messages %}
-            <div class="flash-message relative px-4 py-3 rounded-lg shadow-md text-sm font-medium border transition-opacity duration-500
-                {% if message.tags == 'success' %}
-                    bg-green-100 text-green-800 border-green-300
-                {% elif message.tags == 'error' %}
-                    bg-red-100 text-red-800 border-red-300
-                {% elif message.tags == 'warning' %}
-                    bg-yellow-100 text-yellow-800 border-yellow-300
-                {% else %}
-                    bg-blue-100 text-blue-800 border-blue-300
-                {% endif %}
-            " role="alert">
-                <span>{{ message }}</span>
-                <button type="button"
-                        class="absolute top-1 right-2 text-xl leading-none text-gray-600 hover:text-black focus:outline-none close-btn">
-                    &times;
-                </button>
-            </div>
-        {% endfor %}
+  <main class="flex-grow py-0 px-4 md:px-0" id="main-content">
+    <div class="max-w-screen-xl mx-auto">
+      {% block content %}{% endblock %}
     </div>
+  </main>
 
-    <!-- Main Content -->
-     <main class="flex-grow py-0 px-4 md:px-0" id="main-content">
-        <div class="max-w-screen-xl mx-auto">
-            {% block content %}{% endblock %}
-        </div>
-    </main>
-
-    <!-- Footer -->
-    <footer class="bg-gray-800 text-white mt-auto">
-        <div class="max-w-screen-xl mx-auto py-4 px-4 sm:px-6 lg:px-8">
-            {% include 'includes/footer.html' %}
-        </div>
-    </footer>
-
-    <!-- Flash Message Script -->
-    <script nonce="{{ request.csp_nonce }}">
-        document.addEventListener('DOMContentLoaded', function () {
-            const flashMessages = document.querySelectorAll('.flash-message');
-
-            flashMessages.forEach(message => {
-                const closeBtn = message.querySelector('.close-btn');
-                if (closeBtn) {
-                    closeBtn.addEventListener('click', () => {
-                        message.classList.add('opacity-0');
-                        setTimeout(() => message.remove(), 500);
-                    });
-                }
-
-                // Auto-dismiss after 20 seconds
-                setTimeout(() => {
-                    message.classList.add('opacity-0');
-                    setTimeout(() => message.remove(), 500);
-                }, 20000);
-            });
-        });
-        (function(){
-  if (!("WebSocket" in window)) return;
-  const proto = location.protocol === "https:" ? "wss" : "ws";
-  const ws = new WebSocket(proto + "://" + location.host + "/ws/notifications/");
-  ws.onmessage = (e) => {
-    const data = JSON.parse(e.data);
-    toast(data.title, data.message, data.level);
-  };
-  function toast(title, msg, level){
-    const wrap = document.getElementById("toaster") || (()=> {
-      const d = document.createElement("div");
-      d.id="toaster"; d.className="fixed top-4 right-4 space-y-2 z-50";
-      document.body.appendChild(d); return d;
-    })();
-    const el = document.createElement("div");
-    el.className = "rounded-xl shadow px-4 py-3 bg-white border w-80";
-    el.innerHTML = `<div class="font-semibold">${title}</div><div class="text-sm text-gray-700 mt-1">${msg}</div>`;
-    wrap.appendChild(el);
-    setTimeout(()=> el.remove(), 6000);
-  }
-})();
-    </script>
-
-
-    {% block extra_js %}{% endblock %}
+  <footer class="bg-gray-800 text-white mt-auto">
+    <div class="max-w-screen-xl mx-auto py-4 px-4 sm:px-6 lg:px-8">
+      {% include 'includes/footer.html' %}
+    </div>
+  </footer>
     <div id="rahim-assistant-mount"
      data-role="{% if user_is_vendor %}vendor{% elif user_is_vendor_staff %}vendor_staff{% elif user_is_driver %}driver
                 {% elif request.user.is_staff %}admin
@@ -133,25 +69,10 @@
      data-vendor-staff="{{ user_is_vendor_staff|yesno:'1,0' }}"
      data-driver="{{ user_is_driver|yesno:'1,0' }}">
 </div>
-{# Old chatbot disabled to avoid conflicts with new ChatPanel #}
-{# {% include 'partials/chatbot.html'%} #}
-    <script type="module" src="{% static 'dist/assets/main.js' %}"></script>
-    <!-- Lightweight WS client to surface vendor application updates as toasts -->
-    <script>
-    (function(){
-      function wsUrl(p){var s=location.protocol==='https:'?'wss':'ws';return s+'://'+location.host+(p.startsWith('/')?p:'/'+p);}
-      try{var ws=new WebSocket(wsUrl('/ws/notifications/'));}catch(e){return;}
-      ws.onmessage=function(ev){
-        var d; try{ d=JSON.parse(ev.data);}catch(_){ d=null; }
-        if(d && d.type==='vendor_application.updated'){
-          var el=document.createElement('div');
-          el.className='fixed bottom-20 right-4 z-[9999] bg-black text-white text-sm px-3 py-2 rounded shadow';
-          el.textContent=d.message || ('Vendor application status: '+(d.status||''));
-          document.body.appendChild(el); setTimeout(function(){ el.remove(); }, 4000);
-          if(window.AssistantPushMessage){ window.AssistantPushMessage({ who:'bot', text:("Vendor application → "+(d.status||'')) }); }
-        }
-      };
-    })();
-    </script>
+  <!-- External JS only -->
+  <script src="{% static 'js/base_init.js' %}" defer nonce="{{ request.csp_nonce }}"></script>
+  <script type="module" src="{% static 'dist/assets/main.js' %}"></script>
+
+  {% block extra_js %}{% endblock %}
 </body>
 </html>
