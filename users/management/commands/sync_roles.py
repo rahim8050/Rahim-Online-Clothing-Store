@@ -2,7 +2,6 @@
 from django.contrib.auth.models import Group, Permission
 from django.core.management.base import BaseCommand
 from django.db import transaction
-from typing import Any
 from users.constants import ADMIN, ALL_GROUPS, CUSTOMER, DRIVER, VENDOR, VENDOR_STAFF
 
 ROLE_PERMS = {
