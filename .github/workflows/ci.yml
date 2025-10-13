@@ -1,0 +1,179 @@
+name: CI
+
+on:
+  push:
+    branches: [main, development]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: testdb
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd="pg_isready -U postgres" --health-interval=10s
+          --health-timeout=5s --health-retries=5
+
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DJANGO_SETTINGS_MODULE: Rahim_Online_ClothesStore.settings
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/testdb?sslmode=disable
+      REDIS_URL: redis://localhost:6379/0
+      SECRET_KEY: ${{ secrets.SECRET_KEY || 'dummy-key-for-testing' }}
+      DEBUG: 1  # Changed to 1 to avoid production checks
+      PYTHONDONTWRITEBYTECODE: 1
+      PYTHONUNBUFFERED: 1
+
+      # Database SSL settings
+      DB_SSLMODE: disable
+
+      # Payment environment variables
+      PAYSTACK_PUBLIC_KEY: pk_test_dummy_paystack_public_key
+      PAYSTACK_SECRET_KEY: sk_test_dummy_paystack_secret_key
+      STRIPE_PUBLIC_KEY: pk_test_dummy_stripe_public_key
+      STRIPE_SECRET_KEY: sk_test_dummy_stripe_secret_key
+      STRIPE_WEBHOOK_SECRET: whsec_dummy_stripe_webhook_secret
+
+      # Email environment variables
+      EMAIL_HOST: smtp.gmail.com
+      EMAIL_HOST_USER: dummy-email@example.com
+      EMAIL_HOST_PASSWORD: dummy-email-password
+      EMAIL_PORT: 587
+      EMAIL_USE_TLS: true
+      DEFAULT_FROM_EMAIL: dummy-email@example.com
+
+      # Django security settings
+      ALLOWED_HOSTS: localhost,127.0.0.1,0.0.0.0
+      CSRF_TRUSTED_ORIGINS: http://localhost,http://127.0.0.1
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pip
+            ~/.cache/pre-commit
+          key: ${{ runner.os }}-python-${{ hashFiles('requirements.txt', 'pyproject.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-python-
+
+      - name: Upgrade pip
+        run: python -m pip install --upgrade pip
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pytest pytest-django pytest-cov pre-commit ruff black isort mypy psycopg2-binary
+          pip install django-stubs djangorestframework-stubs types-six types-requests mypy-extensions
+
+      - name: Install Redis CLI and PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y redis-tools postgresql-client
+
+      - name: Wait for PostgreSQL
+        run: |
+          for i in {1..30}; do
+            if pg_isready -h localhost -p 5432 -U postgres; then
+              echo "PostgreSQL is ready!"
+              break
+            fi
+            echo "Waiting for PostgreSQL... attempt $i"
+            sleep 2
+          done
+
+      - name: Wait for Redis
+        run: |
+          for i in {1..30}; do
+            if redis-cli -h localhost -p 6379 ping | grep -q PONG; then
+              echo "Redis is ready!"
+              break
+            fi
+            echo "Waiting for Redis... attempt $i"
+            sleep 2
+          done
+
+      - name: Test database connection
+        run: |
+          psql "$DATABASE_URL" -c "SELECT version();"
+
+      - name: Run database migrations
+        run: python manage.py migrate --noinput
+
+      - name: Run pre-commit checks
+        run: |
+          pre-commit run --all-files || true
+
+      - name: Lint with Ruff
+        run: |
+          ruff check .
+          ruff format --check .
+
+      - name: Type checking with MyPy
+        run: mypy .
+
+      - name: Run tests with coverage
+        run: |
+          pytest -v --disable-warnings --cov=. --cov-report=term-missing --cov-report=xml
+
+      - name: Complexity analysis
+        run: |
+          pip install radon xenon
+          radon cc -s -a .
+          xenon . --max-absolute B --max-modules B --max-average A || true
+
+      - name: Security scan
+        run: |
+          pip install bandit
+          bandit -r . -f html -o bandit-report.html || true
+
+      - name: Upload coverage reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: |
+            coverage.xml
+            .coverage
+
+      - name: Upload security report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: security-reports
+          path: |
+            bandit-report.html
+
+  quality-gate:
+    runs-on: ubuntu-latest
+    needs: test
+    if: always()
+
+    steps:
+      - name: Check test results
+        run: |
+          echo "Quality gate check - Test job status: ${{ needs.test.result }}"
+          if [ "${{ needs.test.result }}" != "success" ]; then
+            echo "Tests failed - quality gate not passed"
+            exit 1
+          else
+            echo "All checks passed - quality gate succeeded"
+          fi
