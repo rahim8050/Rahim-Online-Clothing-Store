@@ -1,0 +1,20 @@
+--- a/users/permissions.py
++++ b/users/permissions.py
+@@ -1,4 +1,20 @@
+-from rest_framework.permissions import BasePermission
++from typing import TYPE_CHECKING
++
++try:
++    from rest_framework.permissions import BasePermission
++except ImportError:
++    if TYPE_CHECKING:
++        class BasePermission:  # type: ignore[no-redef]
++            ...
++    else:
++        class BasePermission:
++            """Fallback base for non-DRF environments."""
++            pass
++
++
++# rest_framework import now optional and mypy-safe
++
