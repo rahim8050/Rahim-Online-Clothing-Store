@@ -1,8 +1,6 @@
-from django.urls import path
 from typing import List
 from django.urls.resolvers import URLPattern
 
-from . import views  # keep it in case you uncomment routes later
 
 app_name = "Mpesa"
 
