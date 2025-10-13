@@ -21,6 +21,7 @@ dev.key
 *.secret
 
 
+
 # ===== Coverage / test artifacts =====
 htmlcov/
 .coverage
