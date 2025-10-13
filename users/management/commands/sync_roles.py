@@ -2,7 +2,7 @@
 from django.contrib.auth.models import Group, Permission
 from django.core.management.base import BaseCommand
 from django.db import transaction
-
+from typing import Any
 from users.constants import ADMIN, ALL_GROUPS, CUSTOMER, DRIVER, VENDOR, VENDOR_STAFF
 
 ROLE_PERMS = {
@@ -52,9 +52,8 @@ def sync_roles(dry_run: bool = False, stdout=None):
                 continue
 
             good, _ = Group.objects.get_or_create(name=VENDOR_STAFF)
-            for u in legacy.user_set.all():
-                if not dry_run:
-                    u.groups.add(good)
+            for u in legacy.user_set.all():  # type: ignore[attr-defined]
+                u.groups.add(good)
             if not dry_run:
                 legacy.delete()
 
