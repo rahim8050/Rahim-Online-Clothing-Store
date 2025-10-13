@@ -116,7 +116,7 @@ def cart_add(request, product_id):
         request.session["cart_count"] = int(request.session.get("cart_count", 0)) + qty
 
         return _json_ok(
-            f"Added {qty} Ãƒâ€” {product.name} to cart.",
+            f"Added {qty} x {product.name} to cart.",
             count=request.session["cart_count"],
             extra={
                 "item_id": item.id,
