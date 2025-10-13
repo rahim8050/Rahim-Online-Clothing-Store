@@ -1,13 +1,30 @@
-# users/permissions.py (or your api app)
-from rest_framework.permissions import BasePermission
+# users/permissions.py
+from __future__ import annotations
+from typing import TYPE_CHECKING
+
+try:
+    # Try normal DRF import first
+    from rest_framework.permissions import BasePermission
+except ImportError:
+    # Fallback stub for typing & non-DRF environments
+    if TYPE_CHECKING:
+
+        class BasePermission:  # type: ignore[no-redef]
+            ...
+    else:
+
+        class BasePermission:  # runtime fallback
+            """Fallback for BasePermission if DRF is not installed."""
+
+            pass
 
 
 class IsVendorOrVendorStaff(BasePermission):
     message = "Vendor or active vendor staff role required."
 
-    def has_permission(self, request, view):
-        u = request.user
-        if not u or not u.is_authenticated:
+    def has_permission(self, request, view) -> bool:
+        u = getattr(request, "user", None)
+        if not u or not getattr(u, "is_authenticated", False):
             return False
 
         # Admin/superuser always allowed
@@ -32,20 +49,13 @@ class IsVendorOwner(BasePermission):
 
     message = "Only vendor owners can perform this action."
 
-    def has_permission(self, request, view):
+    def has_permission(self, request, view) -> bool:
         u = getattr(request, "user", None)
         if not u or not getattr(u, "is_authenticated", False):
             return False
         if getattr(u, "is_superuser", False) or u.groups.filter(name="Admin").exists():
             return True
         return u.groups.filter(name="Vendor").exists()
-
-
-try:
-    # If DRF is installed, this lets you also reuse it on DRF views
-    from rest_framework.permissions import BasePermission  # type: ignore  # noqa: F811
-except Exception:
-    BasePermission = object  # fallback so it also works in plain Django views
 
 
 class HasVendorScope(BasePermission):
@@ -58,7 +68,7 @@ class HasVendorScope(BasePermission):
 
     message = "Vendor scope required."
 
-    def has_permission(self, request, view):
+    def has_permission(self, request, view) -> bool:
         u = getattr(request, "user", None)
         if not u or not getattr(u, "is_authenticated", False):
             return False
@@ -76,8 +86,7 @@ class HasVendorScope(BasePermission):
         if not scope:
             return True
 
-        # Resolve owner context if provided (or fail fast if ambiguous)
-        owner_id = None
+        # Resolve owner context if provided
         try:
             from users.utils import resolve_vendor_owner_for
 
@@ -88,7 +97,6 @@ class HasVendorScope(BasePermission):
             )
             owner_id = resolve_vendor_owner_for(u, raw_owner)
         except Exception:
-            # If we cannot resolve an owner context, deny
             return False
 
         try:
@@ -110,7 +118,7 @@ class NotBuyingOwnListing(BasePermission):
 
     message = "You cannot purchase your own product."
 
-    def _is_forbidden(self, user, product):
+    def _is_forbidden(self, user, product) -> bool:
         if not user or not getattr(user, "is_authenticated", False):
             return False
         owner_id = (
@@ -131,7 +139,7 @@ class NotBuyingOwnListing(BasePermission):
         except Exception:
             return False
 
-    def has_object_permission(self, request, view, obj):
+    def has_object_permission(self, request, view, obj) -> bool:
         user = getattr(request, "user", None)
         if not user or not getattr(user, "is_authenticated", False):
             self.message = "Authentication required."
@@ -146,8 +154,10 @@ class NotBuyingOwnListing(BasePermission):
 
 
 class IsDriver(BasePermission):
-    def has_permission(self, request, view):
+    def has_permission(self, request, view) -> bool:
         u = getattr(request, "user", None)
         return bool(
-            u and u.is_authenticated and u.groups.filter(name="Driver").exists()
+            u
+            and getattr(u, "is_authenticated", False)
+            and u.groups.filter(name="Driver").exists()
         )

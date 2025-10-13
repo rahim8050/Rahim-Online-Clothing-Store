@@ -305,7 +305,7 @@ KPIS_ENABLED = env.bool("KPIS_ENABLED", default=bool(DEBUG))
 # ------------------------ Celery Beat --------------------------
 # Schedule daily Vendor KPI aggregation at 00:30 Africa/Nairobi
 try:
-    from celery.schedules import crontab  # type: ignore
+    from celery.schedules import crontab
 
     _kpi_schedule = crontab(minute=30, hour=0)
 except Exception:  # pragma: no cover
