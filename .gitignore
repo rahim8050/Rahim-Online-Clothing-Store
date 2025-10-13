@@ -15,6 +15,13 @@ ENV/
 .ruff_cache/
 .pytest_cache/
 .cache/
+dev.key
+.github/workflows/ci.yml
+.env
+*.secret
+
+
+
 
 # ===== Coverage / test artifacts =====
 htmlcov/
