@@ -43,7 +43,7 @@ def best_orientation(
     a_lat, a_lng = normalize_latlng(lat, lng)
     b_lat, b_lng = normalize_latlng(lng, lat)
     if a_lat is None or a_lng is None:
-        return b_lat, b_lng
+        return float(b_lat or 0.0), float(b_lng or 0.0)
     if b_lat is None or b_lng is None:
         return a_lat, a_lng
 
