@@ -1,44 +1,46 @@
-
 const { createApp } = Vue;
 
+// --- Utility helpers ---
 function capitalizeWords(text) {
   return text ? text.toLowerCase().split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') : '';
 }
 function capitalizeSlug(slug) {
   return slug ? slug.replace(/[-_]/g, ' ').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') : '';
 }
-function getCookie(name){
-  const m = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
-  return m ? m.pop() : '';
+function getCookie(name) {
+  const match = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
+  return match ? match.pop() : '';
 }
 
+// --- Vue app ---
 createApp({
   delimiters: ['[[', ']]'],
   data() {
     let productData = {};
-    try { productData = JSON.parse(document.getElementById('product-data').textContent); }
-    catch (e) { console.error('Invalid product JSON:', e); }
+    try {
+      productData = JSON.parse(document.getElementById('product-data').textContent);
+    } catch (e) {
+      console.error('Invalid product JSON:', e);
+    }
 
     return {
       productName: capitalizeWords(productData.name || 'Unknown Product'),
       productSlug: capitalizeSlug(productData.slug || ''),
       productPrice: productData.price || 0,
       productDescription: productData.description || '',
-
-      csrfToken: getCookie('csrftoken'),                                   // read CSRF from cookie
-      addToCartUrl: "{% url 'cart:cart_add' product.id %}",
+      csrfToken: getCookie('csrftoken'),
+      addToCartUrl: '', // will be set on mount
 
       showDescription: false,
       isHovered: false,
       message: '',
-      toasts: []                                                            // toast state
+      toasts: []
     };
   },
   computed: {
     formattedPrice() {
       const price = parseFloat(this.productPrice);
-      if (isNaN(price)) return 'Ksh 0.00';
-      return `Ksh ${price.toLocaleString('en-KE', { minimumFractionDigits: 2 })}`;
+      return isNaN(price) ? 'Ksh 0.00' : `Ksh ${price.toLocaleString('en-KE', { minimumFractionDigits: 2 })}`;
     },
     shortDescription() {
       if (!this.productDescription) return '';
@@ -51,7 +53,7 @@ createApp({
   },
   methods: {
     // --- Toasts ---
-    toast(message, type='success', duration=3500) {
+    toast(message, type = 'success', duration = 3500) {
       const id = Date.now() + Math.random();
       const t = { id, message, type, visible: false };
       this.toasts.push(t);
@@ -68,13 +70,14 @@ createApp({
       }
     },
 
+    // --- Add to Cart ---
     async addToCart() {
       try {
         const response = await fetch(this.addToCartUrl, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Accept': 'application/json',               // ask for JSON
+            'Accept': 'application/json',
             'X-CSRFToken': this.csrfToken
           },
           body: JSON.stringify({ quantity: 1 })
@@ -89,18 +92,19 @@ createApp({
             setTimeout(() => { window.location.href = data.login_url; }, 800);
             return;
           }
-          if (data.code === 'OWN_LISTING')  text = 'You cannot purchase your own product.';
+          if (data.code === 'OWN_LISTING') text = 'You cannot purchase your own product.';
           if (data.code === 'OUT_OF_STOCK') text = data.message || 'Not enough stock.';
-          if (data.code === 'CSRF_FAILED')  text = 'Session expired. Refresh and try again.';
+          if (data.code === 'CSRF_FAILED') text = 'Session expired. Refresh and try again.';
           this.message = text;
           this.toast(text, 'error');
           return;
         }
 
-        const successMsg = data.message || 'Added to cart.';
+        const successMsg = data.message || `Added 1 \u00D7 ${this.productName} to cart.`;
         this.message = successMsg;
         this.toast(successMsg, 'success');
         this.updateCartCounterDisplay();
+
       } catch (error) {
         console.error('Add to cart error:', error);
         this.message = 'Something went wrong.';
@@ -108,6 +112,7 @@ createApp({
       }
     },
 
+    // --- Update Cart Counter ---
     async updateCartCounterDisplay() {
       try {
         const res = await fetch("/cart/count/", { headers: { 'Accept': 'application/json' } });
@@ -120,6 +125,10 @@ createApp({
     }
   },
   mounted() {
+    // ✅ Pull the real add-to-cart URL rendered by Django
+    const form = document.querySelector('form[data-cart-url]');
+    if (form) this.addToCartUrl = form.dataset.cartUrl;
+
     this.updateCartCounterDisplay();
   }
 }).mount('#product-app');

@@ -8,9 +8,8 @@ from .queries import shopable_products_q
 
 import json
 from django.utils.safestring import mark_safe
+
 app_name = "product_app"
-
-
 
 
 def product_list(request, category_slug=None):
@@ -30,15 +29,17 @@ def product_list(request, category_slug=None):
     # Serialize products
     product_list = []
     for product in products:
-        product_list.append({
-            "id": product.id,
-            "name": product.name,
-            "description": product.description,
-            "price": float(product.price),
-            "image_url": product.image.url if product.image else "",
-            "category_slug": product.category.slug if product.category else "",
-            "detail_url": product.get_absolute_url(),
-        })
+        product_list.append(
+            {
+                "id": product.id,
+                "name": product.name,
+                "description": product.description,
+                "price": float(product.price),
+                "image_url": product.image.url if product.image else "",
+                "category_slug": product.category.slug if product.category else "",
+                "detail_url": product.get_absolute_url(),
+            }
+        )
 
     # Serialize categories
     category_list = [{"id": c.id, "name": c.name, "slug": c.slug} for c in categories]
@@ -62,11 +63,14 @@ def product_list(request, category_slug=None):
             "category": category,
         },
     )
+
+
 from django.shortcuts import redirect
 from django.db.models import Sum
 import json
 from django.shortcuts import get_object_or_404, render
 from .models import Product, ProductStock
+
 
 def product_detail(request, id, slug):
     product = get_object_or_404(Product, id=id)
@@ -85,16 +89,14 @@ def product_detail(request, id, slug):
         "product": product,
         "product_json": json.dumps(product_data),
         "product_data": {
-            "total_stock": ProductStock.objects.filter(product=product).aggregate(total=Sum('quantity'))["total"] or 0
+            "total_stock": ProductStock.objects.filter(product=product).aggregate(
+                total=Sum("quantity")
+            )["total"]
+            or 0
         },
     }
 
     return render(request, "products/product/detail.html", context)
-
-
-
-
-
 
 
 def SearchProduct(request, category_slug=None):

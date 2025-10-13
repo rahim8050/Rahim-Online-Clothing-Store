@@ -50,8 +50,10 @@ class Product(models.Model):
     version = models.PositiveIntegerField(default=1)
     product_version = models.PositiveIntegerField(default=1)
     image = models.ImageField(upload_to="products", blank=True, null=True)
+
     def total_stock(self):
         return self.stocks.aggregate(total=Sum("quantity"))["total"] or 0
+
     def __str__(self) -> str:
         return self.name
 
