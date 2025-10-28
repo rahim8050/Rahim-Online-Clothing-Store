@@ -131,7 +131,7 @@ def sign_request(secret: bytes, timestamp: str, method: str, path_with_query: st
 
 
 ---
-======
+
 ### Enterprise Vendor v1
 
 Enterprise multi-tenant vendor capabilities are available in parallel under `/apis/v1/vendor/*` without breaking legacy routes.
