@@ -4,15 +4,14 @@ set -euo pipefail
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 
-css_dir="core/static/dist"
-mkdir -p "$css_dir"
+mkdir -p core/static/dist
 
-tailwind_bin="tailwindcss"
-curl -fsSL https://github.com/tailwindlabs/tailwindcss/releases/download/v3.4.13/tailwindcss-linux-x64 -o "$tailwind_bin"
-chmod +x "$tailwind_bin"
+curl -fsSL https://github.com/tailwindlabs/tailwindcss/releases/download/v3.4.13/tailwindcss-linux-x64 -o tailwindcss
+chmod +x tailwindcss
 
-./"$tailwind_bin" -i static/src/input.css -o "$css_dir/styles.css" --minify
+./tailwindcss -i static/src/input.css -o core/static/dist/styles.css --minify
 
+# prove Django can see it BEFORE collectstatic
 python manage.py findstatic dist/styles.css -v2
 
 python manage.py collectstatic --noinput --clear
