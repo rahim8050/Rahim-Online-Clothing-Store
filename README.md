@@ -16,10 +16,25 @@ python manage.py runserver 8000    # http://127.0.0.1:8000/
 # daphne -b 127.0.0.1 -p 8000 Rahim_Online_ClothesStore.asgi:application
 ```
 
+## Render Build + Static
+
+Render build command:
+
+```bash
+bash scripts/render-build.sh
+```
+
+This runs `npm run build` for Vite output (`static/dist/assets/main.js`), compiles Tailwind to
+`static/dist/styles.css`, verifies the JS exists, then runs `collectstatic --clear` and
+`migrate --noinput`. The `static/dist/` directory is gitignored and must be built on Render.
+
 ### Redis / Channel Layer
 
-* In development you may use the in‑memory channel layer.
+* In development you may use the in-memory channel layer.
 * In production, set `REDIS_URL` to enable Redis for Channels and cache.
+  Runtime processes (web/worker) require it; management commands like
+  `collectstatic`/`migrate` can run without it.
+* On Render, set `REDIS_URL` on both the web service and any worker service.
 
   * Configure password/SSL as required by your host (e.g., `rediss://:password@host:port/0`).
 

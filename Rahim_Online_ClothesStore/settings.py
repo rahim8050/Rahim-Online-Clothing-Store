@@ -4,6 +4,7 @@ Production settings for Rahim_Online_ClothesStore (Render).
 
 import logging
 import os
+import sys
 from datetime import timedelta
 from pathlib import Path
 
@@ -13,6 +14,8 @@ from django.contrib import messages
 from django.core.management.utils import get_random_secret_key
 from django.db import models
 from django.db.models.functions import Length
+
+from Rahim_Online_ClothesStore.redis_guard import validate_redis_url
 
 SECRET_KEY = os.environ.get("DJANGO_TYPECHECK_SECRET_KEY", "typecheck")  # nosec B105
 # at top of Rahim_Online_ClothesStore/settings.py
@@ -243,10 +246,8 @@ SESSION_SERIALIZER = "django.contrib.sessions.serializers.JSONSerializer"
 # ---------------------------------------------------------------------
 REDIS_URL = env("REDIS_URL", default="")
 USE_REDIS = bool(REDIS_URL)
-REDIS_SSL = REDIS_URL.startswith("rediss://") if REDIS_URL else False
 
-if IS_PROD and not USE_REDIS:
-    raise RuntimeError("REDIS_URL is required in production for Channels & cache.")
+validate_redis_url(DEBUG, REDIS_URL, sys.argv)
 
 if USE_REDIS:
     CHANNEL_LAYERS = {
@@ -264,31 +265,16 @@ else:
 if USE_REDIS:
     CACHES = {
         "default": {
-            "BACKEND": "django.core.cache.backends.redis.RedisCache",
+            "BACKEND": "django_redis.cache.RedisCache",
             "LOCATION": REDIS_URL,
-            "TIMEOUT": None,
-            "OPTIONS": {"ssl": True} if REDIS_SSL else {},
+            "OPTIONS": {"CLIENT_CLASS": "django_redis.client.DefaultClient"},
         }
     }
 else:
     CACHES = {
         "default": {
             "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
-            "LOCATION": "rahim-local",
-            "TIMEOUT": None,
-        }
-    }
-
-# Optional override to force Redis cache (even if not using channel layer)
-USE_REDIS_CACHE = env.bool("USE_REDIS_CACHE", default=False)
-if USE_REDIS_CACHE and REDIS_URL:
-    _cache_opts = {"ssl": True} if REDIS_SSL else {}
-    CACHES = {
-        "default": {
-            "BACKEND": "django.core.cache.backends.redis.RedisCache",
-            "LOCATION": REDIS_URL,
-            "TIMEOUT": None,
-            "OPTIONS": _cache_opts,
+            "LOCATION": "unique-local-key",
         }
     }
 
