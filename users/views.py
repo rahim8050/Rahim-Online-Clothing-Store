@@ -15,7 +15,7 @@ from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib.auth import get_user_model, login, update_session_auth_hash
 from django.contrib.auth.decorators import login_required
-from django.contrib.auth.views import LoginView, LogoutView
+from django.contrib.auth.views import LoginView, LogoutView, PasswordResetView
 from django.core.cache import cache
 from django.core.exceptions import FieldError, ImproperlyConfigured
 from django.db import transaction
@@ -34,6 +34,8 @@ from django.utils.timezone import now
 from django.views import View
 from django.views.generic import FormView
 from rest_framework.exceptions import ValidationError
+
+from core.rate_limit import get_client_ip, hit, is_limited, make_key, reset
 
 from orders.models import Delivery, Order, OrderItem, Transaction
 from product_app.utils import get_vendor_field
@@ -206,12 +208,46 @@ def debug_ws_push(request, delivery_id: int):
 
 # -------------------- Auth Views --------------------
 class CustomLoginView(LoginView):
+    RATE_LIMIT_IP = (20, 300)  # 20 attempts / 5 min per IP
+    RATE_LIMIT_IDENT = (5, 300)  # 5 attempts / 5 min per identifier
+
     form_class = CustomLoginForm
     template_name = "users/accounts/login.html"
     redirect_authenticated_user = True
     success_url = reverse_lazy("dashboard")
 
+    def _rate_limit_keys(self, ident: str) -> dict[str, str]:
+        ip = get_client_ip(self.request)
+        ident_norm = (ident or "").strip().lower()
+        return {
+            "ip": make_key("login:ip", ip),
+            "ident": make_key("login:ident", ident_norm or ip),
+        }
+
+    def _rate_limited_response(self, form=None):
+        if form is None:
+            form = self.get_form()
+        form.add_error(None, "Too many login attempts. Try again shortly.")
+        resp = self.render_to_response(self.get_context_data(form=form))
+        resp.status_code = 429
+        return resp
+
+    def dispatch(self, request, *args, **kwargs):
+        if request.method == "POST":
+            ident = (request.POST.get("username") or "").strip().lower()
+            keys = self._rate_limit_keys(ident)
+            if is_limited(keys["ip"], self.RATE_LIMIT_IP[0]) or is_limited(
+                keys["ident"], self.RATE_LIMIT_IDENT[0]
+            ):
+                return self._rate_limited_response()
+        return super().dispatch(request, *args, **kwargs)
+
     def form_valid(self, form):
+        ident = (form.cleaned_data.get("username") or "").strip().lower()
+        keys = self._rate_limit_keys(ident)
+        reset(keys["ip"])
+        reset(keys["ident"])
+
         ident = (form.cleaned_data.get("username") or "").strip()
         if "@" in ident and "." in ident:
             ident_type = "email"
@@ -234,6 +270,12 @@ class CustomLoginView(LoginView):
         logger.warning(
             "Login failed for %s: %s", self.request.POST.get("username"), form.errors
         )
+        ident = (self.request.POST.get("username") or "").strip().lower()
+        keys = self._rate_limit_keys(ident)
+        ip_count = hit(keys["ip"], self.RATE_LIMIT_IP[1])
+        ident_count = hit(keys["ident"], self.RATE_LIMIT_IDENT[1])
+        if ip_count > self.RATE_LIMIT_IP[0] or ident_count > self.RATE_LIMIT_IDENT[0]:
+            return self._rate_limited_response(form=form)
         return super().form_invalid(form)
 
     def get_success_url(self):
@@ -246,6 +288,9 @@ class Logout(LogoutView):
 
 # -------------------- Registration / Activation --------------------
 class RegisterUser(FormView):
+    RATE_LIMIT_IP = (10, 3600)  # 10 attempts / 1 hour per IP
+    RATE_LIMIT_EMAIL = (5, 3600)  # 5 attempts / 1 hour per email
+
     template_name = "users/accounts/register.html"
     success_url = reverse_lazy("index")
 
@@ -256,7 +301,44 @@ class RegisterUser(FormView):
         except Exception as e:
             raise ImproperlyConfigured(f"Cannot import RegisterUserForm: {e}")
 
+    def _rate_limit_keys(self, email: str | None = None) -> dict[str, str]:
+        ip = get_client_ip(self.request)
+        keys = {"ip": make_key("register:ip", ip)}
+        email_norm = (email or "").strip().lower()
+        if email_norm:
+            keys["email"] = make_key("register:email", email_norm)
+        return keys
+
+    def _rate_limited_response(self, form=None):
+        if form is None:
+            form = self.get_form()
+        form.add_error(None, "Too many registration attempts. Try again later.")
+        resp = self.render_to_response(self.get_context_data(form=form))
+        resp.status_code = 429
+        return resp
+
+    def dispatch(self, request, *args, **kwargs):
+        if request.method == "POST":
+            keys = self._rate_limit_keys()
+            if is_limited(keys["ip"], self.RATE_LIMIT_IP[0]):
+                return self._rate_limited_response()
+        return super().dispatch(request, *args, **kwargs)
+
     def form_valid(self, form):
+        email = (form.cleaned_data.get("email") or "").strip().lower()
+        keys = self._rate_limit_keys(email)
+        if is_limited(keys["ip"], self.RATE_LIMIT_IP[0]) or (
+            "email" in keys and is_limited(keys["email"], self.RATE_LIMIT_EMAIL[0])
+        ):
+            return self._rate_limited_response(form=form)
+
+        ip_count = hit(keys["ip"], self.RATE_LIMIT_IP[1])
+        email_count = hit(keys["email"], self.RATE_LIMIT_EMAIL[1]) if "email" in keys else 0
+        if ip_count > self.RATE_LIMIT_IP[0] or (
+            "email" in keys and email_count > self.RATE_LIMIT_EMAIL[0]
+        ):
+            return self._rate_limited_response(form=form)
+
         user = form.save(commit=False)
         user.is_active = False
         user.save()
@@ -266,6 +348,14 @@ class RegisterUser(FormView):
             "Account created successfully. Check your email to activate your account.",
         )
         return redirect(self.get_success_url())
+
+    def form_invalid(self, form):
+        email = (form.data.get("email") or "").strip().lower()
+        keys = self._rate_limit_keys(email)
+        hit(keys["ip"], self.RATE_LIMIT_IP[1])
+        if "email" in keys:
+            hit(keys["email"], self.RATE_LIMIT_EMAIL[1])
+        return super().form_invalid(form)
 
 
 def activate(request, uidb64: str, token: str):
@@ -309,6 +399,20 @@ def activate(request, uidb64: str, token: str):
 class ResendActivationEmailView(View):
     template_name = "users/accounts/resend_activation.html"
     COOLDOWN_SECONDS = 300  # 5 minutes
+    RATE_LIMIT_IP = (10, 3600)  # 10 attempts / 1 hour per IP
+
+    def _rate_limit_key(self) -> str:
+        return make_key("resend-activation:ip", get_client_ip(self.request))
+
+    def _rate_limited_response(self):
+        messages.error(
+            self.request, "Too many resend attempts. Please try again later."
+        )
+        resp = render(
+            self.request, self.template_name, {"form": ResendActivationEmailForm()}
+        )
+        resp.status_code = 429
+        return resp
 
     def get(self, request):
         return render(
@@ -316,6 +420,13 @@ class ResendActivationEmailView(View):
         )
 
     def post(self, request):
+        key = self._rate_limit_key()
+        if is_limited(key, self.RATE_LIMIT_IP[0]):
+            return self._rate_limited_response()
+
+        if hit(key, self.RATE_LIMIT_IP[1]) > self.RATE_LIMIT_IP[0]:
+            return self._rate_limited_response()
+
         form = ResendActivationEmailForm(request.POST)
         if not form.is_valid():
             return render(request, self.template_name, {"form": form})
@@ -352,6 +463,42 @@ class ResendActivationEmailView(View):
         cache.set(cache_key, True, timeout=self.COOLDOWN_SECONDS)
         messages.success(request, "A new activation link has been sent to your email.")
         return redirect("users:resend_activation")
+
+
+class RateLimitedPasswordResetView(PasswordResetView):
+    RATE_LIMIT_IP = (10, 3600)  # 10 attempts / 1 hour per IP
+    RATE_LIMIT_EMAIL = (5, 3600)  # 5 attempts / 1 hour per email
+
+    def _rate_limit_keys(self, email: str | None = None) -> dict[str, str]:
+        ip = get_client_ip(self.request)
+        keys = {"ip": make_key("password-reset:ip", ip)}
+        email_norm = (email or "").strip().lower()
+        if email_norm:
+            keys["email"] = make_key("password-reset:email", email_norm)
+        return keys
+
+    def _rate_limited_response(self, form):
+        form.add_error("email", "Too many password reset attempts. Try again later.")
+        resp = self.render_to_response(self.get_context_data(form=form))
+        resp.status_code = 429
+        return resp
+
+    def form_valid(self, form):
+        email = (form.cleaned_data.get("email") or "").strip().lower()
+        keys = self._rate_limit_keys(email)
+        if is_limited(keys["ip"], self.RATE_LIMIT_IP[0]) or (
+            "email" in keys and is_limited(keys["email"], self.RATE_LIMIT_EMAIL[0])
+        ):
+            return self._rate_limited_response(form)
+
+        ip_count = hit(keys["ip"], self.RATE_LIMIT_IP[1])
+        email_count = hit(keys["email"], self.RATE_LIMIT_EMAIL[1]) if "email" in keys else 0
+        if ip_count > self.RATE_LIMIT_IP[0] or (
+            "email" in keys and email_count > self.RATE_LIMIT_EMAIL[0]
+        ):
+            return self._rate_limited_response(form)
+
+        return super().form_valid(form)
 
 
 # -------------------- Profile --------------------
