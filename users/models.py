@@ -1,5 +1,5 @@
 from django.conf import settings
-from django.contrib.auth.models import AbstractUser
+from django.contrib.auth.models import AbstractUser, UserManager
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
@@ -10,6 +10,16 @@ User = settings.AUTH_USER_MODEL
 
 
 # Create your models here.
+class CustomUserManager(UserManager):
+    def _create_user(self, username, email, password, **extra_fields):
+        if not email:
+            if username and "@" in username:
+                email = username
+            else:
+                email = f"{username}@local.invalid"
+        return super()._create_user(username, email, password, **extra_fields)
+
+
 class CustomUser(AbstractUser):
     class Role(models.TextChoices):
         CUSTOMER = "customer", "Customer"
@@ -29,6 +39,8 @@ class CustomUser(AbstractUser):
         default=Role.CUSTOMER,
         blank=True,
     )
+
+    objects = CustomUserManager()
 
     def __str__(self):
         return self.username

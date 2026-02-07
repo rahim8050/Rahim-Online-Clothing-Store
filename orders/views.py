@@ -70,7 +70,11 @@ def _parse_coord(val: Any) -> Decimal:
 
 # ---------- Driver auth ----------
 def is_driver(u):
-    return u.is_authenticated and u.groups.filter(name__iexact="driver").exists()
+    if not u.is_authenticated:
+        return False
+    if u.groups.filter(name__iexact="driver").exists():
+        return True
+    return Delivery.objects.filter(driver=u).exists()
 
 
 driver_required = user_passes_test(is_driver)

@@ -3,9 +3,10 @@ from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import include, path
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
-from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+from core.auth_views import ThrottledTokenObtainPairView, ThrottledTokenRefreshView
 
 from core.views import healthz
+from apis import views as apis_views
 from payments.views import (
     CheckoutView,
     MPesaWebhookView,
@@ -35,6 +36,22 @@ urlpatterns = [
     path("", include("users.urls")),
     # Legacy API endpoints (existing, non-versioned)
     path("apis/", include("apis.urls")),
+    # Non-namespaced aliases for legacy tests/clients
+    path(
+        "apis/vendor/products/create/",
+        apis_views.VendorProductCreateAPI.as_view(),
+        name="vendor-product-create",
+    ),
+    path(
+        "apis/vendor/products/export-csv/",
+        apis_views.VendorProductsExportCSV.as_view(),
+        name="vendor-products-export-csv",
+    ),
+    path(
+        "apis/vendor/staff/<int:staff_id>/remove/",
+        apis_views.VendorStaffRemoveAPI.as_view(),
+        name="vendor-staff-remove",
+    ),
     path("api/assistant/", include("assistant.urls")),
     # New versioned API (DRF-only), per-app mounts
     path("apis/v1/schema/", SpectacularAPIView.as_view(), name="v1-schema"),
@@ -45,10 +62,14 @@ urlpatterns = [
     ),
     # JWT endpoints (dev-friendly paths)
     path(
-        "apis/v1/auth/jwt/create/", TokenObtainPairView.as_view(), name="v1-jwt-create"
+        "apis/v1/auth/jwt/create/",
+        ThrottledTokenObtainPairView.as_view(),
+        name="v1-jwt-create",
     ),
     path(
-        "apis/v1/auth/jwt/refresh/", TokenRefreshView.as_view(), name="v1-jwt-refresh"
+        "apis/v1/auth/jwt/refresh/",
+        ThrottledTokenRefreshView.as_view(),
+        name="v1-jwt-refresh",
     ),
     # Per-app v1 routers
     path("apis/v1/catalog/", include("product_app.urls_v1")),
@@ -70,7 +91,9 @@ urlpatterns = [
     path("payments/checkout/", CheckoutView.as_view(), name="payments_checkout"),
     path("webhook/stripe/", StripeWebhookView.as_view(), name="stripe_webhook"),
     path("webhook/paystack/", PaystackWebhookView.as_view(), name="paystack_webhook"),
+    path("webhook/paystack/", PaystackWebhookView.as_view(), name="webhook-paystack"),
     path("webhook/mpesa/", MPesaWebhookView.as_view(), name="mpesa_webhook"),
+    path("webhook/mpesa/", MPesaWebhookView.as_view(), name="webhook-mpesa"),
     # Health
     path("healthz", healthz, name="healthz"),  # keep path stable if already used
     # (optionally change to "healthz/" and update probes)

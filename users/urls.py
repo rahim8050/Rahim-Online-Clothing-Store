@@ -5,6 +5,7 @@ from users.views import (
     CustomLoginView,
     Logout,
     RegisterUser,
+    RateLimitedPasswordResetView,
     VendorApplicationApproveAPI,
     activate,
     after_login,
@@ -60,7 +61,7 @@ urlpatterns = [
     # Password reset flow
     path(
         "reset_password/",
-        auth_views.PasswordResetView.as_view(
+        RateLimitedPasswordResetView.as_view(
             template_name="users/accounts/password_reset.html",
             success_url=reverse_lazy("users:password_reset_done"),
             email_template_name="users/accounts/password_reset_email.html",

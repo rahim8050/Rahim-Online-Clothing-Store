@@ -25,6 +25,7 @@ from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema
 from rest_framework import permissions, serializers, status
 from rest_framework.authentication import SessionAuthentication
+from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework.generics import CreateAPIView, ListAPIView
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
@@ -102,6 +103,23 @@ class VendorProductsImportResultSerializer(serializers.Serializer):
     errors = VendorProductsImportResultErrorSerializer(many=True)
 
 
+# ----------------------- Auth mixins -----------------------
+class SessionJWTAuthMixin:
+    authentication_classes = [SessionAuthentication, JWTAuthentication]
+
+
+class SessionJWTAPIView(SessionJWTAuthMixin, APIView):
+    pass
+
+
+class SessionJWTListAPIView(SessionJWTAuthMixin, ListAPIView):
+    pass
+
+
+class SessionJWTCreateAPIView(SessionJWTAuthMixin, CreateAPIView):
+    pass
+
+
 # ----------------------- Helpers -----------------------
 def _publish_delivery(
     delivery: Delivery, kind: str, payload: dict | None = None
@@ -140,7 +158,7 @@ def _q6(x) -> Decimal:
 
 
 # ----------------------- Who am I -----------------------
-class WhoAmI(APIView):
+class WhoAmI(SessionJWTAPIView):
     permission_classes = [IsAuthenticated]
     serializer_class = WhoAmISerializer  # for schema generation
 
@@ -157,7 +175,7 @@ class ShopablePagination(PageNumberPagination):
     max_page_size = 50
 
 
-class ShopableProductsAPI(ListAPIView):
+class ShopableProductsAPI(SessionJWTListAPIView):
     serializer_class = ProductListSerializer
     permission_classes = [IsAuthenticatedOrReadOnly]
     pagination_class = ShopablePagination
@@ -173,7 +191,7 @@ class ShopableProductsAPI(ListAPIView):
         return qs
 
 
-class VendorProductsAPI(APIView):
+class VendorProductsAPI(SessionJWTAPIView):
     """
     Returns products for the vendor owner context of the caller.
     - Vendor owner: sees their own products
@@ -224,7 +242,7 @@ class VendorProductsAPI(APIView):
 
 
 # ----------------------- Deliveries -----------------------
-class DriverDeliveriesAPI(APIView):
+class DriverDeliveriesAPI(SessionJWTAPIView):
     permission_classes = [IsAuthenticated, IsDriver]
     serializer_class = DeliverySerializer
 
@@ -239,7 +257,7 @@ class DriverDeliveriesAPI(APIView):
         return Response(serializer.data)
 
 
-class VendorDeliveriesAPI(APIView):
+class VendorDeliveriesAPI(SessionJWTAPIView):
     permission_classes = [IsAuthenticated, IsVendorOrVendorStaff]
 
     class VendorDeliveryOutSerializer(serializers.Serializer):
@@ -293,7 +311,7 @@ class VendorDeliveriesAPI(APIView):
         return Response(data)
 
 
-class DeliveryAssignAPI(APIView):
+class DeliveryAssignAPI(SessionJWTAPIView):
     permission_classes = [IsAuthenticated, IsVendorOrVendorStaff, HasVendorScope]
     required_vendor_scope = "delivery"
     serializer_class = DeliveryAssignSerializer
@@ -341,7 +359,7 @@ class DeliveryAssignAPI(APIView):
         return Response(DeliverySerializer(delivery, context={"request": request}).data)
 
 
-class DeliveryUnassignAPI(APIView):
+class DeliveryUnassignAPI(SessionJWTAPIView):
     permission_classes = [IsAuthenticated, IsVendorOrVendorStaff, HasVendorScope]
     required_vendor_scope = "delivery"
     serializer_class = DeliveryUnassignSerializer  # empty serializer for docs
@@ -379,7 +397,7 @@ class DeliveryUnassignAPI(APIView):
         return Response(DeliverySerializer(delivery, context={"request": request}).data)
 
 
-class DeliveryAcceptAPI(APIView):
+class DeliveryAcceptAPI(SessionJWTAPIView):
     permission_classes = [IsAuthenticated, InGroups]
     required_groups = [DRIVER]
     serializer_class = _EmptySerializer  # no request body
@@ -393,7 +411,7 @@ class DeliveryAcceptAPI(APIView):
         return Response(DeliverySerializer(delivery, context={"request": request}).data)
 
 
-class DeliveryStatusAPI(APIView):
+class DeliveryStatusAPI(SessionJWTAPIView):
     permission_classes = [IsAuthenticated, InGroups]
     required_groups = [DRIVER]
     serializer_class = DeliveryStatusSerializer
@@ -433,7 +451,7 @@ class DeliveryStatusAPI(APIView):
         return Response(DeliverySerializer(delivery, context={"request": request}).data)
 
 
-class DriverLocationAPI(APIView):
+class DriverLocationAPI(SessionJWTAPIView):
     permission_classes = [IsAuthenticated, InGroups]
     required_groups = [DRIVER]
 
@@ -498,7 +516,7 @@ class DriverLocationAPI(APIView):
 
 
 # ----------------------- Products (create/import/export) -----------------------
-class VendorProductCreateAPI(CreateAPIView):
+class VendorProductCreateAPI(SessionJWTCreateAPIView):
     permission_classes = [IsAuthenticated, IsVendorOrVendorStaff]
     serializer_class = VendorProductCreateSerializer
 
@@ -524,7 +542,7 @@ class VendorProductCreateAPI(CreateAPIView):
         return Response(out_ser.data, status=status.HTTP_201_CREATED, headers=headers)
 
 
-class VendorProductsImportCSV(APIView):
+class VendorProductsImportCSV(SessionJWTAPIView):
     permission_classes = [IsAuthenticated, IsVendorOrVendorStaff, HasVendorScope]
     required_vendor_scope = "catalog"
     serializer_class = VendorProductsImportRequestSerializer
@@ -592,7 +610,7 @@ class VendorProductsImportCSV(APIView):
         return Response({"created": created, "updated": updated, "errors": errors})
 
 
-class VendorProductsExportCSV(APIView):
+class VendorProductsExportCSV(SessionJWTAPIView):
     permission_classes = [IsAuthenticated, IsVendorOrVendorStaff, HasVendorScope]
     required_vendor_scope = "catalog"
     serializer_class = _EmptySerializer
@@ -621,7 +639,7 @@ class VendorProductsExportCSV(APIView):
 
 
 # ----------------------- Vendor Staff (invite/accept/list/remove/deactivate) -----------------------
-class VendorStaffInviteAPI(APIView):
+class VendorStaffInviteAPI(SessionJWTAPIView):
     permission_classes = [permissions.IsAuthenticated, IsVendorOwner]
     serializer_class = VendorStaffInviteSerializer
 
@@ -718,7 +736,7 @@ class VendorStaffInviteAPI(APIView):
         )
 
 
-class VendorStaffAcceptAPI(APIView):
+class VendorStaffAcceptAPI(SessionJWTAPIView):
     permission_classes = [permissions.IsAuthenticated]
     TOKEN_MAX_AGE = 60 * 60 * 24 * 7  # 7 days
     serializer_class = _EmptySerializer
@@ -773,7 +791,7 @@ class VendorStaffAcceptAPI(APIView):
         return Response({"ok": True, "message": "Invite accepted."}, status=200)
 
 
-class VendorStaffListCreateView(APIView):
+class VendorStaffListCreateView(SessionJWTAPIView):
     permission_classes = [permissions.IsAuthenticated, IsVendorOwner]
     serializer_class = VendorStaffCreateSerializer  # request body for POST
 
@@ -813,7 +831,7 @@ class VendorStaffListCreateView(APIView):
         )
 
 
-class VendorStaffRemoveAPI(APIView):
+class VendorStaffRemoveAPI(SessionJWTAPIView):
     permission_classes = [IsAuthenticated, IsVendorOwner]
     serializer_class = VendorStaffRemoveSerializer
 
@@ -848,7 +866,7 @@ class VendorStaffRemoveAPI(APIView):
         return Response(data)
 
 
-class VendorStaffDeactivateAPI(APIView):
+class VendorStaffDeactivateAPI(SessionJWTAPIView):
     permission_classes = [IsAuthenticated, IsVendorOwner]
     serializer_class = _EmptySerializer
 
@@ -875,9 +893,8 @@ class VendorStaffDeactivateAPI(APIView):
 
 
 # ----------------------- Vendor Application -----------------------
-class VendorApplyAPI(APIView):
+class VendorApplyAPI(SessionJWTAPIView):
     permission_classes = [permissions.IsAuthenticated]
-    authentication_classes = [SessionAuthentication]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
     serializer_class = VendorApplicationCreateSerializer
 
@@ -903,6 +920,14 @@ class VendorApplyAPI(APIView):
         ):
             return Response(
                 {"detail": "Already a vendor/staff."}, status=status.HTTP_409_CONFLICT
+            )
+        # Also block if a previous application was approved
+        if VendorApplication.objects.filter(
+            user=user, status=VendorApplication.APPROVED
+        ).exists():
+            return Response(
+                {"detail": "Already approved as vendor."},
+                status=status.HTTP_409_CONFLICT,
             )
 
         # 2) Validate payload
@@ -934,7 +959,7 @@ class VendorApplyAPI(APIView):
         )
 
 
-class VendorApplyStatusAPI(APIView):
+class VendorApplyStatusAPI(SessionJWTAPIView):
     permission_classes = [IsAuthenticated]
     serializer_class = _EmptySerializer
 
@@ -961,7 +986,7 @@ class VendorApplyStatusAPI(APIView):
 
 
 # ----------------------- Vendor owners list (for UI pickers) -----------------------
-class VendorOwnersAPI(APIView):
+class VendorOwnersAPI(SessionJWTAPIView):
     permission_classes = [IsAuthenticated, IsVendorOrVendorStaff]
 
     class VendorOwnerOutSerializer(serializers.Serializer):
@@ -988,7 +1013,7 @@ class VendorOwnersAPI(APIView):
 # -----------------------
 # Payments reconciliation
 # -----------------------
-class PaymentReconcileAPI(APIView):
+class PaymentReconcileAPI(SessionJWTAPIView):
     permission_classes = [permissions.IsAdminUser]
     serializer_class = PaymentReconcileRequestSerializer
 

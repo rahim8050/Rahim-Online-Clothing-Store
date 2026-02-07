@@ -1,7 +1,11 @@
 # apis/urls.py
 from django.urls import path
 from rest_framework.routers import DefaultRouter
-from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+from core.auth_views import (
+    SessionJWTExchangeView,
+    ThrottledTokenObtainPairView,
+    ThrottledTokenRefreshView,
+)
 
 from apis.views import (  # Driver + deliveries; Vendor application; Vendor utilities; Vendor staff; General
     DeliveryAcceptAPI,
@@ -35,8 +39,19 @@ router.register(r"deliveries", DeliveryViewSet, basename="driver-deliveries-v2")
 
 urlpatterns = [
     # Auth
-    path("auth/token/", TokenObtainPairView.as_view(), name="token_obtain_pair"),
-    path("auth/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
+    path(
+        "auth/token/", ThrottledTokenObtainPairView.as_view(), name="token_obtain_pair"
+    ),
+    path(
+        "auth/token/refresh/",
+        ThrottledTokenRefreshView.as_view(),
+        name="token_refresh",
+    ),
+    path(
+        "auth/session-jwt/",
+        SessionJWTExchangeView.as_view(),
+        name="session_jwt_exchange",
+    ),
     path("auth/whoami/", WhoAmI.as_view(), name="whoami"),
     # Vendor products
     path("vendor/products/", VendorProductsAPI.as_view(), name="vendor-products"),
