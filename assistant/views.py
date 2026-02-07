@@ -5,7 +5,9 @@ from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
 from drf_spectacular.utils import extend_schema
 from rest_framework import serializers
+from rest_framework.authentication import SessionAuthentication
 from rest_framework.permissions import IsAuthenticated
+from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -45,6 +47,7 @@ def _normalize_msg(msg: str) -> str:
 )  # keep if you don't want CSRF; safe to remove if you do
 class AskView(APIView):
     permission_classes = [IsAuthenticated]
+    authentication_classes = [SessionAuthentication, JWTAuthentication]
 
     class AskRequestSerializer(serializers.Serializer):  # guessed; refine as needed
         session_key = serializers.CharField(required=False, allow_blank=True)
