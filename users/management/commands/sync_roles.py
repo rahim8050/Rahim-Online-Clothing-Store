@@ -1,4 +1,5 @@
 # users/management/commands/sync_roles.py
+from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group, Permission
 from django.core.management.base import BaseCommand
 from django.db import transaction
@@ -51,7 +52,8 @@ def sync_roles(dry_run: bool = False, stdout=None):
                 continue
 
             good, _ = Group.objects.get_or_create(name=VENDOR_STAFF)
-            for u in legacy.user_set.all():  # type: ignore[attr-defined]
+            User = get_user_model()
+            for u in User.objects.filter(groups=legacy):
                 u.groups.add(good)
             if not dry_run:
                 legacy.delete()
