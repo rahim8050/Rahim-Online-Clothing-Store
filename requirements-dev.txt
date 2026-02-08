@@ -85,6 +85,7 @@ Pygments==2.19.2
 PyJWT==2.9.0
 pyOpenSSL==25.1.0
 pytest==8.4.1
+pytest-asyncio==0.23.8
 pytest-cov==7.0.0
 pytest-django==4.11.1
 python-dateutil==2.9.0.post0

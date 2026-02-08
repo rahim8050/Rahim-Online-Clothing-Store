@@ -43,4 +43,3 @@ def hit(key: str, window_seconds: int) -> int:
 
 def reset(key: str) -> None:
     cache.delete(key)
-

@@ -74,7 +74,7 @@ class RealEtimsClient(EtimsClient):  # pragma: no cover - integration shim
 
     def submit_invoice(self, invoice: Invoice) -> EtimsResult:
         try:
-            import requests  # type: ignore
+            import requests
         except Exception:  # requests not installed
             return EtimsResult(
                 status="rejected", errors={"message": "REAL_CLIENT_DEP_MISSING"}

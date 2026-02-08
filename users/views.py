@@ -333,7 +333,9 @@ class RegisterUser(FormView):
             return self._rate_limited_response(form=form)
 
         ip_count = hit(keys["ip"], self.RATE_LIMIT_IP[1])
-        email_count = hit(keys["email"], self.RATE_LIMIT_EMAIL[1]) if "email" in keys else 0
+        email_count = (
+            hit(keys["email"], self.RATE_LIMIT_EMAIL[1]) if "email" in keys else 0
+        )
         if ip_count > self.RATE_LIMIT_IP[0] or (
             "email" in keys and email_count > self.RATE_LIMIT_EMAIL[0]
         ):
@@ -492,7 +494,9 @@ class RateLimitedPasswordResetView(PasswordResetView):
             return self._rate_limited_response(form)
 
         ip_count = hit(keys["ip"], self.RATE_LIMIT_IP[1])
-        email_count = hit(keys["email"], self.RATE_LIMIT_EMAIL[1]) if "email" in keys else 0
+        email_count = (
+            hit(keys["email"], self.RATE_LIMIT_EMAIL[1]) if "email" in keys else 0
+        )
         if ip_count > self.RATE_LIMIT_IP[0] or (
             "email" in keys and email_count > self.RATE_LIMIT_EMAIL[0]
         ):

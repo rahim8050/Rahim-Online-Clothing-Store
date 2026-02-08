@@ -1,6 +1,7 @@
 from django.urls import path
 from rest_framework.routers import DefaultRouter
 from core.auth_views import ThrottledTokenObtainPairView, ThrottledTokenRefreshView
+from apis.views import WhoAmI
 
 from .viewsets import (
     CategoryViewSet,
@@ -10,12 +11,6 @@ from .viewsets import (
     ProductViewSet,
     WarehouseViewSet,
 )
-
-# Reuse existing WhoAmI from apis.views for consistency
-try:
-    from apis.views import WhoAmI  # type: ignore
-except Exception:  # pragma: no cover - guard if module moves
-    WhoAmI = None
 
 router = DefaultRouter()
 
@@ -34,17 +29,12 @@ router.register(r"orders/items", OrderItemViewSet, basename="v1-order-items")
 
 urlpatterns = [
     # Auth
-    path(
-        "auth/token/", ThrottledTokenObtainPairView.as_view(), name="v1-token-obtain"
-    ),
+    path("auth/token/", ThrottledTokenObtainPairView.as_view(), name="v1-token-obtain"),
     path(
         "auth/token/refresh/",
         ThrottledTokenRefreshView.as_view(),
         name="v1-token-refresh",
     ),
+    path("auth/me/", WhoAmI.as_view(), name="v1-whoami"),
 ]
-
-if WhoAmI is not None:
-    urlpatterns += [path("auth/me/", WhoAmI.as_view(), name="v1-whoami")]
-
 urlpatterns += router.urls

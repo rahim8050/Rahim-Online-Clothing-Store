@@ -4,7 +4,7 @@ from django.http import JsonResponse
 
 def _redis_ping():
     try:
-        import redis  # type: ignore
+        import redis
 
         url = getattr(settings, "REDIS_URL", "")
         if not url:
