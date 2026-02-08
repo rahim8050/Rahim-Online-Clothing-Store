@@ -878,7 +878,9 @@ def paystack_payment_confirm(request):
 
 def send_payment_receipt_email(transaction: Transaction, order: Order):
     subject = f"🧾 Payment Receipt for Order #{order.id}"
-    recipient = [transaction.email]
+    recipient = [transaction.email] if transaction.email else []
+    if not recipient:
+        return
     message = render_to_string(
         "emails/payment_receipt.html",
         {"user": transaction.user, "order": order, "transaction": transaction},

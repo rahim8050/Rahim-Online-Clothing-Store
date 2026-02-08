@@ -50,8 +50,9 @@ DEFAULT_PROD_ORIGINS = [
 ]
 
 # Allow override via settings.CHANNELS_ALLOWED_ORIGINS if provided
-if getattr(settings, "CHANNELS_ALLOWED_ORIGINS", None):
-    ALLOWED_ORIGINS = list(settings.CHANNELS_ALLOWED_ORIGINS)
+channels_allowed = getattr(settings, "CHANNELS_ALLOWED_ORIGINS", None)
+if channels_allowed:
+    ALLOWED_ORIGINS = list(channels_allowed)
 else:
     ALLOWED_ORIGINS = DEFAULT_DEV_ORIGINS if settings.DEBUG else DEFAULT_PROD_ORIGINS
 

@@ -24,18 +24,7 @@ from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand
 from django.db import DatabaseError, transaction
 from django.db.models import Q, QuerySet
-
-# ---------------------------------------------------------------------
-# Safe import for NotSupportedError (some DBs may not define it)
-# ---------------------------------------------------------------------
-try:
-    from django.db.utils import NotSupportedError
-except ImportError:  # pragma: no cover
-
-    class NotSupportedError(Exception):  # type: ignore[misc]
-        """Fallback when Django doesn't define NotSupportedError."""
-
-        pass
+from django.db.utils import NotSupportedError
 
 
 # ---------------------------------------------------------------------
@@ -87,9 +76,9 @@ def _resolve_vendor_model() -> Any | None:
         return _VENDOR_MODEL
     _VENDOR_MODEL_TRIED = True
     try:
-        from vendor_app.models import Vendor  # ✅ fixed import path
+        from vendor_app.models import VendorProfile
 
-        _VENDOR_MODEL = Vendor
+        _VENDOR_MODEL = VendorProfile
     except Exception:
         _VENDOR_MODEL = None
     return _VENDOR_MODEL

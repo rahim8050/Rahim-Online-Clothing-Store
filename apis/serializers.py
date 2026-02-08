@@ -3,14 +3,13 @@ from __future__ import annotations
 
 import re
 
-from django.apps import apps
 from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.utils.text import slugify
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
-from orders.models import OrderItem
+from orders.models import Delivery, OrderItem
 from product_app.models import Product, ProductStock, Warehouse
 from product_app.utils import get_vendor_field
 from users import (
@@ -29,6 +28,12 @@ User = get_user_model()
 # -----------------------
 # Helpers
 # -----------------------
+class _EmptySerializer(serializers.Serializer):
+    """Marker serializer for endpoints with no request body."""
+
+    pass
+
+
 def _orderitem_reverse_name() -> str:
     """
     Return the reverse name from Product -> OrderItem safely.
@@ -148,28 +153,14 @@ class ProductOutSerializer(serializers.ModelSerializer):
 
 
 # -----------------------
-# Delivery (model may be absent)
+# Delivery
 # -----------------------
-class _EmptySerializer(serializers.Serializer):
-    pass
-
-
-try:
-    DeliveryModel = apps.get_model("orders", "Delivery")
-except LookupError:
-    DeliveryModel = None
-
-if DeliveryModel is not None:
-
-    class DeliverySerializer(serializers.ModelSerializer):
-        class Meta:
-            model = DeliveryModel
-            fields = "__all__"
-            # Avoid component name collision with orders.serializers.DeliverySerializer
-            ref_name = "APIsDelivery"
-
-else:
-    DeliverySerializer = _EmptySerializer
+class DeliverySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Delivery
+        fields = "__all__"
+        # Avoid component name collision with orders.serializers.DeliverySerializer
+        ref_name = "APIsDelivery"
 
 
 class DeliveryAssignSerializer(serializers.Serializer):
@@ -187,24 +178,23 @@ class DeliveryStatusSerializer(serializers.Serializer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         choices = []
-        if DeliveryModel is not None:
-            try:
-                field = DeliveryModel._meta.get_field("status")
-                if getattr(field, "choices", None):
-                    choices = [c[0] for c in field.choices]
-            except (AttributeError, TypeError, ValueError) as e:
-                logger.debug(
-                    "Could not derive choices from field %r: %s",
-                    field,
-                    e,
-                    exc_info=True,
-                )
-            if (
-                not choices
-                and hasattr(DeliveryModel, "Status")
-                and getattr(DeliveryModel.Status, "choices", None)
-            ):
-                choices = [c[0] for c in DeliveryModel.Status.choices]
+        try:
+            field = Delivery._meta.get_field("status")
+            if getattr(field, "choices", None):
+                choices = [c[0] for c in field.choices]
+        except (AttributeError, TypeError, ValueError) as e:
+            logger.debug(
+                "Could not derive choices from field %r: %s",
+                field,
+                e,
+                exc_info=True,
+            )
+        if (
+            not choices
+            and hasattr(Delivery, "Status")
+            and getattr(Delivery.Status, "choices", None)
+        ):
+            choices = [c[0] for c in Delivery.Status.choices]
         if choices:
             self.fields["status"] = serializers.ChoiceField(choices=choices)
 

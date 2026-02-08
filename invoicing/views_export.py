@@ -56,7 +56,7 @@ class DownloadCsvView(View):
         w.writerow(
             ["SKU", "Name", "Qty", "Unit Price", "Tax Rate", "Line Total", "Tax Total"]
         )
-        for line in inv.lineines.alineline():
+        for line in inv.lines.all():
             w.writerow(
                 [
                     line.sku,

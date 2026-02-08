@@ -1,3 +1,5 @@
+from typing import ClassVar
+
 from django.conf import settings
 from django.contrib.auth.models import AbstractUser, UserManager
 from django.core.exceptions import ValidationError
@@ -40,7 +42,7 @@ class CustomUser(AbstractUser):
         blank=True,
     )
 
-    objects = CustomUserManager()
+    objects: ClassVar[CustomUserManager] = CustomUserManager()
 
     def __str__(self):
         return self.username
