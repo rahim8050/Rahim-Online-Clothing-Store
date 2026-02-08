@@ -129,6 +129,8 @@ jobs:
           ruff format --check .
 
       - name: Type checking with MyPy
+        env:
+          DJANGO_SETTINGS_MODULE: Rahim_Online_ClothesStore.settings_typecheck
         run: mypy .
 
       - name: Run tests with coverage
