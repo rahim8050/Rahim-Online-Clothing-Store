@@ -130,7 +130,8 @@ jobs:
 
       - name: Type checking with MyPy
         env:
-          DJANGO_SETTINGS_MODULE: Rahim_Online_ClothesStore.settings_typecheck
+          DJANGO_SETTINGS_MODULE: Rahim_Online_ClothesStore.settings
+          MYPY_RUNNING: "1"
         run: mypy .
 
       - name: Run tests with coverage

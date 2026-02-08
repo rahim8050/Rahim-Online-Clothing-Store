@@ -5,6 +5,7 @@ import csv
 import logging
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from io import StringIO
+from typing import ClassVar
 
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
@@ -24,7 +25,7 @@ from django.utils import timezone
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema
 from rest_framework import permissions, serializers, status
-from rest_framework.authentication import SessionAuthentication
+from rest_framework.authentication import BaseAuthentication, SessionAuthentication
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework.generics import CreateAPIView, ListAPIView
 from rest_framework.pagination import PageNumberPagination
@@ -100,12 +101,15 @@ class VendorProductsImportResultErrorSerializer(serializers.Serializer):
 class VendorProductsImportResultSerializer(serializers.Serializer):
     created = serializers.IntegerField()
     updated = serializers.IntegerField()
-    errors = VendorProductsImportResultErrorSerializer(many=True)
+    error_items = VendorProductsImportResultErrorSerializer(many=True)
 
 
 # ----------------------- Auth mixins -----------------------
 class SessionJWTAuthMixin:
-    authentication_classes = [SessionAuthentication, JWTAuthentication]
+    authentication_classes: ClassVar[list[type[BaseAuthentication]]] = [
+        SessionAuthentication,
+        JWTAuthentication,
+    ]
 
 
 class SessionJWTAPIView(SessionJWTAuthMixin, APIView):
@@ -607,7 +611,14 @@ class VendorProductsImportCSV(SessionJWTAPIView):
             except Exception as e:
                 errors.append({"row": i, "error": str(e)})
 
-        return Response({"created": created, "updated": updated, "errors": errors})
+        return Response(
+            {
+                "created": created,
+                "updated": updated,
+                "errors": errors,
+                "error_items": errors,
+            }
+        )
 
 
 class VendorProductsExportCSV(SessionJWTAPIView):
@@ -646,7 +657,7 @@ class VendorStaffInviteAPI(SessionJWTAPIView):
     class VendorStaffInviteOutSerializer(serializers.Serializer):
         ok = serializers.BooleanField()
         message = serializers.CharField()
-        data = serializers.DictField()
+        payload = serializers.DictField()
 
     @extend_schema(
         request=VendorStaffInviteSerializer, responses=VendorStaffInviteOutSerializer
@@ -716,6 +727,13 @@ class VendorStaffInviteAPI(SessionJWTAPIView):
         except Exception as e:
             logger.exception("Non-critical side-effect failed in %s: %s", __name__, e)
 
+        payload = {
+            "vendor_staff_id": vs.id,
+            "owner_id": vs.owner_id,
+            "staff_id": vs.staff_id,
+            "is_active": vs.is_active,
+            "invite_link_preview": invite_link if created else None,
+        }
         return Response(
             {
                 "ok": True,
@@ -724,13 +742,8 @@ class VendorStaffInviteAPI(SessionJWTAPIView):
                     if created
                     else "Invite already pending."
                 ),
-                "data": {
-                    "vendor_staff_id": vs.id,
-                    "owner_id": vs.owner_id,
-                    "staff_id": vs.staff_id,
-                    "is_active": vs.is_active,
-                    "invite_link_preview": invite_link if created else None,
-                },
+                "data": payload,
+                "payload": payload,
             },
             status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
         )

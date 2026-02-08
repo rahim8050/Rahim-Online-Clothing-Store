@@ -19,4 +19,4 @@ exclude = '''(?x)(
 )'''
 
 [tool.django-stubs]
-django_settings_module = "Rahim_Online_ClothesStore.settings_typecheck"
+django_settings_module = "Rahim_Online_ClothesStore.settings"

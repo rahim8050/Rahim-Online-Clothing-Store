@@ -49,7 +49,7 @@ if not SECRET_KEY:
 ALLOWED_HOSTS = env.list(
     "ALLOWED_HOSTS", default=["codealpa-online-clothesstore.onrender.com"]
 )
-if DEBUG:
+if DEBUG and not os.getenv("MYPY_RUNNING"):
     ALLOWED_HOSTS += ["127.0.0.1", "localhost", "[::1]"]
 
 # Render dynamic hostname
@@ -75,7 +75,7 @@ def _with_scheme(host: str) -> str:
 CSRF_TRUSTED_ORIGINS = env.list(
     "CSRF_TRUSTED_ORIGINS", default=[_with_scheme(h) for h in ALLOWED_HOSTS]
 )
-if DEBUG:
+if DEBUG and not os.getenv("MYPY_RUNNING"):
     CSRF_TRUSTED_ORIGINS += ["https://127.0.0.1:8000", "https://localhost:8000"]
 
 REQUIRED_CSRF_ORIGINS = [
@@ -445,7 +445,7 @@ if IS_PROD:
     if missing:
         raise RuntimeError(f"Missing required payment envs: {', '.join(missing)}")
 
-if DEBUG:
+if DEBUG and not os.getenv("MYPY_RUNNING"):
     for label, val in {
         "PAYSTACK_PUBLIC_KEY": PAYSTACK_PUBLIC_KEY,
         "PAYSTACK_SECRET_KEY": PAYSTACK_SECRET_KEY,
