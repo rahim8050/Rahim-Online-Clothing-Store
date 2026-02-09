@@ -5,7 +5,7 @@ import csv
 import logging
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from io import StringIO
-from typing import ClassVar
+from typing import ClassVar, Sequence, Type
 
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
@@ -106,10 +106,9 @@ class VendorProductsImportResultSerializer(serializers.Serializer):
 
 # ----------------------- Auth mixins -----------------------
 class SessionJWTAuthMixin:
-    authentication_classes: ClassVar[list[type[BaseAuthentication]]] = [
-        SessionAuthentication,
-        JWTAuthentication,
-    ]
+    authentication_classes: ClassVar[
+        Sequence[Type[BaseAuthentication]]
+    ] = (SessionAuthentication, JWTAuthentication)
 
 
 class SessionJWTAPIView(SessionJWTAuthMixin, APIView):
