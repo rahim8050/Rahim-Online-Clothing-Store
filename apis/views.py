@@ -106,9 +106,10 @@ class VendorProductsImportResultSerializer(serializers.Serializer):
 
 # ----------------------- Auth mixins -----------------------
 class SessionJWTAuthMixin:
-    authentication_classes: ClassVar[
-        Sequence[Type[BaseAuthentication]]
-    ] = (SessionAuthentication, JWTAuthentication)
+    authentication_classes: ClassVar[Sequence[Type[BaseAuthentication]]] = (
+        SessionAuthentication,
+        JWTAuthentication,
+    )
 
 
 class SessionJWTAPIView(SessionJWTAuthMixin, APIView):
