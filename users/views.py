@@ -549,7 +549,9 @@ def profile_view(request):
         password_form = CustomPasswordChangeForm(user=request.user)
 
     recent_orders = (
-        Order.objects.filter(user=request.user).order_by("-created_at").select_related()[:5]
+        Order.objects.filter(user=request.user)
+        .order_by("-created_at")
+        .select_related()[:5]
     )
 
     return render(
