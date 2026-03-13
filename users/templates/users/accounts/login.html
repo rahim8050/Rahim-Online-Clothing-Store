@@ -1,10 +1,17 @@
-{% extends "base.html" %}
+{% load static %}
 
-{% block title %}Login{% endblock %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Login</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="{% static 'dist/styles.css' %}">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
+</head>
 
-{% block content %}
-  <div class="bg-[#eee6d7] min-h-[70vh] flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-    <div class="max-w-md w-full space-y-8">
+<body class="bg-[#eee6d7] min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+  <div class="max-w-md w-full space-y-8">
     <div class="text-center">
       <h1 class="text-3xl font-bold text-gray-900">Login</h1>
     </div>
@@ -57,11 +64,8 @@
         <a href="{% url 'users:password_reset' %}" class="text-blue-600 font-semibold hover:underline">Forgot your password?</a>
       </div>
     </div>
-    </div>
   </div>
-{% endblock %}
 
-{% block extra_js %}
   <script nonce="{{ request.csp_nonce }}">
     function togglePasswordVisibility() {
       const passwordField = document.querySelector('input[name="password"]');
@@ -76,4 +80,5 @@
       }
     }
   </script>
-{% endblock %}
+</body>
+</html>

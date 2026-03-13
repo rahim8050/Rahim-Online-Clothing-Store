@@ -470,7 +470,6 @@ class ResendActivationEmailView(View):
 class RateLimitedPasswordResetView(PasswordResetView):
     RATE_LIMIT_IP = (10, 3600)  # 10 attempts / 1 hour per IP
     RATE_LIMIT_EMAIL = (5, 3600)  # 5 attempts / 1 hour per email
-    domain_override = settings.SITE_DOMAIN
 
     def _rate_limit_keys(self, email: str | None = None) -> dict[str, str]:
         ip = get_client_ip(self.request)
@@ -503,20 +502,7 @@ class RateLimitedPasswordResetView(PasswordResetView):
         ):
             return self._rate_limited_response(form)
 
-        use_https = settings.SITE_SCHEME.lower() == "https"
-        opts = {
-            "use_https": use_https,
-            "token_generator": self.token_generator,
-            "from_email": self.from_email,
-            "email_template_name": self.email_template_name,
-            "subject_template_name": self.subject_template_name,
-            "request": self.request,
-            "html_email_template_name": self.html_email_template_name,
-            "extra_email_context": self.extra_email_context,
-            "domain_override": settings.SITE_DOMAIN,
-        }
-        form.save(**opts)
-        return HttpResponseRedirect(self.get_success_url())
+        return super().form_valid(form)
 
 
 # -------------------- Profile --------------------
@@ -548,18 +534,10 @@ def profile_view(request):
         profile_form = UserUpdateForm(instance=request.user)
         password_form = CustomPasswordChangeForm(user=request.user)
 
-    recent_orders = (
-        Order.objects.filter(user=request.user).order_by("-created_at").select_related()[:5]
-    )
-
     return render(
         request,
         "users/accounts/profile.html",
-        {
-            "profile_form": profile_form,
-            "password_form": password_form,
-            "recent_orders": recent_orders,
-        },
+        {"profile_form": profile_form, "password_form": password_form},
     )
 
 

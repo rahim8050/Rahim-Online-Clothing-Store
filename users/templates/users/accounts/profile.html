@@ -75,44 +75,6 @@
         </div>
       </section>
 
-      <!-- Recent Orders -->
-      <section class="bg-white p-6 rounded-lg shadow border border-gray-100 mb-10">
-        <div class="flex items-center justify-between mb-4">
-          <h2 class="text-xl font-bold text-gray-900 flex items-center">
-            <i class="fas fa-receipt mr-2 text-green-600"></i> Recent Orders
-          </h2>
-          <a href="{% url 'users:my_orders' %}" class="text-sm text-blue-600 hover:underline">
-            View all
-          </a>
-        </div>
-
-        {% if recent_orders %}
-          <div class="space-y-3">
-            {% for order in recent_orders %}
-              <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between border rounded-lg p-3">
-                <div>
-                  <p class="font-semibold">Order #{{ order.id }}</p>
-                  <p class="text-sm text-gray-600">{{ order.created_at|date:"Y-m-d H:i" }}</p>
-                </div>
-                <div class="mt-2 sm:mt-0">
-                  {% if order.paid %}
-                    {% if order.last_tx and order.last_tx.callback_received %}
-                      <span class="text-green-600 font-medium">Paid (verified)</span>
-                    {% else %}
-                      <span class="text-yellow-600 font-medium">Paid (awaiting confirmation)</span>
-                    {% endif %}
-                  {% else %}
-                    <span class="text-red-500 font-medium">Awaiting Payment</span>
-                  {% endif %}
-                </div>
-              </div>
-            {% endfor %}
-          </div>
-        {% else %}
-          <p class="text-gray-500">You have no orders yet.</p>
-        {% endif %}
-      </section>
-
       <!-- Profile Form Only -->
       <section class="grid grid-cols-1 gap-6">
 
