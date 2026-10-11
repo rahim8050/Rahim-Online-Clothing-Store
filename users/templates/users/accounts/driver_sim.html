@@ -53,7 +53,7 @@
 {% block extra_js %}
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-<script>
+<script nonce="{{ request.csp_nonce }}">
 (function(){
   const log = (m) => { const el = document.getElementById('sim-log'); el.textContent += m + "\\n"; el.scrollTop = el.scrollHeight; };
 

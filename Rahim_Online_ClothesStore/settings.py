@@ -542,6 +542,7 @@ CONTENT_SECURITY_POLICY = {
         "script-src": [
             SELF,
             NONCE,
+            "'unsafe-eval'",
             "https://cdn.tailwindcss.com",
             "https://cdn.jsdelivr.net",
             "https://unpkg.com",

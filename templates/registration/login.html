@@ -98,7 +98,7 @@
 
 {% block extra_js %}
   <!-- Vue 3 (global build) -->
-  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js" defer></script>
+  <script src="{% static 'js/vue.global.prod.js' %}" defer></script>
   <script nonce="{{ request.csp_nonce }}">
     document.addEventListener("DOMContentLoaded", function () {
       const { createApp } = Vue;

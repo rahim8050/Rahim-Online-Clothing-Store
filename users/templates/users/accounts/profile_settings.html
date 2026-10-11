@@ -82,7 +82,7 @@
 {% endblock %}
 
 {% block extra_js %}
-<script>
+<script nonce="{{ request.csp_nonce }}">
   // Avatar preview
   document.addEventListener('DOMContentLoaded', function(){
     const input = document.getElementById('avatar-upload');
