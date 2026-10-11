@@ -54,7 +54,13 @@ channels_allowed = getattr(settings, "CHANNELS_ALLOWED_ORIGINS", None)
 if channels_allowed:
     ALLOWED_ORIGINS = list(channels_allowed)
 else:
-    ALLOWED_ORIGINS = DEFAULT_DEV_ORIGINS if settings.DEBUG else DEFAULT_PROD_ORIGINS
+    # Scheme-less entries match hostname only (any port), so hosts such as
+    # 127.0.0.1, 172.25.121.28 or tailnet names work on any port.
+    derived_hosts = [
+        h for h in settings.ALLOWED_HOSTS if h and h != "*" and not h.startswith(".")
+    ]
+    base_origins = DEFAULT_DEV_ORIGINS if settings.DEBUG else DEFAULT_PROD_ORIGINS
+    ALLOWED_ORIGINS = [*base_origins, *derived_hosts]
 
 # Final ASGI application
 application = ProtocolTypeRouter(

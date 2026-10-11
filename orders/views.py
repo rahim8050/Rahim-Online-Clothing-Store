@@ -474,6 +474,16 @@ def order_create(request):
         sum((i.product.price * i.quantity for i in cart_items), Decimal("0.00"))
     )
 
+    # Keep the picked destination across failed POSTs so the user does
+    # not have to re-search the address after a validation error.
+    dest_initial = {
+        "text": (
+            request.POST.get("dest_address_text") or request.POST.get("address") or ""
+        ).strip(),
+        "lat": (request.POST.get("dest_lat") or "").strip(),
+        "lng": (request.POST.get("dest_lng") or "").strip(),
+    }
+
     return render(
         request,
         "orders/order_create.html",
@@ -483,6 +493,7 @@ def order_create(request):
             "cart_items": cart_items,
             "selected_total": selected_total,
             "error_msg": None,
+            "dest_initial": dest_initial,
             "GEOAPIFY_ENABLED": bool(getattr(settings, "GEOAPIFY_API_KEY", "")),
         },
     )

@@ -197,7 +197,7 @@
   </div>
 </div>
 
-<script>
+<script nonce="{{ request.csp_nonce }}">
   document.addEventListener('DOMContentLoaded', function() {
     const avatarUpload = document.getElementById('avatar-upload');
     if (avatarUpload) {

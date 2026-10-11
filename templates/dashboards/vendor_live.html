@@ -23,7 +23,7 @@
 {% endblock %}
 
 {% block extra_js %}
-<script>
+<script nonce="{{ request.csp_nonce }}">
 (function(){
   const rows = document.getElementById('rows');
   const qs = new URLSearchParams(location.search);

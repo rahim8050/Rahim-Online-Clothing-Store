@@ -26,7 +26,7 @@
     <div><strong>lat</strong>: <code id="lat"></code></div>
     <div><strong>lon</strong>: <code id="lon"></code></div>
   </div>
-<script>
+<script nonce="{{ request.csp_nonce }}">
 const KEY = "{{ GEOAPIFY_API_KEY|default:'' }}";
 
 const addr = document.getElementById('addr');
