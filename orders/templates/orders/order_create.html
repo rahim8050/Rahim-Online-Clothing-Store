@@ -36,14 +36,14 @@
           <label for="dest-search" class="block text-sm font-medium text-gray-700 mb-1">
             Delivery Address<span class="text-red-500">*</span>
           </label>
-          <input id="dest-search" type="text" class="w-full px-3 py-2 border border-gray-300 rounded-md" autocomplete="off">
+          <input id="dest-search" type="text" class="w-full px-3 py-2 border border-gray-300 rounded-md" autocomplete="off" value="{{ dest_initial.text }}">
           <ul id="dest-suggestions" class="border border-gray-300 mt-1 bg-white rounded-md shadow-md max-h-60 overflow-auto hidden"></ul>
 
           {# bound/hidden fields #}
           {% render_field form.address type="hidden" id="id_address" %}
-          <input type="hidden" name="dest_address_text" id="dest_address_text">
-          <input type="hidden" name="dest_lat" id="dest_lat">
-          <input type="hidden" name="dest_lng" id="dest_lng">
+          <input type="hidden" name="dest_address_text" id="dest_address_text" value="{{ dest_initial.text }}">
+          <input type="hidden" name="dest_lat" id="dest_lat" value="{{ dest_initial.lat }}">
+          <input type="hidden" name="dest_lng" id="dest_lng" value="{{ dest_initial.lng }}">
           <input type="hidden" name="dest_source" id="dest_source" value="autocomplete">
         </div>
 
@@ -55,7 +55,7 @@
                 {{ field.label }}{% if field.field.required %}<span class="text-red-500">*</span>{% endif %}
               </label>
 
-              {% if error_msg and field.errors %}
+              {% if field.errors %}
                 {% render_field field class="w-full px-3 py-2 border border-red-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500" %}
                 <p class="mt-1 text-sm text-red-600">{{ field.errors|striptags }}</p>
               {% else %}
@@ -135,7 +135,7 @@
 {% endblock %}
 
 {% block extra_js %}
-<script>
+<script nonce="{{ request.csp_nonce }}">
 document.addEventListener('DOMContentLoaded', () => {
   // 0) Guard: remove any stray radios outside #pm-group (defensive)
   const group = document.getElementById('pm-group');
@@ -161,10 +161,11 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   group?.addEventListener('change', (e) => {
     if (e.target.matches('input[type="radio"][name="payment_method"]')) refreshPM();
+    validate();
   });
   refreshPM();
 
-  // 2) Geoapify autocomplete minimal gating (enable submit only after pick)
+  // 2) Address autocomplete + full-form gating of the submit button
   const input = document.getElementById('dest-search');
   const list = document.getElementById('dest-suggestions');
   const submitBtn = document.getElementById('submit-btn');
@@ -172,56 +173,86 @@ document.addEventListener('DOMContentLoaded', () => {
   const destTxt = document.getElementById('dest_address_text');
   const destLat = document.getElementById('dest_lat');
   const destLng = document.getElementById('dest_lng');
+  const nameField = document.querySelector('[name="full_name"]');
+  const emailField = document.querySelector('[name="email"]');
   let controller;
 
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  function isValid() {
+    const hasDest = !!(destLat && destLat.value && destLng && destLng.value);
+    const hasName = !!(nameField && nameField.value.trim());
+    const hasEmail = !!(emailField && EMAIL_RE.test(emailField.value.trim()));
+    const hasPm = !!(group &&
+      group.querySelector('input[type="radio"][name="payment_method"]:checked'));
+    return hasDest && hasName && hasEmail && hasPm;
+  }
+  function validate() {
+    const ok = isValid();
+    submitBtn.disabled = !ok;
+    submitBtn.classList.toggle('opacity-50', !ok);
+    submitBtn.classList.toggle('cursor-not-allowed', !ok);
+  }
   function resetSelection() {
     destTxt.value = ''; destLat.value = ''; destLng.value = ''; addr.value = '';
-    submitBtn.disabled = true;
-    submitBtn.classList.add('opacity-50','cursor-not-allowed');
-  }
-  function enableSubmit() {
-    submitBtn.disabled = false;
-    submitBtn.classList.remove('opacity-50','cursor-not-allowed');
+    validate();
   }
 
+  nameField?.addEventListener('input', validate);
+  emailField?.addEventListener('input', validate);
+
+  input?.addEventListener('keydown', e => {
+    if (e.key === 'Enter') e.preventDefault();
+  });
+
+  let searchTimer;
   input?.addEventListener('input', function () {
     const q = input.value.trim();
     resetSelection(); list.innerHTML = '';
+    clearTimeout(searchTimer);
     if (q.length < 3) { list.classList.add('hidden'); return; }
-    if (controller) controller.abort();
-    controller = new AbortController();
-    fetch('{% url "orders:geo-autocomplete" %}?q=' + encodeURIComponent(q), {signal: controller.signal})
-      .then(r => r.ok ? r.json() : {results: []})
-      .then(data => {
-        list.innerHTML = '';
-        (data.results || []).forEach((p) => {
-          const li = document.createElement('li');
-          li.tabIndex = 0;
-          li.className = 'p-2 hover:bg-indigo-600 hover:text-white cursor-pointer';
-          li.textContent = p.formatted;
-          function choose() {
-            input.value = p.formatted;
-            addr.value = p.formatted;
-            destTxt.value = p.formatted;
-            destLat.value = p.lat;
-            destLng.value = p.lon;
-            enableSubmit();
-            list.classList.add('hidden');
-          }
-          li.addEventListener('click', choose);
-          li.addEventListener('keydown', e => { if (e.key === 'Enter') choose(); });
-          list.appendChild(li);
-        });
-        list.classList.toggle('hidden', list.children.length === 0);
-      }).catch(() => {});
+    // Debounce so the server's rate limiter (0.2s window) does not
+    // swallow fast keystrokes and return an empty result set.
+    searchTimer = setTimeout(() => {
+      if (controller) controller.abort();
+      controller = new AbortController();
+      fetch('{% url "orders:geo-autocomplete" %}?q=' + encodeURIComponent(q), {signal: controller.signal})
+        .then(r => r.ok ? r.json() : {results: []})
+        .then(data => {
+          list.innerHTML = '';
+          (data.results || []).forEach((p) => {
+            const li = document.createElement('li');
+            li.tabIndex = 0;
+            li.className = 'p-2 hover:bg-indigo-600 hover:text-white cursor-pointer';
+            li.textContent = p.formatted;
+            function choose() {
+              input.value = p.formatted;
+              addr.value = p.formatted;
+              destTxt.value = p.formatted;
+              destLat.value = p.lat;
+              destLng.value = p.lon;
+              validate();
+              list.classList.add('hidden');
+            }
+            li.addEventListener('click', choose);
+            li.addEventListener('keydown', e => { if (e.key === 'Enter') choose(); });
+            list.appendChild(li);
+          });
+          list.classList.toggle('hidden', list.children.length === 0);
+        }).catch(() => {});
+    }, 300);
   });
 
   document.getElementById('checkout-form')?.addEventListener('submit', function(e){
-    if (!destLat.value || !destLng.value) {
+    if (!isValid()) {
       e.preventDefault();
-      alert('Please select a delivery address from suggestions.');
+      validate();
+      if (!destLat.value) {
+        alert('Please select a delivery address from suggestions.');
+      }
     }
   });
+  validate();
 });
 </script>
 {% endblock %}
