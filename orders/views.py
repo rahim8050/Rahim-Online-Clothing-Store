@@ -409,7 +409,12 @@ def order_create(request):
             cart.items.filter(product_id__in=selected_items).update(is_selected=True)
 
         form = OrderForm(request.POST)
-        if form.is_valid():
+        if request.POST.get("from_cart"):
+            # The cart page posts only the item selection (from_cart +
+            # selected_items). Render a fresh checkout form instead of
+            # treating the missing order fields as validation errors.
+            form = OrderForm()
+        elif form.is_valid():
             try:
                 txt = (request.POST.get("dest_address_text") or "").strip()
                 lat = _parse_coord(request.POST.get("dest_lat"))
@@ -464,7 +469,8 @@ def order_create(request):
             messages.success(request, "Order placed successfully!")
             return redirect("orders:order_confirmation", order.id)
 
-        messages.error(request, "Please correct the errors in your order form")
+        else:
+            messages.error(request, "Please correct the errors in your order form")
 
     # Sidebar totals
     cart_items = cart.items.filter(is_selected=True)
