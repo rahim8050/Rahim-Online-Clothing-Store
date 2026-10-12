@@ -389,8 +389,14 @@ if not IS_PROD:
 # ---------------------------------------------------------------------
 # Security
 # ---------------------------------------------------------------------
+# Set TRUST_X_FORWARDED_PROTO=1 when a TLS terminator (e.g. Caddy) sits in
+# front of the dev server, so is_secure(), CSRF origin checks and absolute
+# URLs (payment callback/return links) reflect the real https scheme.
+BEHIND_TLS_PROXY = env.bool("TRUST_X_FORWARDED_PROTO", False)
 SECURE_SSL_REDIRECT = IS_PROD
-SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https") if IS_PROD else None
+SECURE_PROXY_SSL_HEADER = (
+    ("HTTP_X_FORWARDED_PROTO", "https") if (IS_PROD or BEHIND_TLS_PROXY) else None
+)
 USE_X_FORWARDED_HOST = IS_PROD
 
 if IS_PROD:
