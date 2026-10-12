@@ -105,33 +105,18 @@ def after_login(request):
 
 
 # -------------------- Orders list (optimized) --------------------
-@login_required
-def my_orders(request):
-    # Latest transaction per order (id via subquery)
+def _with_last_tx(orders_qs, limit: int | None = None) -> list[Order]:
+    """Attach the latest Transaction to each order as ``.last_tx`` (one extra query).
+
+    Templates branch on ``order.last_tx.callback_received`` to distinguish
+    "Paid (verified)" from "Paid (awaiting confirmation)".
+    """
     latest_tx_id = Subquery(
         Transaction.objects.filter(order_id=OuterRef("pk"))
         .order_by("-id")
         .values("id")[:1]
     )
-
-    orders_qs = (
-        Order.objects.filter(user=request.user)
-        .order_by("-created_at")
-        .annotate(
-            delivery_count=Count("deliveries", distinct=True),
-            last_tx_id=latest_tx_id,
-        )
-        .prefetch_related(
-            Prefetch(
-                "items",
-                queryset=OrderItem.objects.select_related("product", "warehouse"),
-            ),
-            "deliveries",
-        )
-    )
-
-    # Evaluate and attach last_tx objects with a single extra query
-    orders = list(orders_qs)
+    orders = list(orders_qs.annotate(last_tx_id=latest_tx_id)[:limit])
     tx_ids = [o.last_tx_id for o in orders if o.last_tx_id]
     tx_map = {
         tx.id: tx
@@ -141,6 +126,26 @@ def my_orders(request):
     }
     for o in orders:
         o.last_tx = tx_map.get(o.last_tx_id)
+    return orders
+
+
+@login_required
+def my_orders(request):
+    orders_qs = (
+        Order.objects.filter(user=request.user)
+        .order_by("-created_at")
+        .annotate(
+            delivery_count=Count("deliveries", distinct=True),
+        )
+        .prefetch_related(
+            Prefetch(
+                "items",
+                queryset=OrderItem.objects.select_related("product", "warehouse"),
+            ),
+            "deliveries",
+        )
+    )
+    orders = _with_last_tx(orders_qs)
 
     return render(
         request,
@@ -548,10 +553,9 @@ def profile_view(request):
         profile_form = UserUpdateForm(instance=request.user)
         password_form = CustomPasswordChangeForm(user=request.user)
 
-    recent_orders = (
-        Order.objects.filter(user=request.user)
-        .order_by("-created_at")
-        .select_related()[:5]
+    recent_orders = _with_last_tx(
+        Order.objects.filter(user=request.user).order_by("-created_at"),
+        limit=5,
     )
 
     return render(
