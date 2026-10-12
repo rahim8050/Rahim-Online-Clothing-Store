@@ -169,11 +169,11 @@ onMounted(()=> nextTick(autosize))
 /* Panel */
 .panel {
   position: fixed; right: 1rem; bottom: 5.5rem;
-  width: 380px; max-height: 70vh; display: flex; flex-direction: column;
+  width: 380px; max-height: 70vh; max-height: 70dvh; display: flex; flex-direction: column;
   border-radius: 1rem; box-shadow: 0 20px 50px rgba(0,0,0,.35);
 }
 @media (max-width: 767px) {
-  .panel { right: .5rem; left: .5rem; bottom: 5rem; width: auto; max-height: 75vh; }
+  .panel { right: .5rem; left: .5rem; bottom: 5rem; width: auto; max-height: 75vh; max-height: 75dvh; }
 }
 
 /* Theme + content (same as yours) */
