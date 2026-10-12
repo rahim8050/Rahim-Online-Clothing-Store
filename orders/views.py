@@ -8,6 +8,7 @@ import logging
 import math
 import time
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
+from functools import partial
 from typing import Any
 
 import paypalrestsdk
@@ -715,6 +716,17 @@ def paystack_webhook(request):
     except Exception:
         return JsonResponse({"detail": "invalid json"}, status=400)
 
+    return process_paystack_event(event, raw)
+
+
+def process_paystack_event(event: dict[str, Any], raw: bytes) -> HttpResponse:
+    """Apply a Paystack charge event. Idempotent via PaymentEvent body hash.
+
+    Called by the webhook (signature-verified) and by the return-flow
+    verifier (server-side Paystack verification) — same fulfillment path.
+    """
+    logger_ps = logging.getLogger("paystack")
+
     # 3) Validate schema
     ser = PaystackWebhookSerializer(data=event)
     if not ser.is_valid():
@@ -785,28 +797,35 @@ def paystack_webhook(request):
                 order.save(update_fields=["paid", "payment_status"])
                 assign_warehouses_and_update_stock(order)
 
-            if getattr(tx, "email", None):
+            if tx.email:
+                tx_email = tx.email
                 emit_once(
                     event_key=f"payment_success:{tx.reference}",
                     user=getattr(tx, "user", None),
                     channel="email",
                     payload={"order_id": order_id, "amount": str(tx.amount)},
                     send_fn=lambda: send_payment_email(
-                        tx.email, order_id, tx.amount, tx.reference, "received"
+                        tx_email, order_id, tx.amount, tx.reference, "received"
                     ),
                 )
 
             if order_id:
                 refunded_refs = maybe_refund_duplicate_success(tx)
-                if refunded_refs and getattr(tx, "email", None):
+                if refunded_refs and tx.email:
+                    tx_email = tx.email
                     for ref in refunded_refs:
                         emit_once(
                             event_key=f"refund_completed:{ref}",
                             user=getattr(tx, "user", None),
                             channel="email",
                             payload={"order_id": order_id, "amount": str(tx.amount)},
-                            send_fn=lambda ref=ref: send_refund_email(
-                                tx.email, order_id, tx.amount, ref, "completed"
+                            send_fn=partial(
+                                send_refund_email,
+                                tx_email,
+                                order_id,
+                                tx.amount,
+                                ref,
+                                "completed",
                             ),
                         )
 
@@ -827,14 +846,15 @@ def paystack_webhook(request):
                 order.payment_status = "failed"
                 order.save(update_fields=["payment_status"])
 
-            if getattr(tx, "email", None):
+            if tx.email:
+                tx_email = tx.email
                 emit_once(
                     event_key=f"payment_failed:{tx.reference}",
                     user=getattr(tx, "user", None),
                     channel="email",
                     payload={"order_id": order_id, "amount": str(tx.amount)},
                     send_fn=lambda: send_payment_email(
-                        tx.email, order_id, tx.amount, tx.reference, "failed"
+                        tx_email, order_id, tx.amount, tx.reference, "failed"
                     ),
                 )
 
@@ -855,14 +875,15 @@ def paystack_webhook(request):
                 order.payment_status = "cancelled"
                 order.save(update_fields=["payment_status"])
 
-            if getattr(tx, "email", None):
+            if tx.email:
+                tx_email = tx.email
                 emit_once(
                     event_key=f"payment_cancelled:{tx.reference}",
                     user=getattr(tx, "user", None),
                     channel="email",
                     payload={"order_id": order_id, "amount": str(tx.amount)},
                     send_fn=lambda: send_payment_email(
-                        tx.email, order_id, tx.amount, tx.reference, "cancelled"
+                        tx_email, order_id, tx.amount, tx.reference, "cancelled"
                     ),
                 )
         else:
@@ -1174,6 +1195,68 @@ def paypal_payment(request, order_id):
 # =========================================================
 #                     Generic payment result
 # =========================================================
+def _verify_paystack(reference: str) -> dict[str, Any] | None:
+    """Ask Paystack server-side whether a transaction succeeded."""
+    logger_ps = logging.getLogger("paystack")
+    secret = getattr(settings, "PAYSTACK_SECRET_KEY", "")
+    if not secret:
+        return None
+    try:
+        resp = requests.get(
+            f"https://api.paystack.co/transaction/verify/{reference}",
+            headers={"Authorization": f"Bearer {secret}"},
+            timeout=15,
+        )
+        body = resp.json()
+    except Exception:
+        logger_ps.exception("Paystack verify error for %s", reference)
+        return None
+    if not resp.ok or not body.get("status"):
+        logger_ps.warning(
+            "Paystack verify rejected for %s: %s", reference, body.get("message")
+        )
+        return None
+    return body.get("data") or None
+
+
+def _confirm_paystack_payment(order: Order, tx: Transaction) -> bool:
+    """Verify with Paystack and, on success, run the shared fulfillment.
+
+    Webhooks only reach publicly-reachable dashboards; on the return flow
+    we verify directly with the Paystack API so local/dev checkouts settle
+    too. Falls back to the webhook for delivery when verification fails.
+    """
+    data = _verify_paystack(tx.reference)
+    if not data or data.get("status") != "success":
+        return False
+    expected = to_minor_units(safe_order_total(order))
+    if data.get("amount") != expected:
+        logging.getLogger("paystack").warning(
+            "Paystack amount mismatch for %s: got %s want %s",
+            tx.reference,
+            data.get("amount"),
+            expected,
+        )
+        return False
+    customer_email = (data.get("customer") or {}).get("email") or tx.email
+    event = {
+        "event": "charge.success",
+        "data": {
+            "reference": tx.reference,
+            "status": "success",
+            "amount": data.get("amount"),
+            "currency": data.get("currency")
+            or getattr(settings, "PAYSTACK_CURRENCY", "KES"),
+            "metadata": {"order_id": order.id},
+            "customer": {"email": customer_email},
+        },
+    }
+    process_paystack_event(event, json.dumps(event).encode())
+    order.refresh_from_db()
+    tx.refresh_from_db()
+    return bool(tx.callback_received and tx.verified)
+
+
 @login_required
 def payment_success(request, order_id):
     order = get_object_or_404(Order, id=order_id, user=request.user)
@@ -1181,11 +1264,17 @@ def payment_success(request, order_id):
 
     message = "Payment successful"
     if last_tx and last_tx.gateway == "paystack":
-        # UI hint until webhook lands
-        order.payment_status = "pending_confirmation"
-        order.paid = False
-        order.save(update_fields=["payment_status", "paid"])
-        message = "Payment received. Awaiting confirmation."
+        if last_tx.callback_received and last_tx.verified:
+            # Webhook already fulfilled this payment — never regress it.
+            message = "Payment confirmed."
+        elif _confirm_paystack_payment(order, last_tx):
+            message = "Payment confirmed."
+        else:
+            # UI hint until webhook lands
+            order.payment_status = "pending_confirmation"
+            order.paid = False
+            order.save(update_fields=["payment_status", "paid"])
+            message = "Payment received. Awaiting confirmation."
     else:
         order.paid = True
         order.payment_status = "paid"
