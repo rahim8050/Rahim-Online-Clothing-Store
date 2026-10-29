@@ -87,6 +87,9 @@ for _origin in REQUIRED_CSRF_ORIGINS:
     if _origin not in CSRF_TRUSTED_ORIGINS:
         CSRF_TRUSTED_ORIGINS.append(_origin)
 
+# Subpath deployments (e.g. /clothing behind a prefix-stripping proxy).
+FORCE_SCRIPT_NAME = env("FORCE_SCRIPT_NAME", default=None) or None
+
 # CORS (optional, only if you install `django-cors-headers`)
 CORS_ALLOWED_ORIGINS = env.list("CORS_ALLOWED_ORIGINS", default=[])
 CORS_ALLOW_ALL_ORIGINS = DEBUG  # dev convenience; keep False in prod unless you mean it
